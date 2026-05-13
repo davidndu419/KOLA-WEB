@@ -24,8 +24,7 @@ export class CorrectionService {
 
     // 3. Prepare Corrected Data
     const correctionVersion = (original.correctionVersion || 0) + 1;
-    const correctedPayload: Partial<Transaction> = {
-      ...original,
+    const updateSpec: any = {
       ...updatedData,
       status: 'edited',
       isEdited: true,
@@ -33,14 +32,15 @@ export class CorrectionService {
       correctionReason: reason,
       correctedAt: new Date(),
       updatedAt: new Date(),
-      originalPayload: (original.originalPayload || original) as any // Avoid deep recursion types
+      originalPayload: (original.originalPayload || original)
     };
 
     // 4. Update Database
-    await db.transactions.update(original.id!, correctedPayload);
+    await db.transactions.update(original.id!, updateSpec);
 
     // 5. Apply New Financial Impact
-    await this.applyFinancialImpact(correctedPayload as Transaction, businessId);
+    const finalTransaction = { ...original, ...updateSpec } as Transaction;
+    await this.applyFinancialImpact(finalTransaction, businessId);
 
     // 6. Audit Log
     await db.audit_logs.add({
