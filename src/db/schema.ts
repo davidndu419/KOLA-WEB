@@ -156,6 +156,6 @@ export interface SyncQueue {
   action: 'create' | 'update' | 'delete';
   data: any;
   timestamp: Date;
-  retryCount: number;
-  status: 'pending' | 'syncing' | 'failed';
+  retryCount?: number;
+  status?: 'pending' | 'syncing' | 'failed';
 }

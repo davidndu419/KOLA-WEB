@@ -76,7 +76,9 @@ export async function adjustStock(
       table: 'inventory_movements',
       action: 'create',
       data: movement,
-      timestamp: new Date()
+      timestamp: new Date(),
+      retryCount: 0,
+      status: 'pending'
     });
 
     return movement;
