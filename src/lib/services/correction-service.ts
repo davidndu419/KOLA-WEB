@@ -177,7 +177,7 @@ export class CorrectionService {
       if (transaction.items) {
         for (const item of transaction.items) {
           const product = await db.products.where('localId').equals(item.productId).first();
-          if (product) totalCOGS += (product.costPrice * item.quantity);
+          if (product) totalCOGS += (product.buyingPrice * item.quantity);
         }
       }
 
@@ -205,10 +205,8 @@ export class CorrectionService {
           ...createBaseEntity(businessId),
           transactionId: transaction.localId,
           customerId: transaction.customerId || '',
-          totalAmount: transaction.amount,
-          amountPaid: 0,
-          balance: transaction.amount,
-          dueDate: transaction.dueDate || new Date(),
+          amount: transaction.amount,
+          paidAmount: 0,
           status: 'pending'
         });
       }

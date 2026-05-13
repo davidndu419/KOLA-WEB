@@ -167,16 +167,14 @@ export class ReversalService {
     }
 
     // 3. Update Receivable balance
-    const newAmountPaid = Math.max(0, receivable.amountPaid - payment.amount);
-    const newBalance = receivable.totalAmount - newAmountPaid;
+    const newPaidAmount = Math.max(0, (receivable.paidAmount || 0) - payment.amount);
     let newStatus = receivable.status;
 
-    if (newBalance === receivable.totalAmount) newStatus = 'pending';
-    else if (newBalance > 0) newStatus = 'partially_paid';
+    if (newPaidAmount === 0) newStatus = 'pending';
+    else if (newPaidAmount < receivable.amount) newStatus = 'partially-paid';
 
     await db.receivables.update(receivable.id!, {
-      amountPaid: newAmountPaid,
-      balance: newBalance,
+      paidAmount: newPaidAmount,
       status: newStatus,
       updatedAt: new Date()
     });

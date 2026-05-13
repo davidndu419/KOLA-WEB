@@ -123,7 +123,7 @@ export interface Receivable extends BaseEntity {
   amount: number;
   paidAmount: number;
   dueDate?: Date;
-  status: 'pending' | 'partially-paid' | 'paid';
+  status: 'pending' | 'partially-paid' | 'paid' | 'voided';
 }
 
 export interface Receipt extends BaseEntity {
