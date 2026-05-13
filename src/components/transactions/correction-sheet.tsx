@@ -1,6 +1,6 @@
 // src/components/transactions/correction-sheet.tsx
 'use client';
-
+import { useStore } from '@/store/use-store';
 import { useState, useEffect } from 'react';
 import { Edit3, AlertCircle, ShoppingBag, User, Plus, Minus, X, Search } from 'lucide-react';
 import { BottomSheet } from '@/components/bottom-sheet';
@@ -24,7 +24,7 @@ export function CorrectionSheet({
 }) {
   const [reason, setReason] = useState('');
   const [isCorrecting, setIsCorrecting] = useState(false);
-  
+  const { user } = useStore();
   // State for Sales Correction
   const [cart, setCart] = useState<{ productId: string; name: string; quantity: number; price: number }[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'credit'>('cash');
@@ -94,7 +94,7 @@ export function CorrectionSheet({
         updatedData.amount = amount;
       }
 
-      await CorrectionService.correctTransaction(transaction.localId, updatedData, reason, transaction.businessId);
+      await CorrectionService.correctTransaction(transaction.localId, updatedData, reason, transaction.businessId,user.id);
       onSuccess();
       onClose();
     } catch (error: any) {
