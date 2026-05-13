@@ -55,7 +55,7 @@ await db.audit_logs.add({
   reason: reason
 });
 
-  private static async validateSaleCorrection(original: Transaction, updated: Partial<Transaction>) {
+ async function validateSaleCorrection(original: Transaction, updated: Partial<Transaction>) {
     if (!updated.items) return;
 
     for (const item of updated.items) {
