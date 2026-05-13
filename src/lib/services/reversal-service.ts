@@ -198,6 +198,7 @@ export class ReversalService {
   private static async createAuditLog(entity: Transaction, action: string, reason: string, businessId: string) {
     await db.audit_logs.add({
       ...createBaseEntity(businessId),
+      userId: 'offline_user'
       entityType: 'transaction',
       entityId: entity.localId,
       action: action as any,
