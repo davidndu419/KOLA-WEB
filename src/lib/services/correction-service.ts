@@ -43,16 +43,17 @@ export class CorrectionService {
     await this.applyFinancialImpact(finalTransaction, businessId);
 
     // 6. Audit Log
-    await db.audit_logs.add({
-      ...createBaseEntity(businessId),
-      entityType: 'transaction',
-      entityId: original.localId,
-      action: 'corrected',
-      oldValue: original,
-      newValue: correctedPayload,
-      reason: reason
-    });
-  }
+   // 6. Audit Log
+await db.audit_logs.add({
+  ...createBaseEntity(businessId),
+  userId: currentUserId,
+  entityType: 'transaction',
+  entityId: original.localId,
+  action: 'corrected',
+  oldValue: original,
+  newValue: correctedPayload,
+  reason: reason
+});
 
   private static async validateSaleCorrection(original: Transaction, updated: Partial<Transaction>) {
     if (!updated.items) return;
