@@ -27,7 +27,7 @@ export class CorrectionService {
     const correctedPayload = {
       ...original,
       ...updatedData,
-      status: 'edited',
+      status: 'edited' as const,
       isEdited: true,
       correctionVersion,
       correctionReason: reason,
