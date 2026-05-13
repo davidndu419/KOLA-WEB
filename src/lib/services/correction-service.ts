@@ -24,16 +24,16 @@ export class CorrectionService {
 
     // 3. Prepare Corrected Data
     const correctionVersion = (original.correctionVersion || 0) + 1;
-    const correctedPayload = {
+    const correctedPayload: Partial<Transaction> = {
       ...original,
       ...updatedData,
-      status: 'edited' as const,
+      status: 'edited',
       isEdited: true,
       correctionVersion,
       correctionReason: reason,
       correctedAt: new Date(),
       updatedAt: new Date(),
-      originalPayload: original.originalPayload || original // Keep track of first version if possible
+      originalPayload: (original.originalPayload || original) as any // Avoid deep recursion types
     };
 
     // 4. Update Database
