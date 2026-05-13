@@ -4,7 +4,7 @@ import { Product, InventoryMovement } from '@/db/schema';
 import { adjustStock } from '@/accounting/inventory';
 
 export const inventoryService = {
-  async addProduct(productData: Omit<Product, keyof import('@/db/schema').BaseEntity | 'id'>, businessId: string) {
+  async addProduct(productData: Omit<Product, keyof import('@/db/schema').BaseEntity | 'id' | 'isArchived'>, businessId: string) {
     const base = createBaseEntity(businessId);
     const product: Product = {
       ...base,
