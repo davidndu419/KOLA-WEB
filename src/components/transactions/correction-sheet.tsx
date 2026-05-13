@@ -94,7 +94,7 @@ export function CorrectionSheet({
         updatedData.amount = amount;
       }
 
-      await CorrectionService.correctTransaction(transaction.localId, updatedData, reason, transaction.businessId,user.id);
+      await CorrectionService.correctTransaction(transaction.localId, updatedData, reason, transaction.businessId,user?.id || 'offline_user');
       onSuccess();
       onClose();
     } catch (error: any) {
