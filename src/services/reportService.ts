@@ -33,12 +33,12 @@ export const reportService = {
     await db.ledger_entries
       .where('created_at')
       .between(startDate, endDate)
-      .each(entry => {
-        if (entry.credit_account === 'Revenue') revenue += entry.amount;
-        else if (entry.credit_account === 'Service Revenue') serviceRevenue += entry.amount;
-        else if (entry.debit_account === 'COGS') cogs += entry.amount;
-        else if (entry.debit_account === 'Expenses') expenses += entry.amount;
-      });
+      .each((entry: any) => {
+  if (entry.credit_account === 'Revenue') revenue += entry.amount;
+  else if (entry.credit_account === 'Service Revenue') serviceRevenue += entry.amount;
+  else if (entry.debit_account === 'COGS') cogs += entry.amount;
+  else if (entry.debit_account === 'Expenses') expenses += entry.amount;
+});
 
     const totalRevenue = revenue + serviceRevenue;
     const grossProfit = totalRevenue - cogs;
