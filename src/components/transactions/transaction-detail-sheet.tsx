@@ -104,13 +104,14 @@ export function TransactionDetailSheet({
   };
 
   const isRecent = transaction ? (new Date().getTime() - new Date(transaction.created_at).getTime()) < 24 * 60 * 60 * 1000 : false;
-  const canModify = transaction && !transaction.isReversed && isRecent;
+  const canModify = transaction && !transaction.is_reversed && isRecent;
+
 
   return (
     <BottomSheet isOpen={Boolean(transaction)} onClose={onClose} title="Transaction Info" bottomOffset={64}>
       {transaction && (
         <div className="space-y-5 py-4 pb-10">
-          {transaction.isReversed && (
+          {transaction.is_reversed && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
               <p className="text-red-500 text-xs font-bold uppercase tracking-widest">Reversed Transaction</p>
               <p className="text-[10px] text-red-500/80 font-medium mt-1">{transaction.reversal_reason}</p>
@@ -118,9 +119,11 @@ export function TransactionDetailSheet({
           )}
 
 
+
           <div className="bg-secondary/60 rounded-[24px] p-4 space-y-3">
-            <InfoRow label="Status" value={transaction.status} color={transaction.isReversed ? 'text-red-500' : transaction.is_edited ? 'text-amber-500' : ''} />
+            <InfoRow label="Status" value={transaction.status} color={transaction.is_reversed ? 'text-red-500' : transaction.is_edited ? 'text-amber-500' : ''} />
             <InfoRow label="Type" value={transaction.type} />
+
             <InfoRow label="Amount" value={money(transaction.amount)} />
             <InfoRow label="Payment Method" value={transaction.payment_method} />
             <InfoRow label="Transaction Date" value={formatFullTransactionDate(transaction.created_at)} />
@@ -162,11 +165,12 @@ export function TransactionDetailSheet({
             </div>
           )}
 
-          {(transaction.is_edited || transaction.isReversed) && onViewAuditTrail && (
+          {(transaction.is_edited || transaction.is_reversed) && onViewAuditTrail && (
             <Touchable
               onPress={() => onViewAuditTrail(transaction)}
               className="w-full bg-indigo-500/10 text-indigo-600 rounded-2xl py-4 flex items-center justify-center gap-2 text-xs font-bold border border-indigo-500/20"
             >
+
               <History size={16} /> View Audit Trail
             </Touchable>
           )}

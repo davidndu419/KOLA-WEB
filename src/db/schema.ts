@@ -1,6 +1,5 @@
 // src/db/schema.ts
 
-import { ReactNode } from "react";
 
 export interface BaseEntity {
   id?: number;
@@ -99,11 +98,6 @@ export interface Expense extends BaseEntity {
 }
 
 export interface Transaction extends BaseEntity {
-  is_edited: any;
-  reversal_reason: ReactNode;
-  name: any;
-  sku: any;
-  isReversed: any;
   type: 'sale' | 'service' | 'expense' | 'reversal' | 'credit_payment' | 'adjustment';
   amount: number;
   payment_method: 'cash' | 'transfer' | 'credit';
@@ -112,6 +106,13 @@ export interface Transaction extends BaseEntity {
   category?: string;
   customer?: string;
   note?: string;
+  is_reversed?: boolean;
+  is_edited?: boolean;
+  reversal_reason?: string;
+  original_transaction_id?: string;
+  correction_version?: number;
+  corrected_at?: Date;
+  original_payload?: any;
 }
 
 export interface TransactionWithItems extends Transaction {

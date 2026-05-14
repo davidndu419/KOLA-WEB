@@ -15,11 +15,12 @@ export class ReversalService {
     // 1. Mark original transaction as reversed
     await db.transactions.update(transaction.id!, {
       status: 'reversed',
-      isReversed: true,
-      reversalReason: reason,
-      reversedAt: new Date(),
+      is_reversed: true,
+      reversal_reason: reason,
+      reversed_at: new Date(),
       updated_at: new Date()
-    });
+    } as any);
+
 
     // 2. Logic per transaction type
     switch (transaction.type) {
@@ -82,9 +83,10 @@ export class ReversalService {
         // Reverse debit/credit
         debit: entry.credit,
         credit: entry.debit,
-        isReversal: true,
+        is_reversal: true,
         reversal_of_entry_id: entry.local_id
-      });
+      } as any);
+
     }
 
     // C. Handle Receivables if credit sale
@@ -109,9 +111,10 @@ export class ReversalService {
         account_name: entry.account_name,
         debit: entry.credit,
         credit: entry.debit,
-        isReversal: true,
+        is_reversal: true,
         reversal_of_entry_id: entry.local_id
-      });
+      } as any);
+
     }
 
     // Handle Receivables if credit service
@@ -136,9 +139,10 @@ export class ReversalService {
         account_name: entry.account_name,
         debit: entry.credit,
         credit: entry.debit,
-        isReversal: true,
+        is_reversal: true,
         reversal_of_entry_id: entry.local_id
-      });
+      } as any);
+
     }
   }
 
@@ -161,9 +165,10 @@ export class ReversalService {
         account_name: entry.account_name,
         debit: entry.credit,
         credit: entry.debit,
-        isReversal: true,
+        is_reversal: true,
         reversal_of_entry_id: entry.local_id
-      });
+      } as any);
+
     }
 
     // 3. Update Receivable balance
@@ -187,23 +192,25 @@ export class ReversalService {
       amount: original.amount,
       payment_method: original.payment_method,
       status: 'active',
-      originalTransactionId: original.local_id,
-      sourceType: original.type as any,
-      sourceId: original.local_id,
-      reversalReason: reason,
+      original_transaction_id: original.local_id,
+      source_type: original.type as any,
+      source_id: original.local_id,
+      reversal_reason: reason,
       note: `Reversal of ${original.type}: ${original.local_id}`
-    });
+    } as any);
+
   }
 
   private static async createAuditLog(entity: Transaction, action: string, reason: string, business_id: string) {
     await db.audit_logs.add({
       ...createBaseEntity(business_id),
-      userId: 'offline_user',
+      user_id: 'offline_user',
       entity_type: 'transaction',
       entity_id: entity.local_id,
       action: action as any,
       old_value: entity,
       reason: reason
-    });
+    } as any);
+
   }
 }
