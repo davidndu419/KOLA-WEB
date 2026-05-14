@@ -1,6 +1,7 @@
 // src/lib/services/reversal-service.ts
 import { db } from '@/db/dexie';
-import { Transaction, LedgerEntry, InventoryMovement, AuditLog } from '@/db/schema';
+import { Transaction, LedgerEntry, InventoryMovement, AuditLog, TransactionWithItems } from '@/db/schema';
+
 import { createBaseEntity } from '@/db/dexie';
 
 export class ReversalService {
@@ -8,7 +9,8 @@ export class ReversalService {
    * Main entry point for reversing any transaction
    */
   static async reverseTransaction(transaction_id: string, reason: string, business_id: string) {
-    const transaction = await db.transactions.where('local_id').equals(transaction_id).first();
+    const transaction = await db.transactions.where('local_id').equals(transaction_id).first() as TransactionWithItems | undefined;
+
     if (!transaction) throw new Error('Transaction not found');
     if (transaction.status === 'reversed') throw new Error('Transaction already reversed');
 
@@ -45,7 +47,8 @@ export class ReversalService {
     await this.createReversalTransaction(transaction, reason, business_id);
   }
 
-  private static async reverseSale(sale: Transaction, business_id: string) {
+  private static async reverseSale(sale: TransactionWithItems, business_id: string) {
+
     // A. Restore Stock
     if (sale.items) {
       for (const item of sale.items) {

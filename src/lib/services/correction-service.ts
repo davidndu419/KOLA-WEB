@@ -1,14 +1,13 @@
 import { db, createBaseEntity } from '@/db/dexie';
-import { Transaction, LedgerEntry, InventoryMovement } from '@/db/schema';
+import { Transaction, LedgerEntry, InventoryMovement, TransactionWithItems } from '@/db/schema';
 
 /**
  * FIXED: Standalone function for Sale Validation
  */
-async function validateSaleCorrection(original: Transaction, updated: Partial<Transaction>) {
- const updatedTx = updated as any;
-if (!updatedTx.items) return;
+async function validateSaleCorrection(original: TransactionWithItems, updated: Partial<TransactionWithItems>) {
+  if (!updated.items) return;
 
-for (const item of updatedTx.items) {
+  for (const item of updated.items) {
     const product = await db.products.where('local_id').equals(item.product_id).first();
     if (!product) continue;
 
@@ -25,20 +24,20 @@ for (const item of updatedTx.items) {
 /**
  * FIXED: Standalone function for Reversing Financial Impact
  */
-async function reverseFinancialImpact(transaction: Transaction, business_id: string) {
+async function reverseFinancialImpact(transaction: TransactionWithItems, business_id: string) {
   // Ledgers
   const entries = await db.ledger_entries.where('transaction_id').equals(transaction.local_id).toArray();
-  for (const entry of entries as any[]) {
-  await db.ledger_entries.add({
-    ...createBaseEntity(business_id),
-    transaction_id: transaction.local_id,
-    account_name: entry.account_name,
-    debit: entry.credit,
-    credit: entry.debit,
-    isCorrection: true,
-    reversal_of_entry_id: entry.local_id
-  } as any);
-}
+  for (const entry of entries) {
+    await db.ledger_entries.add({
+      ...createBaseEntity(business_id),
+      transaction_id: transaction.local_id,
+      account_name: entry.account_name,
+      debit: entry.credit,
+      credit: entry.debit,
+      is_correction: true,
+      reversal_of_entry_id: entry.local_id
+    } as any);
+  }
 
   // Inventory (if sale)
   if (transaction.type === 'sale' && transaction.items) {
@@ -72,7 +71,7 @@ async function reverseFinancialImpact(transaction: Transaction, business_id: str
 /**
  * FIXED: Standalone function for Applying New Impact
  */
-async function applyFinancialImpact(transaction: Transaction, business_id: string) {
+async function applyFinancialImpact(transaction: TransactionWithItems, business_id: string) {
   if (transaction.type === 'sale' && transaction.items) {
     for (const item of transaction.items) {
       const product = await db.products.where('local_id').equals(item.product_id).first();
@@ -95,23 +94,23 @@ async function applyFinancialImpact(transaction: Transaction, business_id: strin
     const account_name = transaction.payment_method === 'cash' ? 'Cash' : 
                         transaction.payment_method === 'transfer' ? 'Bank' : 'Receivables';
     
-   await db.ledger_entries.add({
-  ...createBaseEntity(business_id),
-  transaction_id: transaction.local_id,
-  account_name: 'Cash', // Or your dynamic account variable
-  debit: transaction.amount,
-  credit: 0,
-  isCorrection: true,
-} as any);
+    await db.ledger_entries.add({
+      ...createBaseEntity(business_id),
+      transaction_id: transaction.local_id,
+      account_name,
+      debit: transaction.amount,
+      credit: 0,
+      is_correction: true,
+    } as any);
 
-await db.ledger_entries.add({
-  ...createBaseEntity(business_id),
-  transaction_id: transaction.local_id,
-  account_name: 'Sales Revenue',
-  debit: 0,
-  credit: transaction.amount,
-  isCorrection: true,
-} as any);
+    await db.ledger_entries.add({
+      ...createBaseEntity(business_id),
+      transaction_id: transaction.local_id,
+      account_name: 'Sales Revenue',
+      debit: 0,
+      credit: transaction.amount,
+      is_correction: true,
+    } as any);
 
     // COGS
     let totalCOGS = 0;
@@ -121,46 +120,45 @@ await db.ledger_entries.add({
     }
 
     // For COGS and Inventory entries
-await db.ledger_entries.add({
-  ...createBaseEntity(business_id),
-  transaction_id: transaction.local_id,
-  account_name: 'COGS',
-  debit: totalCOGS,
-  credit: 0,
-  isCorrection: true
-} as any);
+    await db.ledger_entries.add({
+      ...createBaseEntity(business_id),
+      transaction_id: transaction.local_id,
+      account_name: 'COGS',
+      debit: totalCOGS,
+      credit: 0,
+      is_correction: true
+    } as any);
 
-await db.ledger_entries.add({
-  ...createBaseEntity(business_id),
-  transaction_id: transaction.local_id,
-  account_name: 'Inventory',
-  debit: 0,
-  credit: totalCOGS,
-  isCorrection: true
-} as any);
+    await db.ledger_entries.add({
+      ...createBaseEntity(business_id),
+      transaction_id: transaction.local_id,
+      account_name: 'Inventory',
+      debit: 0,
+      credit: totalCOGS,
+      is_correction: true
+    } as any);
 
-// For Receivables (Credit Sales)
-if (transaction.payment_method === 'credit') {
-  await db.receivables.add({
-    ...createBaseEntity(business_id),
-    transaction_id: transaction.local_id,
-    customer_id: (transaction as any).customer_id || '',
-    amount: transaction.amount,
-    paid_amount: 0,
-    status: 'pending'
-  } as any);
-} 
-    }
+    // For Receivables (Credit Sales)
+    if (transaction.payment_method === 'credit') {
+      await db.receivables.add({
+        ...createBaseEntity(business_id),
+        transaction_id: transaction.local_id,
+        customer_id: (transaction as any).customer_id || '',
+        amount: transaction.amount,
+        paid_amount: 0,
+        status: 'pending'
+      } as any);
+    } 
   }
- 
+}
 
 
 /**
  * MAIN EXPORTED SERVICE
  */
 export const CorrectionService = {
-  async correctTransaction(transaction_id: string, updatedData: Partial<Transaction>, reason: string, business_id: string, userId: string) {
-    const original = await db.transactions.where('local_id').equals(transaction_id).first();
+  async correctTransaction(transaction_id: string, updatedData: Partial<TransactionWithItems>, reason: string, business_id: string, userId: string) {
+    const original = await db.transactions.where('local_id').equals(transaction_id).first() as TransactionWithItems | undefined;
     if (!original) throw new Error('Transaction not found');
     if (original.status === 'reversed') throw new Error('Cannot correct a reversed transaction');
 
@@ -189,7 +187,7 @@ export const CorrectionService = {
     await db.transactions.update(original.id!, updateSpec);
 
     // 5. Apply Impact
-    const finalTransaction = { ...original, ...updateSpec } as Transaction;
+    const finalTransaction = { ...original, ...updateSpec } as TransactionWithItems;
     await applyFinancialImpact(finalTransaction, business_id);
 
     // 6. Audit Log

@@ -98,6 +98,7 @@ export interface Expense extends BaseEntity {
 }
 
 export interface Transaction extends BaseEntity {
+
   type: 'sale' | 'service' | 'expense' | 'reversal' | 'credit_payment' | 'adjustment';
   amount: number;
   payment_method: 'cash' | 'transfer' | 'credit';
@@ -123,15 +124,15 @@ export interface TransactionWithItems extends Transaction {
 
 export interface LedgerEntry extends BaseEntity {
   transaction_id: string;
-  source_type: 'sale' | 'service' | 'expense' | 'credit_payment' | 'inventory_adjustment';
-  source_id: string;      // ID of the sale, service, etc.
-  debit_account: string;
-  credit_account: string;
-  amount: number;
-  is_reversal: boolean;
-  is_correction: boolean;
+  account_name: string;
+  debit: number;
+  credit: number;
+  is_correction?: boolean;
+  reversal_of_entry_id?: string;
+  is_reversal?: boolean;
   description?: string;
 }
+
 
 
 
