@@ -125,8 +125,8 @@ function buildHistory(
         title: formatTransactionTitle(transaction),
         subtitle: [(transaction as any).customer, transaction.payment_method, transaction.status].filter(Boolean).join(' | '),
         ledgerImpact: {
-          debits: roundCurrency(entries.reduce((total, entry) => total + entry.amount, 0)),
-          credits: roundCurrency(entries.reduce((total, entry) => total + entry.amount, 0)),
+          debits: roundCurrency(entries.reduce((total, entry: any) => total + entry.amount, 0)),
+          credits: roundCurrency(entries.reduce((total, entry: any) => total + entry.amount, 0)),
           entries,
         },
         auditTrail: auditMap.get(transaction.local_id) || [],
