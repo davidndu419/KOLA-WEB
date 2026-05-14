@@ -17,7 +17,8 @@ import { resolveReportDateRange } from '@/services/reportSelectors';
 import { reportsService } from '@/services/reportsService';
 import { reportService } from '@/services/reportService';
 
-import type { Transaction } from '@/db/schema';
+import type { Transaction, LedgerEntry } from '@/db/schema';
+
 import { ReversalSheet } from '@/components/transactions/reversal-sheet';
 import { CorrectionSheet } from '@/components/transactions/correction-sheet';
 import { AuditTrailSheet } from '@/components/transactions/audit-trail-sheet';
@@ -47,17 +48,18 @@ export default function DashboardPage() {
 
     // 1. Total Balance calculation (Net of all Cash/Receivables entries)
     let totalBalance = 0;
-    await db.ledger_entries.each((entry: any) => {
-  const accounts = ['Cash', 'Bank', 'Receivables'];
-  
-  if (accounts.includes(entry.debit_account)) {
-    totalBalance += entry.amount;
-  }
-  
-  if (accounts.includes(entry.credit_account)) {
-    totalBalance -= entry.amount;
-  }
-});
+    await db.ledger_entries.each((entry: LedgerEntry) => {
+      const accounts = ['Cash', 'Bank', 'Receivables'];
+      
+      if (accounts.includes(entry.debit_account)) {
+        totalBalance += entry.amount;
+      }
+      
+      if (accounts.includes(entry.credit_account)) {
+        totalBalance -= entry.amount;
+      }
+    });
+
 
 
     // 2. Range Profit calculation

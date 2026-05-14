@@ -24,20 +24,24 @@ async function validateSaleCorrection(original: TransactionWithItems, updated: P
 /**
  * FIXED: Standalone function for Reversing Financial Impact
  */
-async function reverseFinancialImpact(transaction: TransactionWithItems, business_id: string) {
+async function reverseFinancialImpact(transaction: TransactionWithItems, business_id: string, correction_transaction_id: string) {
   // Ledgers
   const entries = await db.ledger_entries.where('transaction_id').equals(transaction.local_id).toArray();
-  for (const entry of entries) {
+  for (const original_entry of entries) {
     await db.ledger_entries.add({
       ...createBaseEntity(business_id),
-      transaction_id: transaction.local_id,
-      account_name: entry.account_name,
-      debit: entry.credit,
-      credit: entry.debit,
+      transaction_id: correction_transaction_id,
+      source_type: 'correction',
+      source_id: original_entry.local_id,
+      debit_account: original_entry.credit_account,
+      credit_account: original_entry.debit_account,
+      amount: original_entry.amount,
       is_correction: true,
-      reversal_of_entry_id: entry.local_id
-    } as any);
+      reversal_of_entry_id: original_entry.local_id,
+      description: `Correction reversal of ${original_entry.local_id}`
+    });
   }
+
 
   // Inventory (if sale)
   if (transaction.type === 'sale' && transaction.items) {
@@ -162,13 +166,17 @@ export const CorrectionService = {
     if (!original) throw new Error('Transaction not found');
     if (original.status === 'reversed') throw new Error('Cannot correct a reversed transaction');
 
+    const correction_transaction_id = crypto.randomUUID();
+
+
     // 1. Validate
     if (original.type === 'sale') {
       await validateSaleCorrection(original, updatedData);
     }
 
     // 2. Reverse Financial Impact
-    await reverseFinancialImpact(original, business_id);
+    await reverseFinancialImpact(original, business_id, correction_transaction_id);
+
 
     // 3. Prepare Data
     const correction_version = ((original as any).correction_version || 0) + 1;

@@ -57,7 +57,7 @@ export async function adjustStock(
       const valueChange = (new_stock - previous_stock) * product.buying_price;
       if (valueChange === 0) return movement;
 
-      const entry: any= {
+      const entry: Omit<LedgerEntry, 'id'> = {
         ...createBaseEntity(product.business_id),
         local_id: crypto.randomUUID(),
         transaction_id: movement.local_id,
@@ -71,7 +71,8 @@ export async function adjustStock(
         description: `Inventory Adjustment: ${reason || note || 'Manual'}`
       };
 
-      await db.ledger_entries.add(entry as any);
+      await db.ledger_entries.add(entry as LedgerEntry);
+
       await syncQueueService.enqueue('ledger_entries', 'create', entry, product.business_id);
     }
 

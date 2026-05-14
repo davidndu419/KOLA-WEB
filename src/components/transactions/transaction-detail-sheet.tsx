@@ -38,7 +38,8 @@ function receiptText(transaction: any) {
     `Amount: ${money(transaction.amount)}`,
     `Payment: ${transaction.payment_method}`,
     `Date: ${formatFullTransactionDate(transaction.created_at)}`,
-    transaction.customer ? `Customer: ${transaction.customer}` : '',
+    transaction.customer_name ? `Customer: ${transaction.customer_name}` : '',
+
     transaction.note ? `Note: ${transaction.note}` : '',
   ].filter(Boolean).join('\n');
 }
@@ -71,7 +72,8 @@ function printReceipt(transaction: any) {
         <div class="row"><span class="label">Amount</span><span class="value">${money(transaction.amount)}</span></div>
         <div class="row"><span class="label">Payment</span><span class="value">${transaction.payment_method}</span></div>
         <div class="row"><span class="label">Date</span><span class="value">${formatFullTransactionDate(transaction.created_at)}</span></div>
-        ${transaction.customer ? `<div class="row"><span class="label">Customer</span><span class="value">${transaction.customer}</span></div>` : ''}
+        ${transaction.customer_name ? `<div class="row"><span class="label">Customer</span><span class="value">${transaction.customer_name}</span></div>` : ''}
+
         ${transaction.note ? `<div class="row"><span class="label">Note</span><span class="value">${transaction.note}</span></div>` : ''}
       </body>
     </html>
@@ -127,7 +129,8 @@ export function TransactionDetailSheet({
             <InfoRow label="Amount" value={money(transaction.amount)} />
             <InfoRow label="Payment Method" value={transaction.payment_method} />
             <InfoRow label="Transaction Date" value={formatFullTransactionDate(transaction.created_at)} />
-            {transaction.customer && <InfoRow label="Customer" value={transaction.customer} />}
+            {transaction.customer_name && <InfoRow label="Customer" value={transaction.customer_name} />}
+
             {transaction.note && <InfoRow label="Note" value={transaction.note} />}
           </div>
 

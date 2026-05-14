@@ -33,7 +33,7 @@ export class TransactionRepository extends BaseRepository<Transaction> {
         const matchesQuery = !!(
           t.type.toLowerCase().includes(q) || 
           t.note?.toLowerCase().includes(q) || 
-          t.customer?.toLowerCase().includes(q)
+          t.customer_name?.toLowerCase().includes(q)
         );
         return !!(isNotDeleted && matchesQuery);
       })

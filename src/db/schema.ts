@@ -98,14 +98,15 @@ export interface Expense extends BaseEntity {
 }
 
 export interface Transaction extends BaseEntity {
-
   type: 'sale' | 'service' | 'expense' | 'reversal' | 'credit_payment' | 'adjustment';
   amount: number;
   payment_method: 'cash' | 'transfer' | 'credit';
   status: 'completed' | 'voided' | 'pending' | 'active' | 'edited' | 'reversed';
   reference_id: string; // ID of the sale, service, or expense
-  category?: string;
-  customer?: string;
+  customer_id?: string;
+  customer_name?: string;
+  category_id?: string;
+  category_name?: string;
   note?: string;
   is_reversed?: boolean;
   is_edited?: boolean;
@@ -127,14 +128,18 @@ export interface TransactionWithItems extends Transaction {
 
 export interface LedgerEntry extends BaseEntity {
   transaction_id: string;
-  account_name: string;
-  debit: number;
-  credit: number;
+  source_type?: string;
+  source_id?: string;
+  debit_account: string;
+  credit_account: string;
+  amount: number;
+  description?: string;
   is_correction?: boolean;
   reversal_of_entry_id?: string;
+  correction_group_id?: string;
   is_reversal?: boolean;
-  description?: string;
 }
+
 
 
 

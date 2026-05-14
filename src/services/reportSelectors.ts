@@ -23,13 +23,14 @@ export interface ResolvedReportRange {
 }
 
 export interface ReportFilters {
-  category?: string;
+  category_name?: string;
   product_id?: string;
-  customer?: string;
+  customer_name?: string;
   payment_method?: Transaction['payment_method'] | 'all';
   type?: Transaction['type'] | 'all';
   search?: string;
 }
+
 
 
 export function startOfDay(date: Date) {
@@ -165,8 +166,9 @@ export function transactionMatchesFilters(transaction: Transaction, filters: Rep
   if (!isActiveTransaction(transaction)) return false;
   if (filters.type && filters.type !== 'all' && transaction.type !== filters.type) return false;
   if (filters.payment_method && filters.payment_method !== 'all' && transaction.payment_method !== filters.payment_method) return false;
-  if (filters.category && transaction.category !== filters.category) return false;
-  if (filters.customer && transaction.customer !== filters.customer) return false;
+  if (filters.category_name && transaction.category_name !== filters.category_name) return false;
+  if (filters.customer_name && transaction.customer_name !== filters.customer_name) return false;
+
 
   if (filters.search?.trim()) {
     const needle = filters.search.trim().toLowerCase();
@@ -174,10 +176,11 @@ export function transactionMatchesFilters(transaction: Transaction, filters: Rep
       transaction.local_id,
       transaction.type,
       transaction.payment_method,
-      transaction.category,
-      transaction.customer,
+      transaction.category_name,
+      transaction.customer_name,
       transaction.note,
     ]
+
       .filter(Boolean)
       .join(' ')
       .toLowerCase();

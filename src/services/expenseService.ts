@@ -32,8 +32,9 @@ export const expenseService = {
     const categoryMap = new Map<string, ExpenseCategoryBreakdown>();
 
     for (const expense of expenses) {
-      const category = expense.category || 'Uncategorized';
+      const category = expense.category_name || 'Uncategorized';
       const current = categoryMap.get(category) || { category, amount: 0, count: 0, percentage: 0 };
+
       current.amount += expense.amount;
       current.count += 1;
       categoryMap.set(category, current);

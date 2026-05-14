@@ -30,7 +30,8 @@ export async function processAccounting(
       is_reversal: false,
       is_correction: false,
       description: `Sale: ${transaction.local_id}`
-    }as any);
+    });
+
 
     // COGS & Inventory Entry
     for (const item of items) {
@@ -50,7 +51,7 @@ export async function processAccounting(
           is_reversal: false,
           is_correction: false,
           description: `COGS for ${product.name}`
-        }as any);
+        });
 
         // Update stock
         await db.products.update(product.id!, {
@@ -89,7 +90,8 @@ export async function processAccounting(
       is_reversal: false,
       is_correction: false,
       description: `Service: ${transaction.local_id}`
-    }as any);
+    });
+
   }
 
   // 3. Handle Expenses
@@ -106,7 +108,8 @@ export async function processAccounting(
       is_reversal: false,
       is_correction: false,
       description: `Expense: ${transaction.local_id}`
-    }as any);
+    });
+
   }
 
   // 4. Handle Credit Payments
@@ -123,23 +126,25 @@ export async function processAccounting(
       is_reversal: false,
       is_correction: false,
       description: `Credit Payment: ${transaction.local_id}`
-    } as any);
+    });
+
   }
 
   // Perform bulk operations
   if (entries.length > 0) {
-    await db.ledger_entries.bulkAdd(entries as any);
+    await db.ledger_entries.bulkAdd(entries as LedgerEntry[]);
     await syncQueueService.enqueueMany(
       entries.map(e => ({ entity: 'ledger_entries', action: 'create', payload: e, business_id: transaction.business_id }))
     );
   }
 
   if (movements.length > 0) {
-    await db.inventory_movements.bulkAdd(movements as any);
+    await db.inventory_movements.bulkAdd(movements as InventoryMovement[]);
     await syncQueueService.enqueueMany(
       movements.map(m => ({ entity: 'inventory_movements', action: 'create', payload: m, business_id: transaction.business_id }))
     );
   }
+
 }
 
 /**

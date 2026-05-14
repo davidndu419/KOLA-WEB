@@ -56,12 +56,13 @@ export const exportService = {
         item.transaction.type,
         item.title,
         item.transaction.payment_method,
-        item.transaction.customer || item.transaction.customer || '',
+        item.transaction.customer_name || '',
         item.transaction.amount,
         item.transaction.status,
         item.ledgerImpact.debits,
         item.ledgerImpact.credits,
       ]),
+
     ];
 
     downloadText(

@@ -19,9 +19,9 @@ export class ReversalService {
       status: 'reversed',
       is_reversed: true,
       reversal_reason: reason,
-      reversed_at: new Date(),
       updated_at: new Date()
-    } as any);
+    });
+
 
 
     // 2. Logic per transaction type
@@ -82,15 +82,18 @@ export class ReversalService {
       await db.ledger_entries.add({
         ...createBaseEntity(business_id),
         transaction_id: sale.local_id,
-        account_name: entry.account_name,
+        source_type: entry.source_type,
+        source_id: entry.source_id,
         // Reverse debit/credit
-        debit: entry.credit,
-        credit: entry.debit,
+        debit_account: entry.credit_account,
+        credit_account: entry.debit_account,
+        amount: entry.amount,
         is_reversal: true,
-        reversal_of_entry_id: entry.local_id
-      } as any);
-
+        reversal_of_entry_id: entry.local_id,
+        description: `Reversal of entry ${entry.local_id}`
+      });
     }
+
 
     // C. Handle Receivables if credit sale
     if (sale.payment_method === 'credit') {
@@ -111,14 +114,17 @@ export class ReversalService {
       await db.ledger_entries.add({
         ...createBaseEntity(business_id),
         transaction_id: service.local_id,
-        account_name: entry.account_name,
-        debit: entry.credit,
-        credit: entry.debit,
+        source_type: entry.source_type,
+        source_id: entry.source_id,
+        debit_account: entry.credit_account,
+        credit_account: entry.debit_account,
+        amount: entry.amount,
         is_reversal: true,
-        reversal_of_entry_id: entry.local_id
-      } as any);
-
+        reversal_of_entry_id: entry.local_id,
+        description: `Reversal of entry ${entry.local_id}`
+      });
     }
+
 
     // Handle Receivables if credit service
     if (service.payment_method === 'credit') {
@@ -139,14 +145,17 @@ export class ReversalService {
       await db.ledger_entries.add({
         ...createBaseEntity(business_id),
         transaction_id: expense.local_id,
-        account_name: entry.account_name,
-        debit: entry.credit,
-        credit: entry.debit,
+        source_type: entry.source_type,
+        source_id: entry.source_id,
+        debit_account: entry.credit_account,
+        credit_account: entry.debit_account,
+        amount: entry.amount,
         is_reversal: true,
-        reversal_of_entry_id: entry.local_id
-      } as any);
-
+        reversal_of_entry_id: entry.local_id,
+        description: `Reversal of entry ${entry.local_id}`
+      });
     }
+
   }
 
   private static async reverseCreditPayment(payment: Transaction, business_id: string) {
@@ -164,14 +173,17 @@ export class ReversalService {
       await db.ledger_entries.add({
         ...createBaseEntity(business_id),
         transaction_id: payment.local_id,
-        account_name: entry.account_name,
-        debit: entry.credit,
-        credit: entry.debit,
+        source_type: entry.source_type,
+        source_id: entry.source_id,
+        debit_account: entry.credit_account,
+        credit_account: entry.debit_account,
+        amount: entry.amount,
         is_reversal: true,
-        reversal_of_entry_id: entry.local_id
-      } as any);
-
+        reversal_of_entry_id: entry.local_id,
+        description: `Reversal of entry ${entry.local_id}`
+      });
     }
+
 
     // 3. Update Receivable balance
     const newPaidAmount = Math.max(0, (receivable.paid_amount || 0) - payment.amount);
@@ -211,10 +223,10 @@ export class ReversalService {
       user_id: 'offline_user',
       entity_type: 'transaction',
       entity_id: entity.local_id,
-      action: action as any,
+      action: action,
       old_value: entity,
       reason: reason
-    } as any);
-
+    });
   }
+
 }

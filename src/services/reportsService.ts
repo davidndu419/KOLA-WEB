@@ -87,8 +87,9 @@ function applyFilters(transactions: Transaction[], filters?: ReportFilters) {
 function formatTransactionTitle(transaction: Transaction) {
   if (transaction.type === 'sale') return 'Product sale';
   if (transaction.type === 'service') return transaction.note || 'Service income';
-  return transaction.category || 'Expense';
+  return transaction.category_name || 'Expense';
 }
+
 
 function buildHistory(
   transactions: Transaction[],
@@ -123,10 +124,10 @@ function buildHistory(
       return {
         transaction,
         title: formatTransactionTitle(transaction),
-        subtitle: [(transaction as any).customer, transaction.payment_method, transaction.status].filter(Boolean).join(' | '),
+        subtitle: [transaction.customer_name, transaction.payment_method, transaction.status].filter(Boolean).join(' | '),
         ledgerImpact: {
-          debits: roundCurrency(entries.reduce((total, entry: any) => total + entry.amount, 0)),
-          credits: roundCurrency(entries.reduce((total, entry: any) => total + entry.amount, 0)),
+          debits: roundCurrency(entries.reduce((total, entry) => total + (entry.debit_account ? entry.amount : 0), 0)),
+          credits: roundCurrency(entries.reduce((total, entry) => total + (entry.credit_account ? entry.amount : 0), 0)),
           entries,
         },
         auditTrail: auditMap.get(transaction.local_id) || [],
@@ -136,8 +137,8 @@ function buildHistory(
         })),
       };
     });
-
 }
+
 
 export const reportsService = {
   async getSnapshot(
@@ -153,7 +154,7 @@ export const reportsService = {
       previousTransactionsRaw,
       currentLedgerRaw,
       previousLedgerRaw,
-      allLedger,
+      receivableLedger,
       products,
       inventoryMovements,
       receivables,
@@ -166,22 +167,23 @@ export const reportsService = {
       rangeTransactions(range.previousStartDate, range.previousEndDate),
       rangeLedger(range.startDate, range.endDate),
       rangeLedger(range.previousStartDate, range.previousEndDate),
-      db.ledger_entries.toArray(),
-      db.products.toArray(),
-      db.inventory_movements.toArray(),
-      db.receivables.toArray(),
+      db.ledger_entries.where('debit_account').anyOf(['Receivables', 'Cash', 'Bank']).or('credit_account').anyOf(['Receivables', 'Cash', 'Bank']).toArray(),
+      db.products.toArray(), // Products table is usually small enough
+      db.inventory_movements.where('created_at').between(range.startDate, range.endDate, true, true).toArray(),
+      db.receivables.where('status').anyOf(['pending', 'partially-paid']).toArray(),
       db.customers.toArray(),
-      db.audit_logs.toArray(),
-      db.sales.toArray(),
-      db.sale_items.toArray(),
+      db.audit_logs.where('created_at').between(range.startDate, range.endDate, true, true).toArray(),
+      db.sales.where('created_at').between(range.startDate, range.endDate, true, true).toArray(),
+      db.sale_items.where('created_at').between(range.startDate, range.endDate, true, true).toArray(),
     ]);
 
     const transactions = applyFilters(currentTransactionsRaw, filters);
     const previousTransactions = applyFilters(previousTransactionsRaw, filters);
     const transaction_ids = new Set(transactions.map((transaction) => transaction.local_id));
     const previousTransactionIds = new Set(previousTransactions.map((transaction) => transaction.local_id));
-    const currentLedger = currentLedgerRaw.filter((entry: any) => transaction_ids.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
-    const previousLedger = previousLedgerRaw.filter((entry: any) => previousTransactionIds.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
+    const currentLedger = currentLedgerRaw.filter((entry) => transaction_ids.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
+    const previousLedger = previousLedgerRaw.filter((entry) => previousTransactionIds.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
+
 
     // Enrich transactions with items for downstream services
     const saleMap = new Map(salesRaw.map(s => [s.transaction_id, s]));
@@ -214,8 +216,8 @@ export const reportsService = {
     const expenses = expenseService.analyze(transactions, previousTransactions, range);
     const profitLoss = profitLossService.calculate(transactions, currentLedger, previousTransactions, previousLedger);
     const inventory = inventoryReportService.analyze(products, transactions, inventoryMovements);
-    const receivableLedger = allLedger.filter((entry: any) => entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables' || entry.debit_account === 'Cash' || entry.credit_account === 'Cash' || entry.debit_account === 'Bank' || entry.credit_account === 'Bank');
     const receivablesReport = receivableReportService.analyze(receivables as Receivable[], customers as Customer[], receivableLedger);
+
     const sales = analyticsService.sales(transactions, products);
     const services = analyticsService.services(transactions);
     const paymentBreakdown = analyticsService.paymentBreakdown(transactions);
@@ -236,7 +238,8 @@ export const reportsService = {
       topSellingProducts: sales.topSellingProducts,
       bestPerformingServices: services.topServices,
       mostProfitableItems,
-      transactions: buildHistory(transactions, products, [...currentLedger, ...allLedger], auditLogs),
+      transactions: buildHistory(transactions, products, [...currentLedger, ...receivableLedger], auditLogs),
+
       summary: {
         totalRevenue: revenue.totalRevenue,
         totalSales: sales.totalSalesValue,

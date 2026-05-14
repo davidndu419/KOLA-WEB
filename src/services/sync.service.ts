@@ -25,6 +25,171 @@ const ENTITY_PRIORITY: Record<string, number> = {
   'receipts': 8
 };
 
+const syncTables = {
+  products: db.products,
+  sales: db.sales,
+  sale_items: db.sale_items,
+  expenses: db.expenses,
+  transactions: db.transactions,
+  ledger_entries: db.ledger_entries,
+  receivables: db.receivables,
+  inventory_movements: db.inventory_movements,
+  customers: db.customers,
+  suppliers: db.suppliers,
+  categories: db.categories,
+} as const;
+
+
+/**
+ * Base Serializer: Returns fields common to all entities.
+ */
+const serializeBase = (payload: any) => ({
+  local_id: payload.local_id,
+  business_id: payload.business_id,
+  created_at: payload.created_at,
+  updated_at: payload.updated_at,
+  deleted_at: payload.deleted_at || null,
+  sync_status: payload.sync_status,
+  version: payload.version || 1,
+  device_id: payload.device_id || 'unknown',
+});
+
+const serializeLedgerEntryForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  transaction_id: payload.transaction_id,
+  source_type: payload.source_type,
+  source_id: payload.source_id,
+  debit_account: payload.debit_account,
+  credit_account: payload.credit_account,
+  amount: payload.amount,
+  description: payload.description,
+  is_correction: !!payload.is_correction,
+  reversal_of_entry_id: payload.reversal_of_entry_id,
+  correction_group_id: payload.correction_group_id,
+  is_reversal: !!payload.is_reversal,
+});
+
+const serializeTransactionForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  type: payload.type,
+  amount: payload.amount,
+  payment_method: payload.payment_method,
+  status: payload.status,
+  reference_id: payload.reference_id,
+  customer_id: payload.customer_id,
+  customer_name: payload.customer_name,
+  category_id: payload.category_id,
+  category_name: payload.category_name,
+  note: payload.note,
+  is_reversed: !!payload.is_reversed,
+  is_edited: !!payload.is_edited,
+  reversal_reason: payload.reversal_reason,
+  original_transaction_id: payload.original_transaction_id,
+  source_type: payload.source_type,
+  source_id: payload.source_id,
+  correction_version: payload.correction_version,
+  corrected_at: payload.corrected_at,
+});
+
+const serializeSaleForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  transaction_id: payload.transaction_id,
+  customer_id: payload.customer_id,
+  total_amount: payload.total_amount,
+  discount_amount: payload.discount_amount,
+  tax_amount: payload.tax_amount,
+  net_amount: payload.net_amount,
+  payment_method: payload.payment_method,
+  status: payload.status,
+  note: payload.note,
+});
+
+const serializeSaleItemForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  sale_id: payload.sale_id,
+  product_id: payload.product_id,
+  quantity: payload.quantity,
+  unit_price: payload.unit_price,
+  total_price: payload.total_price,
+  cost: payload.cost,
+});
+
+const serializeExpenseForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  transaction_id: payload.transaction_id,
+  category_id: payload.category_id,
+  amount: payload.amount,
+  payment_method: payload.payment_method,
+  recipient: payload.recipient,
+  note: payload.note,
+  status: payload.status,
+});
+
+const serializeReceivableForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  transaction_id: payload.transaction_id,
+  customer_id: payload.customer_id,
+  amount: payload.amount,
+  paid_amount: payload.paid_amount,
+  due_date: payload.due_date,
+  status: payload.status,
+});
+
+const serializeInventoryMovementForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  product_id: payload.product_id,
+  type: payload.type,
+  quantity: payload.quantity,
+  previous_stock: payload.previous_stock,
+  new_stock: payload.new_stock,
+  note: payload.note,
+  reason: payload.reason,
+  status: payload.status,
+});
+
+const serializeProductForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  name: payload.name,
+  sku: payload.sku,
+  barcode: payload.barcode,
+  category_id: payload.category_id,
+  unit_type: payload.unit_type,
+  buying_price: payload.buying_price,
+  selling_price: payload.selling_price,
+  profit_margin: payload.profit_margin,
+  stock: payload.stock,
+  min_stock: payload.min_stock,
+  max_stock: payload.max_stock,
+  supplier_id: payload.supplier_id,
+  expiry_date: payload.expiry_date,
+  image_url: payload.image_url,
+  notes: payload.notes,
+  tags: payload.tags,
+  is_archived: !!payload.is_archived,
+});
+
+/**
+ * Main Dispatcher: Strips all local-only or legacy fields.
+ */
+const serializeForSync = (entity: string, payload: any) => {
+  switch (entity) {
+    case 'ledger_entries': return serializeLedgerEntryForSync(payload);
+    case 'transactions': return serializeTransactionForSync(payload);
+    case 'sales': return serializeSaleForSync(payload);
+    case 'sale_items': return serializeSaleItemForSync(payload);
+    case 'expenses': return serializeExpenseForSync(payload);
+    case 'receivables': return serializeReceivableForSync(payload);
+    case 'inventory_movements': return serializeInventoryMovementForSync(payload);
+    case 'products': return serializeProductForSync(payload);
+    default:
+      // For other entities, just remove the local Dexie ID
+      const { id: _, ...clean } = payload;
+      return clean;
+  }
+};
+
+
+
 export const syncService = {
   isProcessing: false,
 
@@ -80,16 +245,21 @@ export const syncService = {
     const { entity, action, payload, id, retry_count } = item;
     
     try {
+      const localTable = syncTables[entity as keyof typeof syncTables];
+      if (!localTable) {
+        throw new Error(`Unsupported sync entity: ${entity}`);
+      }
+
       await db.sync_queue.update(id!, { status: 'syncing' });
 
       let result;
       switch (action) {
         case 'create':
         case 'update':
-          // Ensure we don't send local ++id to Supabase if it exists in payload
-          const { id: _, ...syncPayload } = payload;
+          const syncPayload = serializeForSync(entity, payload);
           result = await supabase.from(entity).upsert(syncPayload, { onConflict: 'local_id' });
           break;
+
         case 'delete':
           result = await supabase.from(entity).delete().eq('local_id', item.entity_id);
           break;
@@ -100,15 +270,13 @@ export const syncService = {
       // Success: Remove from queue and mark local as synced
       await db.sync_queue.delete(id!);
       
-      const localTable = (db as any)[entity];
-      if (localTable) {
-        const localItem = await localTable.where('local_id').equals(item.entity_id).first();
-        if (localItem) {
-          await localTable.update(localItem.id, { sync_status: 'synced', updated_at: new Date() });
-        }
+      const localItem = await localTable.where('local_id').equals(item.entity_id).first();
+      if (localItem) {
+        await localTable.update(localItem.id, { sync_status: 'synced', updated_at: new Date() });
       }
 
     } catch (error: any) {
+
       const newRetryCount = retry_count + 1;
       const status = newRetryCount >= MAX_RETRIES ? 'failed' : 'pending';
       await db.sync_queue.update(id!, { 
@@ -146,8 +314,11 @@ export const syncService = {
 
       if (data && data.length > 0) {
         for (const remoteItem of data) {
-          const localTable = (db as any)[table];
+          const localTable = syncTables[table as keyof typeof syncTables];
+          if (!localTable) continue;
+
           const localItem = await localTable.where('local_id').equals((remoteItem as any).local_id).first();
+
           
           // Convert string dates to Date objects for Dexie
           const processedItem: any = {

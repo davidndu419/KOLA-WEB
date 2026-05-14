@@ -47,7 +47,8 @@ function productRanking(transactions: Transaction[], products: Product[]): Ranke
   const rankings = new Map<string, RankedItem>();
 
   for (const transaction of transactions.filter((item) => item.type === 'sale')) {
-    const transactionItems = (transaction as any).items || [];
+    const transactionItems = (transaction as Transaction & { items: any[] }).items || [];
+
     for (const item of transactionItems) {
       const product = productMap.get(item.product_id);
       const current = rankings.get(item.product_id) || {
@@ -177,8 +178,9 @@ export const analyticsService = {
         .reduce((total, transaction) => total + transaction.amount, 0)
     );
     const paymentRecoveries = roundCurrency(
-      ledgerEntries.filter((entry: any) => entry.credit_account === 'Receivables').reduce((total: any, entry: any) => total + entry.amount, 0)
+      ledgerEntries.filter((entry) => entry.credit_account === 'Receivables').reduce((total, entry) => total + entry.amount, 0)
     );
+
 
     const previousCashFlow = roundCurrency(
       previousTransactions
