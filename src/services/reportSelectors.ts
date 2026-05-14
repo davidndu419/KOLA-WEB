@@ -24,12 +24,13 @@ export interface ResolvedReportRange {
 
 export interface ReportFilters {
   category?: string;
-  productId?: string;
-  customerId?: string;
-  paymentMethod?: Transaction['paymentMethod'] | 'all';
+  product_id?: string;
+  customer?: string;
+  payment_method?: Transaction['payment_method'] | 'all';
   type?: Transaction['type'] | 'all';
   search?: string;
 }
+
 
 export function startOfDay(date: Date) {
   const next = new Date(date);
@@ -157,26 +158,24 @@ export function resolveReportDateRange(
 }
 
 export function isActiveTransaction(transaction: Transaction) {
-  return !transaction.deletedAt && transaction.status !== 'voided' && transaction.status !== 'reversed';
+  return !transaction.deleted_at && transaction.status !== 'voided' && transaction.status !== 'reversed';
 }
 
 export function transactionMatchesFilters(transaction: Transaction, filters: ReportFilters = {}) {
   if (!isActiveTransaction(transaction)) return false;
   if (filters.type && filters.type !== 'all' && transaction.type !== filters.type) return false;
-  if (filters.paymentMethod && filters.paymentMethod !== 'all' && transaction.paymentMethod !== filters.paymentMethod) return false;
+  if (filters.payment_method && filters.payment_method !== 'all' && transaction.payment_method !== filters.payment_method) return false;
   if (filters.category && transaction.category !== filters.category) return false;
-  if (filters.productId && !transaction.items?.some((item) => item.productId === filters.productId)) return false;
-  if (filters.customerId && transaction.customerId !== filters.customerId) return false;
+  if (filters.customer && transaction.customer !== filters.customer) return false;
 
   if (filters.search?.trim()) {
     const needle = filters.search.trim().toLowerCase();
     const haystack = [
-      transaction.localId,
+      transaction.local_id,
       transaction.type,
-      transaction.paymentMethod,
+      transaction.payment_method,
       transaction.category,
       transaction.customer,
-      transaction.customerId,
       transaction.note,
     ]
       .filter(Boolean)

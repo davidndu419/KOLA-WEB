@@ -1,5 +1,6 @@
 import { db, createBaseEntity } from '@/db/dexie';
 import type { AuditLog, LedgerEntry, Receivable, Transaction } from '@/db/schema';
+import { syncQueueService } from './syncQueueService';
 
 export type CreditSourceType = 'sale' | 'service';
 export type CreditFilter = 'all' | 'pending' | 'partially-paid' | 'paid' | 'overdue';
@@ -12,7 +13,7 @@ export interface CreditHistoryItem {
   amountOwed: number;
   amountPaid: number;
   balance: number;
-  dueDate: Date;
+  due_date: Date;
   isOverdue: boolean;
 }
 
@@ -27,7 +28,7 @@ export interface CreditSummary {
 export interface CreditPaymentInput {
   receivableId: string;
   amount: number;
-  paymentMethod: 'cash' | 'transfer';
+  payment_method: 'cash' | 'transfer';
   paymentDate?: Date;
   note?: string;
 }
@@ -35,15 +36,15 @@ export interface CreditPaymentInput {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function defaultDueDate(receivable: Receivable) {
-  return receivable.dueDate || new Date(receivable.createdAt.getTime() + 30 * DAY_MS);
+  return receivable.due_date || new Date(receivable.created_at.getTime() + 30 * DAY_MS);
 }
 
 function isOverdue(receivable: Receivable, now = new Date()) {
   return receivable.status !== 'paid' && defaultDueDate(receivable).getTime() < now.getTime();
 }
 
-function balance(receivable: Receivable) {
-  return Math.max(0, receivable.amount - receivable.paidAmount);
+function getBalance(receivable: Receivable) {
+  return Math.max(0, receivable.amount - receivable.paid_amount);
 }
 
 async function creditHistory(sourceType: CreditSourceType): Promise<CreditHistoryItem[]> {
@@ -52,33 +53,31 @@ async function creditHistory(sourceType: CreditSourceType): Promise<CreditHistor
     db.transactions.toArray(),
     db.customers.toArray(),
   ]);
-  const transactionMap = new Map(transactions.map((transaction) => [transaction.localId, transaction]));
-  const customerMap = new Map(customers.map((customer) => [customer.localId, customer]));
+  const transactionMap = new Map(transactions.map((transaction) => [transaction.local_id, transaction]));
+  const customerMap = new Map(customers.map((customer) => [customer.local_id, customer]));
 
   return receivables
     .map((receivable) => {
-      const transaction = transactionMap.get(receivable.transactionId);
-      if (!transaction || transaction.type !== sourceType || transaction.deletedAt || receivable.deletedAt) return null;
-      const customer = customerMap.get(receivable.customerId);
+      const transaction = transactionMap.get(receivable.transaction_id);
+      if (!transaction || transaction.type !== sourceType || transaction.deleted_at || receivable.deleted_at) return null;
+      const customer = customerMap.get(receivable.customer_id);
 
       return {
         receivable,
         transaction,
-        customerName: transaction.customer || customer?.name || transaction.customerId || 'Walk-in customer',
+        customerName: customer?.name || 'Walk-in customer',
         sourceName: sourceType === 'service'
           ? transaction.note || 'Service'
-          : transaction.items?.length
-            ? `${transaction.items.length} item sale`
-            : 'Product sale',
+          : 'Product sale',
         amountOwed: receivable.amount,
-        amountPaid: receivable.paidAmount,
-        balance: balance(receivable),
-        dueDate: defaultDueDate(receivable),
+        amountPaid: receivable.paid_amount,
+        balance: getBalance(receivable),
+        due_date: defaultDueDate(receivable),
         isOverdue: isOverdue(receivable),
       };
     })
     .filter((item): item is CreditHistoryItem => Boolean(item))
-    .sort((a, b) => b.receivable.createdAt.getTime() - a.receivable.createdAt.getTime());
+    .sort((a, b) => b.receivable.created_at.getTime() - a.receivable.created_at.getTime());
 }
 
 function summarize(items: CreditHistoryItem[]): CreditSummary {
@@ -91,171 +90,86 @@ function summarize(items: CreditHistoryItem[]): CreditSummary {
   };
 }
 
-export function getSalesCreditHistory() {
-  return creditHistory('sale');
-}
-
-export function getServiceCreditHistory() {
-  return creditHistory('service');
-}
-
-export async function getSalesCreditSummary() {
-  return summarize(await creditHistory('sale'));
-}
-
-export async function getServiceCreditSummary() {
-  return summarize(await creditHistory('service'));
-}
-
-export async function getPendingSalesCreditCount() {
-  return (await getSalesCreditSummary()).pendingCount;
-}
-
-export async function getPendingServiceCreditCount() {
-  return (await getServiceCreditSummary()).pendingCount;
-}
-
-export async function getOverdueSalesCreditCount() {
-  return (await getSalesCreditSummary()).overdueCount;
-}
-
-export async function getOverdueServiceCreditCount() {
-  return (await getServiceCreditSummary()).overdueCount;
-}
-
-export function openSalesCreditHistory() {
-  return undefined;
-}
-
-export function openServiceCreditHistory() {
-  return undefined;
-}
-
-export async function confirmCreditPayment(input: CreditPaymentInput) {
-  const receivable = await db.receivables.where('localId').equals(input.receivableId).first();
-  if (!receivable) throw new Error('Receivable not found');
-
-  const outstanding = balance(receivable);
-  const amount = Math.min(input.amount, outstanding);
-  if (amount <= 0) throw new Error('Payment amount must be greater than zero');
-
-  const paymentDate = input.paymentDate || new Date();
-  const ledgerBase = createBaseEntity(receivable.businessId);
-  const auditBase = createBaseEntity(receivable.businessId);
-  const paymentId = crypto.randomUUID();
-  const newPaidAmount = Math.min(receivable.amount, receivable.paidAmount + amount);
-  const status: Receivable['status'] = newPaidAmount >= receivable.amount ? 'paid' : 'partially-paid';
-
-  return db.transaction('rw', [db.receivables, db.ledger_entries, db.customers, db.audit_logs, db.sync_queue], async () => {
-    await db.receivables.update(receivable.id!, {
-      paidAmount: newPaidAmount,
-      status,
-      updatedAt: paymentDate,
-      syncStatus: 'pending',
-    });
-
-    const customer = await db.customers.where('localId').equals(receivable.customerId).first();
-    if (customer) {
-      await db.customers.update(customer.id!, {
-        totalDebt: Math.max(0, customer.totalDebt - amount),
-        updatedAt: paymentDate,
-        syncStatus: 'pending',
-      });
-    }
-
-    const ledgerEntries: Omit<LedgerEntry, 'id'>[] = [
-      {
-        ...ledgerBase,
-        localId: crypto.randomUUID(),
-        transactionId: paymentId,
-        accountName: input.paymentMethod === 'cash' ? 'Cash' : 'Bank',
-        debit: amount,
-        credit: 0,
-        createdAt: paymentDate,
-        updatedAt: paymentDate,
-      },
-      {
-        ...ledgerBase,
-        localId: crypto.randomUUID(),
-        transactionId: paymentId,
-        accountName: 'Receivables',
-        debit: 0,
-        credit: amount,
-        createdAt: paymentDate,
-        updatedAt: paymentDate,
-      },
-    ];
-
-    await db.ledger_entries.bulkAdd(ledgerEntries);
-
-    const auditLog: Omit<AuditLog, 'id'> = {
-      ...auditBase,
-      userId: 'local-user',
-      action: 'credit_payment',
-      entityType: 'receivable',
-      entityId: receivable.localId,
-      previousValue: {
-        paidAmount: receivable.paidAmount,
-        status: receivable.status,
-      },
-      newValue: {
-        paymentId,
-        amount,
-        paidAmount: newPaidAmount,
-        status,
-        paymentMethod: input.paymentMethod,
-        paymentDate,
-        note: input.note,
-      },
-      createdAt: paymentDate,
-      updatedAt: paymentDate,
-    };
-    await db.audit_logs.add(auditLog);
-
-    await db.sync_queue.bulkAdd([
-      {
-        table: 'receivables',
-        action: 'update',
-        data: { localId: receivable.localId, paidAmount: newPaidAmount, status },
-        timestamp: paymentDate,
-        retryCount: 0,
-        status: 'pending',
-      },
-      {
-        table: 'ledger_entries',
-        action: 'create',
-        data: ledgerEntries,
-        timestamp: paymentDate,
-        retryCount: 0,
-        status: 'pending',
-      },
-      {
-        table: 'audit_logs',
-        action: 'create',
-        data: auditLog,
-        timestamp: paymentDate,
-        retryCount: 0,
-        status: 'pending',
-      },
-    ]);
-
-    return { paidAmount: newPaidAmount, status };
-  });
-}
-
 export const creditService = {
-  getSalesCreditHistory,
-  getServiceCreditHistory,
-  getSalesCreditSummary,
-  getServiceCreditSummary,
-  getPendingSalesCreditCount,
-  getPendingServiceCreditCount,
-  getOverdueSalesCreditCount,
-  getOverdueServiceCreditCount,
-  openSalesCreditHistory,
-  openServiceCreditHistory,
-  confirmCreditPayment,
-  recordPartialCreditPayment: confirmCreditPayment,
-};
+  getSalesCreditHistory: () => creditHistory('sale'),
+  getServiceCreditHistory: () => creditHistory('service'),
+  getSalesCreditSummary: async () => summarize(await creditHistory('sale')),
+  getServiceCreditSummary: async () => summarize(await creditHistory('service')),
+  
+  async confirmCreditPayment(input: CreditPaymentInput) {
+    const receivable = await db.receivables.where('local_id').equals(input.receivableId).first();
+    if (!receivable) throw new Error('Receivable not found');
 
-export const recordPartialCreditPayment = confirmCreditPayment;
+    const outstanding = getBalance(receivable);
+    const amount = Math.min(input.amount, outstanding);
+    if (amount <= 0) throw new Error('Payment amount must be greater than zero');
+
+    const business_id = receivable.business_id;
+    const paymentDate = input.paymentDate || new Date();
+    
+    return db.transaction('rw', [db.receivables, db.transactions, db.ledger_entries, db.customers, db.audit_logs, db.sync_queue], async () => {
+      const newPaidAmount = receivable.paid_amount + amount;
+      const status: Receivable['status'] = newPaidAmount >= receivable.amount ? 'paid' : 'partially-paid';
+
+      // 1. Update Receivable
+      const updatedReceivable = {
+        ...receivable,
+        paid_amount: newPaidAmount,
+        status,
+        updated_at: paymentDate,
+        sync_status: 'pending' as const
+      };
+      await db.receivables.update(receivable.id!, updatedReceivable);
+      await syncQueueService.enqueue('receivables', 'update', updatedReceivable, business_id);
+
+      // 2. Update Customer
+      const customer = await db.customers.where('local_id').equals(receivable.customer_id).first();
+      if (customer) {
+        const updatedCustomer = {
+          ...customer,
+          total_debt: Math.max(0, (customer.total_debt || 0) - amount),
+          updated_at: paymentDate,
+          sync_status: 'pending' as const
+        };
+        await db.customers.update(customer.id!, updatedCustomer);
+        await syncQueueService.enqueue('customers', 'update', updatedCustomer, business_id);
+      }
+
+      // 3. Create Payment Transaction
+      const paymentTx: Transaction = {
+        ...createBaseEntity(business_id),
+        type: 'credit_payment',
+        amount,
+        payment_method: input.payment_method,
+        status: 'completed',
+        reference_id: receivable.local_id,
+        note: input.note || `Credit payment for transaction ${receivable.transaction_id}`,
+      };
+      await db.transactions.add(paymentTx);
+      await syncQueueService.enqueue('transactions', 'create', paymentTx, business_id);
+
+      // 4. Ledger Entries
+      const ledgerBase = createBaseEntity(business_id);
+      const entry: LedgerEntry = {
+        ...ledgerBase,
+        transaction_id: paymentTx.local_id,
+        source_type: 'credit_payment',
+        source_id: receivable.local_id,
+        debit_account: input.payment_method === 'cash' ? 'Cash' : 'Bank',
+        credit_account: 'Receivables',
+        amount,
+        is_reversal: false,
+        is_correction: false,
+      };
+      await db.ledger_entries.add(entry);
+      await syncQueueService.enqueue('ledger_entries', 'create', entry, business_id);
+
+
+      return { paid_amount: newPaidAmount, status };
+    });
+  },
+  
+  recordPartialCreditPayment(input: CreditPaymentInput) {
+    return this.confirmCreditPayment(input);
+  }
+};

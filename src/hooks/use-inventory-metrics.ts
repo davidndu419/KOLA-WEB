@@ -5,7 +5,7 @@ import { db } from '@/db/dexie';
 export function useInventoryMetrics() {
   return useLiveQuery(async () => {
     const products = await db.products
-      .filter((product) => !product.isArchived)
+      .filter((product) => !product.is_archived && !product.deleted_at)
       .toArray();
     
     let totalValue = 0;
@@ -16,21 +16,23 @@ export function useInventoryMetrics() {
     
     products.forEach(p => {
       const stock = p.stock || 0;
-      totalValue += (p.buyingPrice * stock);
-      potentialProfit += ((p.sellingPrice - p.buyingPrice) * stock);
+      totalValue += (p.buying_price * stock);
+      potentialProfit += ((p.selling_price - p.buying_price) * stock);
       totalUnits += stock;
       
       if (stock <= 0) {
         outOfStockCount++;
-      } else if (stock <= p.minStock) {
+      } else if (stock <= p.min_stock) {
         lowStockCount++;
       }
     });
 
+
     // Fast-moving detection (placeholder logic for now, could use transaction frequency)
     const fastMoving = products
-      .filter(p => p.stock > 0 && p.stock < p.minStock * 2)
+      .filter(p => p.stock > 0 && p.stock < p.min_stock * 2)
       .slice(0, 3);
+
 
     return {
       totalValue,

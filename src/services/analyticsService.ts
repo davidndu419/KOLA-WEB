@@ -43,14 +43,15 @@ export interface ServiceAnalytics {
 }
 
 function productRanking(transactions: Transaction[], products: Product[]): RankedItem[] {
-  const productMap = new Map(products.map((product) => [product.localId, product]));
+  const productMap = new Map(products.map((product) => [product.local_id, product]));
   const rankings = new Map<string, RankedItem>();
 
   for (const transaction of transactions.filter((item) => item.type === 'sale')) {
-    for (const item of transaction.items || []) {
-      const product = productMap.get(item.productId);
-      const current = rankings.get(item.productId) || {
-        id: item.productId,
+    const transactionItems = (transaction as any).items || [];
+    for (const item of transactionItems) {
+      const product = productMap.get(item.product_id);
+      const current = rankings.get(item.product_id) || {
+        id: item.product_id,
         name: product?.name || 'Archived product',
         quantity: 0,
         revenue: 0,
@@ -58,11 +59,12 @@ function productRanking(transactions: Transaction[], products: Product[]): Ranke
       };
 
       current.quantity += item.quantity;
-      current.revenue += item.quantity * item.price;
-      current.profit += item.quantity * (item.price - (item.cost ?? product?.buyingPrice ?? 0));
-      rankings.set(item.productId, current);
+      current.revenue += item.quantity * item.unit_price;
+      current.profit += item.quantity * (item.unit_price - (item.cost_price || product?.buying_price || 0));
+      rankings.set(item.product_id, current);
     }
   }
+
 
   return Array.from(rankings.values())
     .map((item) => ({
@@ -112,7 +114,7 @@ export const analyticsService = {
       totalSalesValue,
       averageSaleValue: roundCurrency(safeDivide(totalSalesValue, sales.length)),
       creditSalesValue: roundCurrency(
-        sales.filter((transaction) => transaction.paymentMethod === 'credit').reduce((total, transaction) => total + transaction.amount, 0)
+        sales.filter((transaction) => transaction.payment_method === 'credit').reduce((total, transaction) => total + transaction.amount, 0)
       ),
       topSellingProducts: productRanking(transactions, products).slice(0, 5),
     };
@@ -133,11 +135,11 @@ export const analyticsService = {
 
   paymentBreakdown(transactions: Transaction[]): PaymentBreakdown {
     const income = transactions.filter((transaction) => transaction.type === 'sale' || transaction.type === 'service');
-    const cash = roundCurrency(income.filter((transaction) => transaction.paymentMethod === 'cash').reduce((total, transaction) => total + transaction.amount, 0));
+    const cash = roundCurrency(income.filter((transaction) => transaction.payment_method === 'cash').reduce((total, transaction) => total + transaction.amount, 0));
     const transfer = roundCurrency(
-      income.filter((transaction) => transaction.paymentMethod === 'transfer').reduce((total, transaction) => total + transaction.amount, 0)
+      income.filter((transaction) => transaction.payment_method === 'transfer').reduce((total, transaction) => total + transaction.amount, 0)
     );
-    const credit = roundCurrency(income.filter((transaction) => transaction.paymentMethod === 'credit').reduce((total, transaction) => total + transaction.amount, 0));
+    const credit = roundCurrency(income.filter((transaction) => transaction.payment_method === 'credit').reduce((total, transaction) => total + transaction.amount, 0));
 
     return {
       cash,
@@ -158,12 +160,12 @@ export const analyticsService = {
   cashFlow(transactions: Transaction[], ledgerEntries: LedgerEntry[], previousTransactions: Transaction[]): CashFlowAnalytics {
     const cashInflow = roundCurrency(
       transactions
-        .filter((transaction) => (transaction.type === 'sale' || transaction.type === 'service') && transaction.paymentMethod === 'cash')
+        .filter((transaction) => (transaction.type === 'sale' || transaction.type === 'service') && transaction.payment_method === 'cash')
         .reduce((total, transaction) => total + transaction.amount, 0)
     );
     const transferInflow = roundCurrency(
       transactions
-        .filter((transaction) => (transaction.type === 'sale' || transaction.type === 'service') && transaction.paymentMethod === 'transfer')
+        .filter((transaction) => (transaction.type === 'sale' || transaction.type === 'service') && transaction.payment_method === 'transfer')
         .reduce((total, transaction) => total + transaction.amount, 0)
     );
     const cashOutflow = roundCurrency(
@@ -171,16 +173,17 @@ export const analyticsService = {
     );
     const creditImpact = roundCurrency(
       transactions
-        .filter((transaction) => (transaction.type === 'sale' || transaction.type === 'service') && transaction.paymentMethod === 'credit')
+        .filter((transaction) => (transaction.type === 'sale' || transaction.type === 'service') && transaction.payment_method === 'credit')
         .reduce((total, transaction) => total + transaction.amount, 0)
     );
     const paymentRecoveries = roundCurrency(
-      ledgerEntries.filter((entry) => entry.accountName === 'Receivables' && entry.credit > 0).reduce((total, entry) => total + entry.credit, 0)
+      ledgerEntries.filter((entry) => entry.credit_account === 'Receivables' && entry.amount > 0).reduce((total, entry) => total + entry.amount, 0)
     );
+
     const previousCashFlow = roundCurrency(
       previousTransactions
         .filter((transaction) => transaction.type === 'sale' || transaction.type === 'service')
-        .filter((transaction) => transaction.paymentMethod !== 'credit')
+        .filter((transaction) => transaction.payment_method !== 'credit')
         .reduce((total, transaction) => total + transaction.amount, 0) -
         previousTransactions.filter((transaction) => transaction.type === 'expense').reduce((total, transaction) => total + transaction.amount, 0)
     );

@@ -103,9 +103,9 @@ export default function ReportsPage() {
             />
             <InsightCard
               title="Profit Margin"
-              value={`${reportsData.profitLoss.profitMargin}%`}
+              value={`${reportsData.profitLoss.profit_margin}%`}
               insight="Net profit margin across all operations in this range."
-              color={reportsData.profitLoss.profitMargin >= 0 ? 'emerald' : 'red'}
+              color={reportsData.profitLoss.profit_margin >= 0 ? 'emerald' : 'red'}
               icon={Sparkles}
             />
             <InsightCard

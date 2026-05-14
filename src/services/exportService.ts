@@ -51,12 +51,12 @@ export const exportService = {
       ['Transactions'],
       ['Date', 'ID', 'Type', 'Title', 'Payment', 'Customer', 'Amount', 'Status', 'Ledger debit', 'Ledger credit'],
       ...snapshot.transactions.map((item) => [
-        item.transaction.createdAt.toLocaleString('en-NG'),
-        item.transaction.localId,
+        item.transaction.created_at.toLocaleString('en-NG'),
+        item.transaction.local_id,
         item.transaction.type,
         item.title,
-        item.transaction.paymentMethod,
-        item.transaction.customer || item.transaction.customerId || '',
+        item.transaction.payment_method,
+        item.transaction.customer || item.transaction.customer_id || '',
         item.transaction.amount,
         item.transaction.status,
         item.ledgerImpact.debits,
@@ -83,9 +83,9 @@ export const exportService = {
       .map(
         (item) => `
           <tr>
-            <td>${item.transaction.createdAt.toLocaleDateString('en-NG')}</td>
+            <td>${item.transaction.created_at.toLocaleDateString('en-NG')}</td>
             <td>${item.title}</td>
-            <td>${item.transaction.paymentMethod}</td>
+            <td>${item.transaction.payment_method}</td>
             <td>${money(item.transaction.amount)}</td>
           </tr>
         `

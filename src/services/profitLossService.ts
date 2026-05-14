@@ -7,7 +7,7 @@ export interface ProfitLossReport {
   grossProfit: number;
   operatingExpenses: number;
   netProfit: number;
-  profitMargin: number;
+  profit_margin: number;
   grossMargin: number;
   trendDirection: 'up' | 'down' | 'flat';
   comparison: {
@@ -16,13 +16,18 @@ export interface ProfitLossReport {
   };
 }
 
-function ledgerBalance(entries: LedgerEntry[], accountName: string) {
+function ledgerBalance(entries: LedgerEntry[], account_name: string) {
   return roundCurrency(
     entries
-      .filter((entry) => !entry.deletedAt && entry.accountName === accountName)
-      .reduce((total, entry) => total + entry.debit - entry.credit, 0)
+      .reduce((total, entry) => {
+        let balance = 0;
+        if (entry.debit_account === account_name) balance += entry.amount;
+        if (entry.credit_account === account_name) balance -= entry.amount;
+        return total + balance;
+      }, 0)
   );
 }
+
 
 function revenueFromTransactions(transactions: Transaction[]) {
   return roundCurrency(
@@ -64,7 +69,7 @@ export const profitLossService = {
       grossProfit,
       operatingExpenses,
       netProfit,
-      profitMargin: roundCurrency(safeDivide(netProfit, totalRevenue) * 100),
+      profit_margin: roundCurrency(safeDivide(netProfit, totalRevenue) * 100),
       grossMargin: roundCurrency(safeDivide(grossProfit, totalRevenue) * 100),
       trendDirection: netProfitChange > 0 ? 'up' : netProfitChange < 0 ? 'down' : 'flat',
       comparison: {

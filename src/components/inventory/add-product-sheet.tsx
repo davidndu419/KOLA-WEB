@@ -11,14 +11,14 @@ import { Package, Hash, Tag, Coins, Layers, User } from 'lucide-react';
 
 const productSchema = z.object({
   name: z.string().min(2, 'Name too short'),
-  category: z.string().min(2, 'Category required'),
-  unitType: z.enum(['piece', 'kg', 'liter', 'pack', 'set']),
-  buyingPrice: z.number().min(0),
-  sellingPrice: z.number().min(0),
+  category_id: z.string().optional(),
+  unit_type: z.enum(['piece', 'kg', 'liter', 'pack', 'set']),
+  buying_price: z.number().min(0),
+  selling_price: z.number().min(0),
   stock: z.number().min(0),
-  minStock: z.number().min(0),
+  min_stock: z.number().min(0),
   sku: z.string().optional(),
-  supplier: z.string().optional(),
+  supplier_id: z.string().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -34,22 +34,22 @@ export function AddProductSheet({
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
-      unitType: 'piece',
-      buyingPrice: 0,
-      sellingPrice: 0,
+      unit_type: 'piece',
+      buying_price: 0,
+      selling_price: 0,
       stock: 0,
-      minStock: 5,
+      min_stock: 5,
     }
   });
 
   const onSubmit = async (data: ProductFormValues) => {
     if (!business) return;
     try {
-      const profitMargin = data.sellingPrice - data.buyingPrice;
+      const profit_margin = data.selling_price - data.buying_price;
       
       await inventoryService.addProduct({
         ...data,
-        profitMargin,
+        profit_margin,
       }, business.id);
       
       reset();
@@ -59,6 +59,7 @@ export function AddProductSheet({
       alert('Error adding product: ' + err.message);
     }
   };
+
 
   return (
     <BottomSheet 
@@ -82,9 +83,9 @@ export function AddProductSheet({
           <div className="grid grid-cols-2 gap-4">
             <div className="relative">
               <Tag size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input {...register('category')} placeholder="Category" className="w-full bg-secondary rounded-2xl p-4 pl-12 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
+              <input {...register('category_id')} placeholder="Category" className="w-full bg-secondary rounded-2xl p-4 pl-12 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
             </div>
-            <select {...register('unitType')} className="w-full bg-secondary rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-primary outline-none appearance-none">
+            <select {...register('unit_type')} className="w-full bg-secondary rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-primary outline-none appearance-none">
               <option value="piece">Pieces</option>
               <option value="kg">Kilograms</option>
               <option value="liter">Liters</option>
@@ -98,11 +99,11 @@ export function AddProductSheet({
             <div className="grid grid-cols-2 gap-4">
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₦</span>
-                <input type="number" {...register('buyingPrice', { valueAsNumber: true })} placeholder="Cost" className="w-full bg-secondary rounded-2xl p-4 pl-10 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
+                <input type="number" {...register('buying_price', { valueAsNumber: true })} placeholder="Cost" className="w-full bg-secondary rounded-2xl p-4 pl-10 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
               </div>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₦</span>
-                <input type="number" {...register('sellingPrice', { valueAsNumber: true })} placeholder="Price" className="w-full bg-secondary rounded-2xl p-4 pl-10 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
+                <input type="number" {...register('selling_price', { valueAsNumber: true })} placeholder="Price" className="w-full bg-secondary rounded-2xl p-4 pl-10 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
               </div>
             </div>
           </div>
@@ -111,7 +112,7 @@ export function AddProductSheet({
             <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-2">Stock Levels</label>
             <div className="grid grid-cols-2 gap-4">
               <input type="number" {...register('stock', { valueAsNumber: true })} placeholder="Stock" className="w-full bg-secondary rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
-              <input type="number" {...register('minStock', { valueAsNumber: true })} placeholder="Min Alert" className="w-full bg-secondary rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
+              <input type="number" {...register('min_stock', { valueAsNumber: true })} placeholder="Min Alert" className="w-full bg-secondary rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
             </div>
           </div>
 
@@ -122,9 +123,10 @@ export function AddProductSheet({
             </div>
             <div className="relative">
               <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input {...register('supplier')} placeholder="Supplier" className="w-full bg-secondary rounded-2xl p-4 pl-12 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
+              <input {...register('supplier_id')} placeholder="Supplier" className="w-full bg-secondary rounded-2xl p-4 pl-12 text-sm font-bold focus:ring-2 focus:ring-primary outline-none" />
             </div>
           </div>
+
         </div>
 
         <Touchable disabled={isSubmitting} className="w-full bg-primary text-white font-bold py-5 rounded-[24px] shadow-xl shadow-primary/20 flex items-center justify-center disabled:opacity-50 mt-4">

@@ -38,28 +38,29 @@ export function TransactionRow({
           <div className="min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <p className="font-bold text-sm tracking-tight capitalize truncate">
-                    {tx.type === 'reversal' ? 'Reversal' : tx.type} {tx.customer ? `• ${tx.customer}` : ''}
+                    {tx.type === 'reversal' ? 'Reversal' : tx.type}
                   </p>
-                  {tx.isEdited && (
+                  {tx.status === 'edited' && (
                     <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md">
                       Edited
                     </span>
                   )}
-                  {tx.isReversed && (
+                  {tx.status === 'reversed' && (
                     <span className="bg-red-100 text-red-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md">
                       Reversed
                     </span>
                   )}
-                  {tx.paymentMethod === 'credit' && (
+                  {tx.payment_method === 'credit' && (
                     <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md">
                       Credit
                     </span>
                   )}
                 </div>
                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide truncate">
-                  {formatTransactionListStamp(tx.createdAt)}
-                  {tx.isReversed && ` • Reversed ${tx.reversalReason ? `(${tx.reversalReason})` : ''}`}
+                  {formatTransactionListStamp(tx.created_at)}
+                  {tx.status === 'reversed' && ` • Reversed`}
                 </p>
+
           </div>
         </div>
         <TransactionAmount

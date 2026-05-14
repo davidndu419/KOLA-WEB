@@ -4,9 +4,14 @@ import { ReactNode, useEffect, useState } from 'react';
 import { BottomNavigation } from '@/components/bottom-navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WifiOff } from 'lucide-react';
+import { useSync } from '@/hooks/useSync';
+
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
+  
+  // Initialize background sync loop
+  useSync();
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -21,6 +26,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background overflow-hidden">

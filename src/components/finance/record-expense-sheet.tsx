@@ -24,7 +24,7 @@ export function RecordExpenseSheet({
   const [amount, setAmount] = useState<number>(0);
   const [category, setCategory] = useState('Others');
   const [note, setNote] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
+  const [payment_method, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleConfirm = async () => {
@@ -34,15 +34,14 @@ export function RecordExpenseSheet({
     try {
       await financeService.recordExpense({
         amount,
-        category,
-        paymentMethod,
+        category_id: category, // Using name as ID for now since we don't have a category table fully populated
+        payment_method: payment_method,
         note,
       }, business.id);
 
       setAmount(0);
       setCategory('Others');
       setNote('');
-      alert('Expense recorded successfully!');
       onClose();
     } catch (err: any) {
       alert(err.message || 'Failed to record expense');
@@ -50,6 +49,7 @@ export function RecordExpenseSheet({
       setIsSubmitting(false);
     }
   };
+
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Record Expense" bottomOffset={64}>
@@ -99,7 +99,7 @@ export function RecordExpenseSheet({
               onPress={() => setPaymentMethod('cash')}
               className={cn(
                 "p-4 rounded-2xl border-2 transition-all text-center",
-                paymentMethod === 'cash' ? "bg-red-50 border-red-500 text-red-700" : "bg-secondary border-transparent text-muted-foreground"
+                payment_method === 'cash' ? "bg-red-50 border-red-500 text-red-700" : "bg-secondary border-transparent text-muted-foreground"
               )}
             >
               <p className="text-xs font-bold uppercase tracking-widest">Cash</p>
@@ -108,7 +108,7 @@ export function RecordExpenseSheet({
               onPress={() => setPaymentMethod('transfer')}
               className={cn(
                 "p-4 rounded-2xl border-2 transition-all text-center",
-                paymentMethod === 'transfer' ? "bg-red-50 border-red-500 text-red-700" : "bg-secondary border-transparent text-muted-foreground"
+                payment_method === 'transfer' ? "bg-red-50 border-red-500 text-red-700" : "bg-secondary border-transparent text-muted-foreground"
               )}
             >
               <p className="text-xs font-bold uppercase tracking-widest">Transfer</p>

@@ -73,8 +73,8 @@ export function transactionsToRevenueSeries(
   }
 
   for (const transaction of transactions) {
-    const createdAt = new Date(transaction.createdAt);
-    const key = unit === 'month' ? monthKey(createdAt) : unit === 'week' ? weekKey(createdAt) : dayKey(createdAt);
+    const created_at = new Date(transaction.created_at);
+    const key = unit === 'month' ? monthKey(created_at) : unit === 'week' ? weekKey(created_at) : dayKey(created_at);
     const bucket = buckets.get(key);
     if (!bucket) continue;
 

@@ -3,29 +3,29 @@ import type { AuditLog } from '@/db/schema';
 import { createSyncQueueItem } from './syncQueueService';
 
 export interface AuditLogInput {
-  businessId: string;
-  entityType: string;
-  entityId: string;
+  business_id: string;
+  entity_type: string;
+  entity_id: string;
   action: 'created' | 'corrected' | 'reversed' | 'restored' | 'payment_reversed' | 'credit_payment' | string;
-  oldValue?: unknown;
-  newValue?: unknown;
+  old_value?: unknown;
+  new_value?: unknown;
   reason?: string;
   userId?: string;
 }
 
-export function buildAuditLog(input: AuditLogInput, createdAt = new Date()): Omit<AuditLog, 'id'> {
+export function buildAuditLog(input: AuditLogInput, created_at = new Date()): Omit<AuditLog, 'id'> {
   return {
-    ...createBaseEntity(input.businessId),
+    ...createBaseEntity(input.business_id),
     userId: input.userId || 'local-user',
     action: input.action,
-    entityType: input.entityType,
-    entityId: input.entityId,
-    previousValue: input.oldValue,
-    oldValue: input.oldValue,
-    newValue: input.newValue,
+    entity_type: input.entity_type,
+    entity_id: input.entity_id,
+    previousValue: input.old_value,
+    old_value: input.old_value,
+    new_value: input.new_value,
     reason: input.reason,
-    createdAt,
-    updatedAt: createdAt,
+    created_at,
+    updated_at: created_at,
   };
 }
 
@@ -33,14 +33,14 @@ export const auditLogService = {
   async createAuditLog(input: AuditLogInput) {
     const log = buildAuditLog(input);
     await db.audit_logs.add(log);
-    await db.sync_queue.add(createSyncQueueItem('audit_logs', 'create', log, log.createdAt));
+    await db.sync_queue.add(createSyncQueueItem('audit_logs', 'create', log, log.created_at));
     return log;
   },
 
-  async getTransactionAuditTrail(transactionId: string) {
+  async getTransactionAuditTrail(transaction_id: string) {
     return db.audit_logs
-      .where('entityId')
-      .equals(transactionId)
+      .where('entity_id')
+      .equals(transaction_id)
       .reverse()
       .toArray();
   },

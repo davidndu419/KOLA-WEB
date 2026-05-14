@@ -15,6 +15,8 @@ import { TransactionRow } from '@/components/transactions/transaction-row';
 import { db } from '@/db/dexie';
 import { resolveReportDateRange } from '@/services/reportSelectors';
 import { reportsService } from '@/services/reportsService';
+import { reportService } from '@/services/reportService';
+
 import type { Transaction } from '@/db/schema';
 import { ReversalSheet } from '@/components/transactions/reversal-sheet';
 import { CorrectionSheet } from '@/components/transactions/correction-sheet';
@@ -32,7 +34,7 @@ export default function DashboardPage() {
   const [customDate, setCustomDate] = useState<Date>(new Date());
 
   const transactions = useLiveQuery(() =>
-    db.transactions.orderBy('createdAt').reverse().limit(5).toArray()
+    db.transactions.orderBy('created_at').reverse().limit(5).toArray()
   );
 
   const reportsSnapshot = useLiveQuery(
@@ -43,58 +45,28 @@ export default function DashboardPage() {
   const stats = useLiveQuery(async () => {
     const { startDate, endDate } = resolveReportDateRange(selectedRange, customDate);
 
-    const allLedger = await db.ledger_entries
-      .where('accountName')
-      .anyOf(['Cash', 'Bank', 'Receivables'])
-      .toArray();
-    const totalBalance = allLedger.reduce((acc, entry) => acc + (entry.debit - entry.credit), 0);
+    // 1. Total Balance calculation (Net of all Cash/Receivables entries)
+    let totalBalance = 0;
+    await db.ledger_entries.each(entry => {
+      const accounts = ['Cash', 'Bank', 'Receivables'];
+      if (accounts.includes(entry.debit_account)) totalBalance += entry.amount;
+      if (accounts.includes(entry.credit_account)) totalBalance -= entry.amount;
+    });
 
-    const rangeTxs = await db.transactions
-      .where('createdAt')
-      .between(startDate, endDate)
-      .and(tx => tx.status !== 'reversed') // Exclude reversed
-      .toArray();
+
+    // 2. Range Profit calculation
+    const pnL = await reportService.getProfitLoss(selectedRange, customDate);
     
-    const rangeRevenue = rangeTxs
-      .filter((tx) => tx.type === 'sale' || tx.type === 'service')
-      .reduce((acc, tx) => acc + tx.amount, 0);
-    const rangeExpenses = rangeTxs
-      .filter((tx) => tx.type === 'expense')
-      .reduce((acc, tx) => acc + tx.amount, 0);
-      
-    const rangeLedger = await db.ledger_entries
-      .where('createdAt')
-      .between(startDate, endDate)
-      .and((entry) => entry.accountName === 'COGS')
-      .toArray();
-    const rangeCOGS = rangeLedger.reduce((acc, entry) => acc + (entry.debit - entry.credit), 0);
-    const rangeProfit = rangeRevenue - rangeCOGS - rangeExpenses;
+    // 3. Monthly Profit calculation
+    const monthlyPnL = await reportService.getProfitLoss('thisMonth');
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const monthTxs = await db.transactions
-      .where('createdAt')
-      .above(startOfMonth)
-      .and(tx => tx.status !== 'reversed')
-      .toArray();
-    
-    const monthRevenue = monthTxs
-      .filter((tx) => tx.type === 'sale' || tx.type === 'service')
-      .reduce((acc, tx) => acc + tx.amount, 0);
-    const monthExpenses = monthTxs
-      .filter((tx) => tx.type === 'expense')
-      .reduce((acc, tx) => acc + tx.amount, 0);
-    const monthLedger = await db.ledger_entries
-      .where('createdAt')
-      .above(startOfMonth)
-      .and((entry) => entry.accountName === 'COGS')
-      .toArray();
-    const monthCOGS = monthLedger.reduce((acc, entry) => acc + (entry.debit - entry.credit), 0);
-    const monthlyProfit = monthRevenue - monthCOGS - monthExpenses;
-
-    return { totalBalance, rangeProfit, monthlyProfit };
+    return { 
+      totalBalance, 
+      rangeProfit: pnL.netProfit, 
+      monthlyProfit: monthlyPnL.netProfit 
+    };
   }, [selectedRange, customDate]);
+
 
   return (
     <div className="space-y-2">
@@ -136,7 +108,7 @@ export default function DashboardPage() {
         <div className="space-y-2.5">
           {transactions?.map((item) => (
             <TransactionRow
-              key={item.localId}
+              key={item.local_id}
               transaction={item}
               onPress={() => setSelectedTransaction(item)}
             />
@@ -148,6 +120,7 @@ export default function DashboardPage() {
           )}
         </div>
       </section>
+
 
       <RecordSaleSheet
         isOpen={isSaleSheetOpen}
@@ -182,10 +155,11 @@ export default function DashboardPage() {
       />
 
       <AuditTrailSheet 
-        transactionId={selectedTransaction?.localId || null}
+        transaction_id={selectedTransaction?.local_id || null}
         isOpen={isAuditTrailOpen}
         onClose={() => setIsAuditTrailOpen(false)}
       />
+
 
       <DateRangePickerSheet
         isOpen={isDatePickerOpen}

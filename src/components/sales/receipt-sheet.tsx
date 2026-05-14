@@ -28,7 +28,7 @@ export function ReceiptSheet({
             <CheckCircle2 size={32} />
           </div>
           <h2 className="text-2xl font-black tracking-tighter">Transaction Successful</h2>
-          <p className="text-sm text-muted-foreground font-medium">Receipt for {transaction.localId.slice(0, 8).toUpperCase()}</p>
+          <p className="text-sm text-muted-foreground font-medium">Receipt for {transaction.local_id.slice(0, 8).toUpperCase()}</p>
         </div>
 
         <div className="bg-secondary/50 rounded-[32px] p-8 border-2 border-dashed border-border/50 relative overflow-hidden">
@@ -41,7 +41,7 @@ export function ReceiptSheet({
             <div className="text-center space-y-1">
               <h3 className="font-black text-lg uppercase tracking-tight">{business?.name || 'KOLA BUSINESS'}</h3>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{business?.address || 'Nigeria'}</p>
-              <p className="text-[10px] font-bold text-muted-foreground">{new Date(transaction.createdAt).toLocaleString()}</p>
+              <p className="text-[10px] font-bold text-muted-foreground">{new Date(transaction.created_at).toLocaleString()}</p>
             </div>
 
             <div className="border-y border-border/50 py-4 space-y-3">

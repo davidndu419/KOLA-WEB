@@ -19,7 +19,7 @@ export function RecordServiceSheet({
   const [serviceName, setServiceName] = useState('');
   const [amount, setAmount] = useState<number>(0);
   const [customerName, setCustomerName] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'credit'>('cash');
+  const [payment_method, setPaymentMethod] = useState<'cash' | 'transfer' | 'credit'>('cash');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleConfirm = async () => {
@@ -28,12 +28,13 @@ export function RecordServiceSheet({
     
     try {
       await financeService.recordService({
+        name: serviceName,
         amount: amount,
-        paymentMethod,
-        customerName: customerName || undefined,
-        customerId: paymentMethod === 'credit' ? 'walk-in-customer' : undefined,
+        payment_method: payment_method,
+        customer_id: payment_method === 'credit' ? 'walk-in-customer' : undefined,
         note: serviceName,
       }, business.id);
+
 
       setServiceName('');
       setAmount(0);
@@ -87,7 +88,7 @@ export function RecordServiceSheet({
               onPress={() => setPaymentMethod('cash')}
               className={cn(
                 "p-3 rounded-2xl border-2 transition-all text-center",
-                paymentMethod === 'cash' ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-secondary border-transparent text-muted-foreground"
+                payment_method === 'cash' ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-secondary border-transparent text-muted-foreground"
               )}
             >
               <p className="text-[10px] font-bold uppercase tracking-widest">Cash</p>
@@ -96,7 +97,7 @@ export function RecordServiceSheet({
               onPress={() => setPaymentMethod('transfer')}
               className={cn(
                 "p-3 rounded-2xl border-2 transition-all text-center",
-                paymentMethod === 'transfer' ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-secondary border-transparent text-muted-foreground"
+                payment_method === 'transfer' ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-secondary border-transparent text-muted-foreground"
               )}
             >
               <p className="text-[10px] font-bold uppercase tracking-widest">Transfer</p>
@@ -105,7 +106,7 @@ export function RecordServiceSheet({
               onPress={() => setPaymentMethod('credit')}
               className={cn(
                 "p-3 rounded-2xl border-2 transition-all text-center",
-                paymentMethod === 'credit' ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-secondary border-transparent text-muted-foreground"
+                payment_method === 'credit' ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-secondary border-transparent text-muted-foreground"
               )}
             >
               <p className="text-[10px] font-bold uppercase tracking-widest">Credit</p>

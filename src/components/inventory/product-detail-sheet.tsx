@@ -27,11 +27,11 @@ export function ProductDetailSheet({
     if (adjustment === 0) return;
     try {
       if (adjustment > 0) {
-        await inventoryService.restock(product.localId, adjustment, undefined, 'Manual adjustment');
+        await inventoryService.restock(product.local_id, adjustment, undefined, 'Manual adjustment');
       } else {
         // For negative adjustment, we use the same adjustStock logic via service
         // Actually our service has restock but we can add a generic adjustment
-        await inventoryService.restock(product.localId, adjustment, undefined, 'Manual adjustment');
+        await inventoryService.restock(product.local_id, adjustment, undefined, 'Manual adjustment');
       }
       setAdjustment(0);
       setIsEditingStock(false);
@@ -42,7 +42,7 @@ export function ProductDetailSheet({
 
   const handleArchive = async () => {
     if (confirm(`Are you sure you want to archive ${product.name}?`)) {
-      await inventoryService.deleteProduct(product.localId);
+      await inventoryService.deleteProduct(product.local_id);
       onClose();
     }
   };
@@ -72,11 +72,11 @@ export function ProductDetailSheet({
         <div className="grid grid-cols-2 gap-3">
           <div className="glass-card p-4 rounded-3xl space-y-1">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Selling Price</p>
-            <p className="text-xl font-bold tracking-tight">₦{product.sellingPrice.toLocaleString()}</p>
+            <p className="text-xl font-bold tracking-tight">₦{product.selling_price.toLocaleString()}</p>
           </div>
           <div className="glass-card p-4 rounded-3xl space-y-1">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Cost Price</p>
-            <p className="text-xl font-bold tracking-tight text-muted-foreground">₦{product.buyingPrice.toLocaleString()}</p>
+            <p className="text-xl font-bold tracking-tight text-muted-foreground">₦{product.buying_price.toLocaleString()}</p>
           </div>
         </div>
 
@@ -87,9 +87,9 @@ export function ProductDetailSheet({
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Current Stock</p>
               <p className={cn(
                 "text-4xl font-black tracking-tighter tabular-nums",
-                product.stock <= product.minStock ? "text-amber-500" : "text-emerald-500"
+                product.stock <= product.min_stock ? "text-amber-500" : "text-emerald-500"
               )}>
-                {product.stock} <span className="text-lg font-bold text-muted-foreground uppercase">{product.unitType}s</span>
+                {product.stock} <span className="text-lg font-bold text-muted-foreground uppercase">{product.unit_type}s</span>
               </p>
             </div>
             <Touchable 

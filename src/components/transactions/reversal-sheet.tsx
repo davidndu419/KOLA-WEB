@@ -6,7 +6,7 @@ import { RotateCcw, AlertTriangle } from 'lucide-react';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import type { Transaction } from '@/db/schema';
-import { ReversalService } from '@/lib/services/reversal-service';
+import { reversalService } from '@/services/reversalService';
 
 export function ReversalSheet({
   transaction,
@@ -27,8 +27,9 @@ export function ReversalSheet({
     
     setIsReversing(true);
     try {
-      await ReversalService.reverseTransaction(transaction.localId, reason, transaction.businessId);
+      await reversalService.reverseTransaction(transaction.local_id, reason, transaction.business_id);
       onSuccess();
+
       onClose();
       setReason('');
     } catch (error: any) {

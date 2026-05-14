@@ -38,14 +38,14 @@ export function TransactionList({ startDate, endDate, type = 'all' }: Transactio
 
     if (startDate && endDate) {
       const rangeItems = await db.transactions
-        .where('createdAt')
+        .where('created_at')
         .between(startDate, endDate)
         .reverse()
         .toArray();
       return applyTypeFilter(rangeItems);
     }
 
-    const allItems = await db.transactions.orderBy('createdAt').reverse().toArray();
+    const allItems = await db.transactions.orderBy('created_at').reverse().toArray();
     return applyTypeFilter(allItems);
   }, [startDate, endDate, type]);
 
@@ -74,7 +74,7 @@ export function TransactionList({ startDate, endDate, type = 'all' }: Transactio
       <div className="space-y-2.5 pb-32">
         {transactions.map((tx) => (
           <TransactionRow
-            key={tx.localId}
+            key={tx.local_id}
             transaction={tx}
             onPress={() => setSelectedTransaction(tx)}
           />
@@ -103,7 +103,7 @@ export function TransactionList({ startDate, endDate, type = 'all' }: Transactio
       />
 
       <AuditTrailSheet 
-        transactionId={selectedTransaction?.localId || null}
+        transaction_id={selectedTransaction?.local_id || null}
         isOpen={isAuditTrailOpen}
         onClose={() => setIsAuditTrailOpen(false)}
       />

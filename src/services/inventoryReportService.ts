@@ -2,7 +2,7 @@ import { InventoryMovement, Product, Transaction } from '@/db/schema';
 import { compareDesc, roundCurrency } from './reportSelectors';
 
 export interface InventoryProductMetric {
-  productId: string;
+  product_id: string;
   name: string;
   category: string;
   quantitySold: number;
@@ -34,18 +34,20 @@ export const inventoryReportService = {
     inventoryMovements: InventoryMovement[],
     now = new Date()
   ): InventoryReport {
-    const activeProducts = products.filter((product) => !product.deletedAt && !product.isArchived);
-    const productMap = new Map(activeProducts.map((product) => [product.localId, product]));
+    const activeProducts = products.filter((product) => !product.deleted_at && !product.is_archived);
+    const productMap = new Map(activeProducts.map((product) => [product.local_id, product]));
     const productMetrics = new Map<string, InventoryProductMetric>();
 
     for (const transaction of transactions.filter((item) => item.type === 'sale')) {
-      for (const item of transaction.items || []) {
-        const product = productMap.get(item.productId);
+      const transactionItems = (transaction as any).items || [];
+      for (const item of transactionItems) {
+
+        const product = productMap.get(item.product_id);
         if (!product) continue;
-        const current = productMetrics.get(item.productId) || {
-          productId: item.productId,
+        const current = productMetrics.get(item.product_id) || {
+          product_id: item.product_id,
           name: product.name,
-          category: product.category,
+          category: product.category_id || '',
           quantitySold: 0,
           revenue: 0,
           grossProfit: 0,
@@ -53,8 +55,8 @@ export const inventoryReportService = {
         };
         current.quantitySold += item.quantity;
         current.revenue += item.quantity * item.price;
-        current.grossProfit += item.quantity * (item.price - (item.cost ?? product.buyingPrice));
-        productMetrics.set(item.productId, current);
+        current.grossProfit += item.quantity * (item.price - (item.cost || product.buying_price));
+        productMetrics.set(item.product_id, current);
       }
     }
 
@@ -64,15 +66,17 @@ export const inventoryReportService = {
       grossProfit: roundCurrency(metric.grossProfit),
     }));
 
-    const soldProductIds = new Set(metrics.map((metric) => metric.productId));
+    const soldProductIds = new Set(metrics.map((metric) => metric.product_id));
     const recentSaleCutoff = new Date(now);
     recentSaleCutoff.setDate(recentSaleCutoff.getDate() - 90);
     const recentlySoldIds = new Set<string>();
 
     for (const transaction of transactions) {
-      if (transaction.createdAt < recentSaleCutoff || transaction.type !== 'sale') continue;
-      for (const item of transaction.items || []) recentlySoldIds.add(item.productId);
+      if (transaction.created_at < recentSaleCutoff || transaction.type !== 'sale') continue;
+      const items = (transaction as any).items || [];
+      for (const item of items) recentlySoldIds.add(item.product_id);
     }
+
 
     const stockInQuantity = inventoryMovements
       .filter((movement) => movement.type === 'stock-in' || movement.type === 'return')
@@ -83,20 +87,20 @@ export const inventoryReportService = {
 
     const stockAges = activeProducts.map((product) => {
       const lastMovement = inventoryMovements
-        .filter((movement) => movement.productId === product.localId)
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
-      const ageSource = lastMovement?.createdAt || product.createdAt;
+        .filter((movement) => movement.product_id === product.local_id)
+        .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0];
+      const ageSource = lastMovement?.created_at || product.created_at;
       return Math.max(0, Math.floor((now.getTime() - ageSource.getTime()) / DAY_MS));
     });
 
     return {
-      inventoryValue: roundCurrency(activeProducts.reduce((total, product) => total + product.stock * product.buyingPrice, 0)),
-      retailValue: roundCurrency(activeProducts.reduce((total, product) => total + product.stock * product.sellingPrice, 0)),
+      inventoryValue: roundCurrency(activeProducts.reduce((total, product) => total + product.stock * product.buying_price, 0)),
+      retailValue: roundCurrency(activeProducts.reduce((total, product) => total + product.stock * product.selling_price, 0)),
       estimatedProfitPotential: roundCurrency(
-        activeProducts.reduce((total, product) => total + product.stock * (product.sellingPrice - product.buyingPrice), 0)
+        activeProducts.reduce((total, product) => total + product.stock * (product.selling_price - product.buying_price), 0)
       ),
-      lowStockProducts: activeProducts.filter((product) => product.stock > 0 && product.stock <= product.minStock),
-      deadStockProducts: activeProducts.filter((product) => product.stock > 0 && !recentlySoldIds.has(product.localId) && !soldProductIds.has(product.localId)),
+      lowStockProducts: activeProducts.filter((product) => product.stock > 0 && product.stock <= product.min_stock),
+      deadStockProducts: activeProducts.filter((product) => product.stock > 0 && !recentlySoldIds.has(product.local_id) && !soldProductIds.has(product.local_id)),
       fastMovingProducts: metrics.sort(compareDesc((metric) => metric.quantitySold)).slice(0, 5),
       mostProfitableItems: metrics.sort(compareDesc((metric) => metric.grossProfit)).slice(0, 5),
       stockMovementCount: inventoryMovements.length,

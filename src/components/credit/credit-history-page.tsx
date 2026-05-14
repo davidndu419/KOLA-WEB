@@ -146,11 +146,11 @@ export function CreditHistoryPage({ sourceType }: { sourceType: CreditSourceType
         ) : (
           filteredHistory.map((item) => (
             <CreditCompactRow
-              key={item.receivable.localId}
+              key={item.receivable.local_id}
               item={item}
-              isExpanded={expandedId === item.receivable.localId}
+              isExpanded={expandedId === item.receivable.local_id}
               onToggle={() => {
-                setExpandedId((current) => current === item.receivable.localId ? null : item.receivable.localId);
+                setExpandedId((current) => current === item.receivable.local_id ? null : item.receivable.local_id);
               }}
               onConfirmPayment={() => setPaymentRequest({ item, mode: 'confirm' })}
               onPartialPayment={() => setPaymentRequest({ item, mode: 'partial' })}
@@ -168,6 +168,7 @@ export function CreditHistoryPage({ sourceType }: { sourceType: CreditSourceType
     </div>
   );
 }
+
 
 function SummaryPill({
   label,
@@ -226,9 +227,10 @@ function CreditCompactRow({
           </div>
           <p className="text-xs font-black truncate">{item.sourceName}</p>
           <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide truncate">
-            {shortDate(item.transaction.createdAt)} | Due {shortDate(item.dueDate)}
+            {shortDate(item.transaction.created_at)} | Due {shortDate(item.due_date)}
           </p>
         </div>
+
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="text-right">
             <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">Balance</p>
@@ -308,7 +310,7 @@ function CreditPaymentSheet({
   const item = request?.item || null;
   const isConfirmMode = request?.mode === 'confirm';
   const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
+  const [payment_method, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 16));
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -328,9 +330,10 @@ function CreditPaymentSheet({
     setIsSubmitting(true);
     try {
       const payload = {
-        receivableId: item.receivable.localId,
+        receivableId: item.receivable.local_id,
+
         amount: value,
-        paymentMethod,
+        payment_method,
         paymentDate: new Date(paymentDate),
         note,
       };
@@ -378,7 +381,7 @@ function CreditPaymentSheet({
                   onPress={() => setPaymentMethod(method)}
                   className={cn(
                     'p-4 rounded-2xl border-2 text-xs font-bold uppercase tracking-widest',
-                    paymentMethod === method
+                    payment_method === method
                       ? 'bg-primary/10 border-primary text-primary'
                       : 'bg-secondary border-transparent text-muted-foreground'
                   )}

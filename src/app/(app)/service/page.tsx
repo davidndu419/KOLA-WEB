@@ -24,7 +24,7 @@ export default function ServicePage() {
     const { startDate, endDate } = resolveReportDateRange(selectedRange, customDate);
     
     const transactions = await db.transactions
-      .where('createdAt')
+      .where('created_at')
       .between(startDate, endDate)
       .filter(tx => tx.type === 'service')
       .toArray();

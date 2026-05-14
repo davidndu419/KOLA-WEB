@@ -13,13 +13,21 @@ import {
   Receipt,
   AppSetting,
   AuditLog,
-  InventoryMovement
+  InventoryMovement,
+  Sale,
+  SaleItem,
+  Service,
+  Expense
 } from './schema';
 
 export class KolaDatabase extends Dexie {
   products!: Table<Product>;
   categories!: Table<Category>;
   transactions!: Table<Transaction>;
+  sales!: Table<Sale>;
+  sale_items!: Table<SaleItem>;
+  services!: Table<Service>;
+  expenses!: Table<Expense>;
   ledger_entries!: Table<LedgerEntry>;
   sync_queue!: Table<SyncQueue>;
   inventory_movements!: Table<InventoryMovement>;
@@ -33,38 +41,41 @@ export class KolaDatabase extends Dexie {
   constructor() {
     super('KolaDB');
     
-    this.version(5).stores({
-      products: '++id, localId, name, category, syncStatus, isArchived, updatedAt',
-      categories: '++id, localId, name',
-      transactions: '++id, localId, type, paymentMethod, status, syncStatus, createdAt, isEdited, isReversed, originalTransactionId',
-      ledger_entries: '++id, localId, transactionId, accountName, createdAt, isReversal, isCorrection',
-      sync_queue: '++id, table, status, timestamp, createdAt',
-      inventory_movements: '++id, localId, productId, type, createdAt, status',
-      customers: '++id, localId, name, phone',
-      suppliers: '++id, localId, name',
-      receivables: '++id, localId, transactionId, customerId, status',
-      app_settings: '++id, key',
-      receipts: '++id, localId, transactionId',
-      audit_logs: '++id, localId, timestamp, userId, action, entityId'
+    // Version 8: Improved indexing for delta sync and performance
+    this.version(8).stores({
+      products: '++id, local_id, category_id, sync_status, is_archived, updated_at',
+      categories: '++id, local_id, name',
+      transactions: '++id, local_id, type, payment_method, status, sync_status, created_at, updated_at, reference_id',
+      sales: '++id, local_id, transaction_id, customer_id, sync_status, updated_at',
+      sale_items: '++id, local_id, sale_id, product_id, sync_status, updated_at',
+      services: '++id, local_id, transaction_id, customer_id, status, sync_status, updated_at',
+      expenses: '++id, local_id, transaction_id, category_id, status, sync_status, updated_at',
+      ledger_entries: '++id, local_id, transaction_id, source_type, source_id, debit_account, credit_account, created_at, updated_at, sync_status',
+      sync_queue: '++id, entity, entity_id, status, created_at',
+      inventory_movements: '++id, local_id, product_id, type, created_at, updated_at, sync_status',
+      customers: '++id, local_id, sync_status, updated_at',
+      suppliers: '++id, local_id, sync_status, updated_at',
+      receivables: '++id, local_id, transaction_id, customer_id, status, sync_status, updated_at',
+      app_settings: '++id, key, business_id',
+      receipts: '++id, local_id, transaction_id, sync_status, updated_at',
+      audit_logs: '++id, local_id, user_id, action, entity_id, created_at, sync_status'
+    }).upgrade(tx => {
+      // Future data transformations can be added here
+      console.log('Database upgraded to version 8');
     });
   }
 }
 
 export const db = new KolaDatabase();
 
-/**
- * Solvency Guard & Database Helpers
- */
-
-// Helper to create base entity fields
-export function createBaseEntity(businessId: string): Omit<BaseEntity, 'id'> {
+export function createBaseEntity(business_id: string): Omit<BaseEntity, 'id'> {
   return {
-    localId: crypto.randomUUID(),
-    businessId,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    syncStatus: 'pending',
+    local_id: crypto.randomUUID(),
+    business_id: business_id,
+    created_at: new Date(),
+    updated_at: new Date(),
+    sync_status: 'pending',
     version: 1,
-    deviceId: 'web-browser', // In production, generate/retrieve a persistent device ID
+    device_id: 'web-browser', 
   };
 }

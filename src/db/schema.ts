@@ -2,34 +2,34 @@
 
 export interface BaseEntity {
   id?: number;
-  localId: string;
-  businessId: string;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt?: Date | null;
-  syncStatus: 'pending' | 'synced' | 'failed' | 'conflict';
+  local_id: string;
+  business_id: string;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at?: Date | null;
+  sync_status: 'pending' | 'synced' | 'failed' | 'conflict';
   version: number;
-  deviceId: string;
+  device_id: string;
 }
 
 export interface Product extends BaseEntity {
   name: string;
   sku?: string;
   barcode?: string;
-  category: string;
-  unitType: 'piece' | 'kg' | 'liter' | 'pack' | 'set';
-  buyingPrice: number;
-  sellingPrice: number;
-  profitMargin: number;
+  category_id?: string;
+  unit_type: 'piece' | 'kg' | 'liter' | 'pack' | 'set';
+  buying_price: number;
+  selling_price: number;
+  profit_margin: number;
   stock: number;
-  minStock: number;
-  maxStock?: number;
-  supplier?: string;
-  expiryDate?: Date | null;
-  image?: string;
+  min_stock: number;
+  max_stock?: number;
+  supplier_id?: string;
+  expiry_date?: Date | null;
+  image_url?: string;
   notes?: string;
   tags?: string[];
-  isArchived: boolean;
+  is_archived: boolean;
 }
 
 export interface Category extends BaseEntity {
@@ -40,122 +40,143 @@ export interface Category extends BaseEntity {
 }
 
 export interface InventoryMovement extends BaseEntity {
-  productId: string;
+  product_id: string;
   type: 'stock-in' | 'stock-out' | 'adjustment' | 'damage' | 'return';
   quantity: number;
-  previousStock: number;
-  newStock: number;
+  previous_stock: number;
+  new_stock: number;
   note?: string;
   reason?: string;
-  reversalMovementId?: string;
-  correctionGroupId?: string;
   status?: 'active' | 'reversed' | 'corrected';
 }
 
-export interface Transaction extends BaseEntity {
-  type: 'sale' | 'service' | 'expense' | 'reversal' | 'credit_payment';
-  amount: number;
-  paymentMethod: 'cash' | 'transfer' | 'credit';
-  status: 'completed' | 'voided' | 'pending' | 'active' | 'edited' | 'reversed';
-  customer?: string; // localId of customer
-  customerId?: string;
-  supplierId?: string;
-  category?: string; // For expenses
+export interface Sale extends BaseEntity {
+  transaction_id: string;
+  customer_id?: string;
+  total_amount: number;
+  discount_amount: number;
+  tax_amount: number;
+  net_amount: number;
+  payment_method: 'cash' | 'transfer' | 'credit';
+  status: 'completed' | 'voided' | 'pending';
   note?: string;
-  items?: TransactionItem[];
-  isEdited?: boolean;
-  isReversed?: boolean;
-  originalTransactionId?: string;
-  reversalTransactionId?: string;
-  correctionVersion?: number;
-  correctionReason?: string;
-  reversalReason?: string;
-  manualReviewRequired?: boolean;
-  refundRequired?: boolean;
-  sourceType?: 'sale' | 'service' | 'expense' | 'credit_payment' | 'inventory';
-  sourceId?: string;
-  reversedAt?: Date;
-  reversedBy?: string;
-  correctedAt?: Date;
-  correctedBy?: string;
-  previousTransactionId?: string;
-  originalPayload?: Partial<Transaction>;
-  correctedPayload?: Partial<Transaction>;
 }
 
-export interface TransactionItem {
-  productId: string;
+export interface SaleItem extends BaseEntity {
+  sale_id: string;
+  product_id: string;
   quantity: number;
-  price: number;
-  cost?: number; // Snapshot of cost at time of sale for accurate COGS
+  unit_price: number;
+  total_price: number;
+  cost: number;
 }
+
+export interface Service extends BaseEntity {
+  transaction_id: string;
+  name: string;
+  customer_id?: string;
+  amount: number;
+  payment_method: 'cash' | 'transfer' | 'credit';
+  status: 'completed' | 'voided';
+  note?: string;
+}
+
+export interface Expense extends BaseEntity {
+  transaction_id: string;
+  category_id: string;
+  amount: number;
+  payment_method: 'cash' | 'transfer';
+  recipient?: string;
+  note?: string;
+  status: 'completed' | 'voided';
+}
+
+export interface Transaction extends BaseEntity {
+  type: 'sale' | 'service' | 'expense' | 'reversal' | 'credit_payment' | 'adjustment';
+  amount: number;
+  payment_method: 'cash' | 'transfer' | 'credit';
+  status: 'completed' | 'voided' | 'pending' | 'active' | 'edited' | 'reversed';
+  reference_id: string; // ID of the sale, service, or expense
+  category?: string;
+  customer?: string;
+  note?: string;
+}
+
 
 export interface LedgerEntry extends BaseEntity {
-  transactionId: string;
-  accountName: string; // e.g., 'Cash', 'Revenue', 'Inventory', 'COGS', 'Receivables', 'Expenses'
-  debit: number;
-  credit: number;
-  reversalOfEntryId?: string;
-  correctionGroupId?: string;
-  isReversal?: boolean;
-  isCorrection?: boolean;
+  transaction_id: string;
+  source_type: 'sale' | 'service' | 'expense' | 'credit_payment' | 'inventory_adjustment';
+  source_id: string;      // ID of the sale, service, etc.
+  debit_account: string;
+  credit_account: string;
+  amount: number;
+  is_reversal: boolean;
+  is_correction: boolean;
+  description?: string;
 }
+
+
 
 export interface Customer extends BaseEntity {
   name: string;
   phone?: string;
   email?: string;
   address?: string;
-  totalDebt: number;
+  total_debt: number;
 }
 
 export interface Supplier extends BaseEntity {
   name: string;
-  contactName?: string;
+  contact_name?: string;
   phone?: string;
   email?: string;
   address?: string;
 }
 
 export interface Receivable extends BaseEntity {
-  transactionId: string;
-  customerId: string;
+  transaction_id: string;
+  customer_id: string;
   amount: number;
-  paidAmount: number;
-  dueDate?: Date;
+  paid_amount: number;
+  due_date?: Date;
   status: 'pending' | 'partially-paid' | 'paid' | 'voided';
 }
 
 export interface Receipt extends BaseEntity {
-  transactionId: string;
-  receiptNumber: string;
-  data: string; // JSON blob of receipt content
+  transaction_id: string;
+  receipt_number: string;
+  data: string;
 }
 
 export interface AppSetting {
   id?: number;
+  business_id: string;
   key: string;
   value: any;
-  updatedAt: Date;
+  updated_at: Date;
 }
 
 export interface AuditLog extends BaseEntity {
-  userId: string;
+  user_id: string;
   action: string;
-  entityType: string;
-  entityId: string;
-  previousValue?: any;
-  newValue?: any;
-  oldValue?: any;
+  entity_type: string;
+  entity_id: string;
+  old_value?: any;
+  new_value?: any;
   reason?: string;
 }
 
 export interface SyncQueue {
   id?: number;
-  table: string;
+  business_id: string;
+  entity: string;       // table name
+  entity_id: string;    // local_id of the entity
   action: 'create' | 'update' | 'delete';
-  data: any;
-  timestamp: Date;
-  retryCount?: number;
-  status?: 'pending' | 'syncing' | 'failed';
+  payload: any;
+  status: 'pending' | 'syncing' | 'synced' | 'failed' | 'conflict';
+  retry_count: number;
+  error?: string;
+  created_at: Date;
 }
+
+

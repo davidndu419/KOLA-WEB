@@ -115,7 +115,7 @@ export function CreditHistorySheet({
             ) : (
               filteredHistory.map((item) => (
                 <CreditItemCard
-                  key={item.receivable.localId}
+                  key={item.receivable.local_id}
                   item={item}
                   onConfirmPayment={() => setPaymentRequest({ item, mode: 'confirm' })}
                   onPartialPayment={() => setPaymentRequest({ item, mode: 'partial' })}
@@ -182,7 +182,7 @@ function CreditItemCard({
           </p>
           <h3 className="text-base font-black truncate">{item.sourceName}</h3>
           <p className="text-[10px] font-bold text-muted-foreground uppercase truncate">
-            {shortDate(item.transaction.createdAt)} | Due {shortDate(item.dueDate)}
+            {shortDate(item.transaction.created_at)} | Due {shortDate(item.due_date)}
           </p>
         </div>
         <div className={cn(
@@ -242,7 +242,7 @@ function CreditPaymentSheet({
   const item = request?.item || null;
   const isConfirmMode = request?.mode === 'confirm';
   const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
+  const [payment_method, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 16));
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -262,9 +262,9 @@ function CreditPaymentSheet({
     setIsSubmitting(true);
     try {
       const payload = {
-        receivableId: item.receivable.localId,
+        receivableId: item.receivable.local_id,
         amount: value,
-        paymentMethod,
+        payment_method,
         paymentDate: new Date(paymentDate),
         note,
       };
@@ -307,7 +307,7 @@ function CreditPaymentSheet({
                   onPress={() => setPaymentMethod(method)}
                   className={cn(
                     'p-4 rounded-2xl border-2 text-xs font-bold uppercase tracking-widest',
-                    paymentMethod === method ? 'bg-primary/10 border-primary text-primary' : 'bg-secondary border-transparent text-muted-foreground'
+                    payment_method === method ? 'bg-primary/10 border-primary text-primary' : 'bg-secondary border-transparent text-muted-foreground'
                   )}
                 >
                   {method}

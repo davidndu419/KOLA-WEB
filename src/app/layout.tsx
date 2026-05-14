@@ -33,6 +33,10 @@ export const viewport: Viewport = {
   ],
 };
 
+import { DBInitializer } from "@/components/db-initializer";
+
+
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -46,8 +50,12 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="font-sans antialiased bg-background text-foreground overscroll-none">
+        <DBInitializer />
+
         {children}
       </body>
+
     </html>
   );
 }
+

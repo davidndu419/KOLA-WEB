@@ -324,7 +324,7 @@ export function ProfitLossCard({ snapshot }: { snapshot: ReportsSnapshot }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Profit & Loss</p>
-          <h3 className="text-lg font-bold">Margin {snapshot.profitLoss.profitMargin}%</h3>
+          <h3 className="text-lg font-bold">Margin {snapshot.profitLoss.profit_margin}%</h3>
         </div>
         <div
           className={cn(
@@ -530,7 +530,7 @@ export function TransactionHistoryEngine({ transactions }: { transactions: Trans
     return transactions.filter((item) => {
       if (type !== 'all' && item.transaction.type !== type) return false;
       if (!needle) return true;
-      return [item.transaction.localId, item.title, item.subtitle, item.transaction.note, ...item.items.map((entry) => entry.name)]
+      return [item.transaction.local_id, item.title, item.subtitle, item.transaction.note, ...item.items.map((entry) => entry.name)]
         .join(' ')
         .toLowerCase()
         .includes(needle);
@@ -589,7 +589,7 @@ export function TransactionHistoryEngine({ transactions }: { transactions: Trans
               const item = filtered[virtualRow.index];
               return (
                 <div
-                  key={item.transaction.localId}
+                  key={item.transaction.local_id}
                   style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
                 >
                   <div className="pb-2">

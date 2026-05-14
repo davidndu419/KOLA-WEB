@@ -24,7 +24,7 @@ export default function SalesPage() {
     const { startDate, endDate } = resolveReportDateRange(selectedRange, customDate);
     
     const transactions = await db.transactions
-      .where('createdAt')
+      .where('created_at')
       .between(startDate, endDate)
       .toArray();
       
@@ -36,13 +36,13 @@ export default function SalesPage() {
 
     // Receivables usually remain lifetime unless filtered, but let's keep it lifetime for the card context
     const receivablesEntries = await db.ledger_entries
-      .where('accountName')
+      .where('account_name')
       .equals('Receivables')
       .toArray();
     const receivables = receivablesEntries.reduce((acc, entry) => acc + (entry.debit - entry.credit), 0);
 
     const cashSales = transactions
-      .filter(tx => tx.type === 'sale' && tx.paymentMethod === 'cash')
+      .filter(tx => tx.type === 'sale' && tx.payment_method === 'cash')
       .reduce((acc, tx) => acc + tx.amount, 0);
       
     const cashPercentage = totalSales > 0 ? Math.round((cashSales / totalSales) * 100) : 100;

@@ -27,7 +27,7 @@ export interface TransactionHistoryItem {
   };
   auditTrail: AuditLog[];
   items: {
-    productId: string;
+    product_id: string;
     name: string;
     quantity: number;
     price: number;
@@ -69,15 +69,15 @@ async function rangeTransactions(startDate: Date, endDate: Date) {
     return (await db.transactions.toArray()).filter(isActiveTransaction);
   }
 
-  return (await db.transactions.where('createdAt').between(startDate, endDate, true, true).toArray()).filter(isActiveTransaction);
+  return (await db.transactions.where('created_at').between(startDate, endDate, true, true).toArray()).filter(isActiveTransaction);
 }
 
 async function rangeLedger(startDate: Date, endDate: Date) {
   if (startDate.getTime() === 0) {
-    return (await db.ledger_entries.toArray()).filter((entry) => !entry.deletedAt);
+    return (await db.ledger_entries.toArray()).filter((entry) => !entry.deleted_at);
   }
 
-  return (await db.ledger_entries.where('createdAt').between(startDate, endDate, true, true).toArray()).filter((entry) => !entry.deletedAt);
+  return (await db.ledger_entries.where('created_at').between(startDate, endDate, true, true).toArray()).filter((entry) => !entry.deleted_at);
 }
 
 function applyFilters(transactions: Transaction[], filters?: ReportFilters) {
@@ -97,44 +97,46 @@ function buildHistory(
   auditLogs: AuditLog[],
   limit = 250
 ): TransactionHistoryItem[] {
-  const productMap = new Map(products.map((product) => [product.localId, product]));
+  const productMap = new Map(products.map((product) => [product.local_id, product]));
   const ledgerMap = new Map<string, LedgerEntry[]>();
   const auditMap = new Map<string, AuditLog[]>();
 
   for (const entry of ledgerEntries) {
-    const existing = ledgerMap.get(entry.transactionId) || [];
+    const existing = ledgerMap.get(entry.transaction_id) || [];
     existing.push(entry);
-    ledgerMap.set(entry.transactionId, existing);
+    ledgerMap.set(entry.transaction_id, existing);
   }
 
   for (const log of auditLogs) {
-    const existing = auditMap.get(log.entityId) || [];
+    const existing = auditMap.get(log.entity_id) || [];
     existing.push(log);
-    auditMap.set(log.entityId, existing);
+    auditMap.set(log.entity_id, existing);
   }
 
   return transactions
     .slice()
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
     .slice(0, limit)
     .map((transaction) => {
-      const entries = ledgerMap.get(transaction.localId) || [];
+      const entries = ledgerMap.get(transaction.local_id) || [];
+      const joinedTransaction = transaction as Transaction & { items: any[] };
       return {
         transaction,
         title: formatTransactionTitle(transaction),
-        subtitle: [transaction.customer, transaction.paymentMethod, transaction.status].filter(Boolean).join(' | '),
+        subtitle: [(transaction as any).customer, transaction.payment_method, transaction.status].filter(Boolean).join(' | '),
         ledgerImpact: {
-          debits: roundCurrency(entries.reduce((total, entry) => total + entry.debit, 0)),
-          credits: roundCurrency(entries.reduce((total, entry) => total + entry.credit, 0)),
+          debits: roundCurrency(entries.reduce((total, entry) => total + entry.amount, 0)),
+          credits: roundCurrency(entries.reduce((total, entry) => total + entry.amount, 0)),
           entries,
         },
-        auditTrail: auditMap.get(transaction.localId) || [],
-        items: (transaction.items || []).map((item) => ({
+        auditTrail: auditMap.get(transaction.local_id) || [],
+        items: (joinedTransaction.items || []).map((item) => ({
           ...item,
-          name: productMap.get(item.productId)?.name || 'Archived product',
+          name: productMap.get(item.product_id)?.name || 'Archived product',
         })),
       };
     });
+
 }
 
 export const reportsService = {
@@ -157,6 +159,8 @@ export const reportsService = {
       receivables,
       customers,
       auditLogs,
+      salesRaw,
+      saleItemsRaw,
     ] = await Promise.all([
       rangeTransactions(range.startDate, range.endDate),
       rangeTransactions(range.previousStartDate, range.previousEndDate),
@@ -168,20 +172,49 @@ export const reportsService = {
       db.receivables.toArray(),
       db.customers.toArray(),
       db.audit_logs.toArray(),
+      db.sales.toArray(),
+      db.sale_items.toArray(),
     ]);
 
     const transactions = applyFilters(currentTransactionsRaw, filters);
     const previousTransactions = applyFilters(previousTransactionsRaw, filters);
-    const transactionIds = new Set(transactions.map((transaction) => transaction.localId));
-    const previousTransactionIds = new Set(previousTransactions.map((transaction) => transaction.localId));
-    const currentLedger = currentLedgerRaw.filter((entry) => transactionIds.has(entry.transactionId) || entry.accountName === 'Receivables');
-    const previousLedger = previousLedgerRaw.filter((entry) => previousTransactionIds.has(entry.transactionId) || entry.accountName === 'Receivables');
+    const transaction_ids = new Set(transactions.map((transaction) => transaction.local_id));
+    const previousTransactionIds = new Set(previousTransactions.map((transaction) => transaction.local_id));
+    const currentLedger = currentLedgerRaw.filter((entry) => transaction_ids.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
+    const previousLedger = previousLedgerRaw.filter((entry) => previousTransactionIds.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
+
+    // Enrich transactions with items for downstream services
+    const saleMap = new Map(salesRaw.map(s => [s.transaction_id, s]));
+    const saleItemMap = new Map<string, any[]>();
+    for (const item of saleItemsRaw) {
+      const existing = saleItemMap.get(item.sale_id) || [];
+      existing.push(item);
+      saleItemMap.set(item.sale_id, existing);
+    }
+
+    transactions.forEach(t => {
+      const sale = saleMap.get(t.local_id);
+      if (sale) {
+        (t as any).items = saleItemMap.get(sale.local_id) || [];
+      } else {
+        (t as any).items = [];
+      }
+    });
+
+    previousTransactions.forEach(t => {
+      const sale = saleMap.get(t.local_id);
+      if (sale) {
+        (t as any).items = saleItemMap.get(sale.local_id) || [];
+      } else {
+        (t as any).items = [];
+      }
+    });
 
     const revenue = revenueService.analyze(transactions, previousTransactions, range);
     const expenses = expenseService.analyze(transactions, previousTransactions, range);
     const profitLoss = profitLossService.calculate(transactions, currentLedger, previousTransactions, previousLedger);
     const inventory = inventoryReportService.analyze(products, transactions, inventoryMovements);
-    const receivableLedger = allLedger.filter((entry) => entry.accountName === 'Receivables' || entry.accountName === 'Cash' || entry.accountName === 'Bank');
+    const receivableLedger = allLedger.filter((entry) => entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables' || entry.debit_account === 'Cash' || entry.credit_account === 'Cash' || entry.debit_account === 'Bank' || entry.credit_account === 'Bank');
     const receivablesReport = receivableReportService.analyze(receivables as Receivable[], customers as Customer[], receivableLedger);
     const sales = analyticsService.sales(transactions, products);
     const services = analyticsService.services(transactions);

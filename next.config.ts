@@ -1,7 +1,16 @@
-import type { NextConfig } from "next";
+import withPWAInit from 'next-pwa';
 
-const nextConfig: NextConfig = {
-  /* config options here */
+const withPWA = withPWAInit({
+  dest: 'public',
+  disable: process.env.NODE_ENV === 'development',
+  register: true,
+  skipWaiting: true,
+  buildExcludes: [/middleware-manifest\.json$/],
+});
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Config options here
 };
 
-export default nextConfig;
+export default withPWA(nextConfig);

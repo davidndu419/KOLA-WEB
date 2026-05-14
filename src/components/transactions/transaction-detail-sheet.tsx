@@ -31,11 +31,11 @@ export function formatFullTransactionDate(date: Date) {
 function receiptText(transaction: Transaction) {
   return [
     'Kola Receipt',
-    `Transaction ID: ${transaction.localId}`,
+    `Transaction ID: ${transaction.local_id}`,
     `Type: ${transaction.type}`,
     `Amount: ${money(transaction.amount)}`,
-    `Payment: ${transaction.paymentMethod}`,
-    `Date: ${formatFullTransactionDate(transaction.createdAt)}`,
+    `Payment: ${transaction.payment_method}`,
+    `Date: ${formatFullTransactionDate(transaction.created_at)}`,
     transaction.customer ? `Customer: ${transaction.customer}` : '',
     transaction.note ? `Note: ${transaction.note}` : '',
   ].filter(Boolean).join('\n');
@@ -64,11 +64,11 @@ function printReceipt(transaction: Transaction) {
       <body>
         <button onclick="window.print()">Save as PDF</button>
         <h1>Kola Receipt</h1>
-        <p class="muted">${transaction.localId}</p>
+        <p class="muted">${transaction.local_id}</p>
         <div class="row"><span class="label">Type</span><span class="value">${transaction.type}</span></div>
         <div class="row"><span class="label">Amount</span><span class="value">${money(transaction.amount)}</span></div>
-        <div class="row"><span class="label">Payment</span><span class="value">${transaction.paymentMethod}</span></div>
-        <div class="row"><span class="label">Date</span><span class="value">${formatFullTransactionDate(transaction.createdAt)}</span></div>
+        <div class="row"><span class="label">Payment</span><span class="value">${transaction.payment_method}</span></div>
+        <div class="row"><span class="label">Date</span><span class="value">${formatFullTransactionDate(transaction.created_at)}</span></div>
         ${transaction.customer ? `<div class="row"><span class="label">Customer</span><span class="value">${transaction.customer}</span></div>` : ''}
         ${transaction.note ? `<div class="row"><span class="label">Note</span><span class="value">${transaction.note}</span></div>` : ''}
       </body>
@@ -101,7 +101,7 @@ export function TransactionDetailSheet({
     alert('Receipt copied to clipboard');
   };
 
-  const isRecent = transaction ? (new Date().getTime() - new Date(transaction.createdAt).getTime()) < 24 * 60 * 60 * 1000 : false;
+  const isRecent = transaction ? (new Date().getTime() - new Date(transaction.created_at).getTime()) < 24 * 60 * 60 * 1000 : false;
   const canModify = transaction && !transaction.isReversed && isRecent;
 
   return (
@@ -119,8 +119,8 @@ export function TransactionDetailSheet({
             <InfoRow label="Status" value={transaction.status} color={transaction.isReversed ? 'text-red-500' : transaction.isEdited ? 'text-amber-500' : ''} />
             <InfoRow label="Type" value={transaction.type} />
             <InfoRow label="Amount" value={money(transaction.amount)} />
-            <InfoRow label="Payment Method" value={transaction.paymentMethod} />
-            <InfoRow label="Transaction Date" value={formatFullTransactionDate(transaction.createdAt)} />
+            <InfoRow label="Payment Method" value={transaction.payment_method} />
+            <InfoRow label="Transaction Date" value={formatFullTransactionDate(transaction.created_at)} />
             {transaction.customer && <InfoRow label="Customer" value={transaction.customer} />}
             {transaction.note && <InfoRow label="Note" value={transaction.note} />}
           </div>

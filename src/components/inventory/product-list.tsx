@@ -15,9 +15,9 @@ export function ProductList({ searchQuery }: { searchQuery: string }) {
 
   const products = useLiveQuery(async () => {
     const results = await db.products
-      .orderBy('updatedAt')
+      .orderBy('updated_at')
       .reverse()
-      .filter((product) => !product.isArchived)
+      .filter((product) => !product.is_archived && !product.deleted_at)
       .toArray();
     
     if (!searchQuery) return results;
@@ -25,10 +25,10 @@ export function ProductList({ searchQuery }: { searchQuery: string }) {
     const lowerSearch = searchQuery.toLowerCase();
     return results.filter(p => 
       p.name.toLowerCase().includes(lowerSearch) || 
-      p.sku?.toLowerCase().includes(lowerSearch) ||
-      p.category.toLowerCase().includes(lowerSearch)
+      p.sku?.toLowerCase().includes(lowerSearch)
     );
   }, [searchQuery]);
+
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
@@ -100,9 +100,9 @@ export function ProductList({ searchQuery }: { searchQuery: string }) {
                         <p className="font-bold text-sm tracking-tight">{product.name}</p>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-bold px-1.5 py-0.5 bg-muted text-muted-foreground rounded-md uppercase tracking-wider">
-                            {product.category}
+                            {product.unit_type}
                           </span>
-                          {product.stock <= product.minStock && (
+                          {product.stock <= product.min_stock && (
                             <span className="text-[10px] font-bold text-amber-500 flex items-center gap-0.5">
                                Low Stock
                             </span>
@@ -111,14 +111,15 @@ export function ProductList({ searchQuery }: { searchQuery: string }) {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-sm tabular-nums">₦{product.sellingPrice.toLocaleString()}</p>
+                      <p className="font-bold text-sm tabular-nums">₦{product.selling_price.toLocaleString()}</p>
                       <p className={cn(
                         "text-[11px] font-bold tabular-nums",
                         product.stock <= 0 ? "text-red-500" : 
-                        product.stock <= product.minStock ? "text-amber-500" : "text-emerald-500"
+                        product.stock <= product.min_stock ? "text-amber-500" : "text-emerald-500"
                       )}>
-                        {product.stock} {product.unitType}s
+                        {product.stock} {product.unit_type}s
                       </p>
+
                     </div>
                   </div>
                 </Touchable>

@@ -1,168 +1,216 @@
-// src/services/finance.service.ts
 import { db, createBaseEntity } from '@/db/dexie';
-import { Transaction, Receivable } from '@/db/schema';
+import { Transaction, Receivable, Expense, Service } from '@/db/schema';
 import { processAccounting } from '@/accounting/engine';
+import { syncQueueService } from '@/services/syncQueueService';
 
 export const financeService = {
   async recordExpense(
     data: {
       amount: number;
-      category: string;
-      paymentMethod: 'cash' | 'transfer';
+      category_id: string;
+      payment_method: 'cash' | 'transfer';
+      recipient?: string;
       note?: string;
     },
-    businessId: string
+    business_id: string
   ) {
-    const base = createBaseEntity(businessId);
+    const base = createBaseEntity(business_id);
+    
+    // 1. Create Transaction (Journal)
     const transaction: Transaction = {
       ...base,
       type: 'expense',
       amount: data.amount,
-      paymentMethod: data.paymentMethod,
-      category: data.category,
+      payment_method: data.payment_method,
       status: 'completed',
+      reference_id: '', // Will be set to expense local_id
       note: data.note,
     };
 
-    await db.transaction('rw', [db.transactions, db.ledger_entries, db.sync_queue], async () => {
+    return await db.transaction('rw', [
+      db.transactions, 
+      db.expenses, 
+      db.ledger_entries, 
+      db.sync_queue
+    ], async () => {
       await db.transactions.add(transaction);
-      await processAccounting(transaction);
-      await db.sync_queue.add({
-        table: 'transactions',
-        action: 'create',
-        data: transaction,
-        timestamp: new Date(),
-        retryCount: 0,
-        status: 'pending'
-      });
-    });
+      
+      // 2. Create Expense
+      const expense: Expense = {
+        ...createBaseEntity(business_id),
+        transaction_id: transaction.local_id,
+        category_id: data.category_id,
+        amount: data.amount,
+        payment_method: data.payment_method,
+        recipient: data.recipient,
+        note: data.note,
+        status: 'completed',
+      };
+      await db.expenses.add(expense);
+      
+      // Update transaction reference
+      transaction.reference_id = expense.local_id;
+      await db.transactions.update(transaction.id!, { reference_id: expense.local_id });
 
-    return transaction;
+      // 3. Process Accounting
+      await processAccounting(transaction);
+
+      // 4. Enqueue Sync
+      await syncQueueService.enqueue('transactions', 'create', transaction, business_id);
+      await syncQueueService.enqueue('expenses', 'create', expense, business_id);
+      
+      return { transaction, expense };
+    });
   },
 
   async recordService(
     data: {
+      name: string;
       amount: number;
-      paymentMethod: 'cash' | 'transfer' | 'credit';
-      customerId?: string;
-      customerName?: string;
+      payment_method: 'cash' | 'transfer' | 'credit';
+      customer_id?: string;
       note?: string;
     },
-    businessId: string
+    business_id: string
   ) {
-    const base = createBaseEntity(businessId);
+    const base = createBaseEntity(business_id);
+    
+    // 1. Create Transaction (Journal)
     const transaction: Transaction = {
       ...base,
       type: 'service',
       amount: data.amount,
-      paymentMethod: data.paymentMethod,
+      payment_method: data.payment_method,
       status: 'completed',
-      customerId: data.customerId,
-      customer: data.customerName,
+      reference_id: '', // Will be set to service local_id
       note: data.note,
     };
 
-    await db.transaction('rw', [db.transactions, db.ledger_entries, db.sync_queue, db.receivables, db.customers], async () => {
+    return await db.transaction('rw', [
+      db.transactions, 
+      db.services, 
+      db.ledger_entries, 
+      db.sync_queue, 
+      db.receivables, 
+      db.customers
+    ], async () => {
       await db.transactions.add(transaction);
       
-      if (data.paymentMethod === 'credit' && data.customerId) {
-        const receivableBase = createBaseEntity(businessId);
-        await db.receivables.add({
-          ...receivableBase,
-          transactionId: transaction.localId,
-          customerId: data.customerId,
+      // 2. Create Service
+      const service: Service = {
+        ...createBaseEntity(business_id),
+        transaction_id: transaction.local_id,
+        name: data.name,
+        customer_id: data.customer_id,
+        amount: data.amount,
+        payment_method: data.payment_method,
+        status: 'completed',
+        note: data.note,
+      };
+      await db.services.add(service);
+      
+      // Update transaction reference
+      transaction.reference_id = service.local_id;
+      await db.transactions.update(transaction.id!, { reference_id: service.local_id });
+
+      // Handle Credit
+      if (data.payment_method === 'credit' && data.customer_id) {
+        const receivable: Receivable = {
+          ...createBaseEntity(business_id),
+          transaction_id: transaction.local_id,
+          customer_id: data.customer_id,
           amount: data.amount,
-          paidAmount: 0,
-          status: 'pending'
-        });
+          paid_amount: 0,
+          status: 'pending',
+          due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // Default 14 days for services
+        };
+        await db.receivables.add(receivable);
+        await syncQueueService.enqueue('receivables', 'create', receivable, business_id);
         
-        const customer = await db.customers.where('localId').equals(data.customerId).first();
+        // Update customer debt
+        const customer = await db.customers.where('local_id').equals(data.customer_id).first();
         if (customer) {
-          await db.customers.update(customer.id!, {
-            totalDebt: (customer.totalDebt || 0) + data.amount,
-            updatedAt: new Date()
-          });
+          const updatedCustomer = {
+            ...customer,
+            total_debt: (customer.total_debt || 0) + data.amount,
+            updated_at: new Date(),
+            sync_status: 'pending' as const
+          };
+          await db.customers.update(customer.id!, updatedCustomer);
+          await syncQueueService.enqueue('customers', 'update', updatedCustomer, business_id);
         }
       }
 
+      // 3. Process Accounting
       await processAccounting(transaction);
-      await db.sync_queue.add({
-        table: 'transactions',
-        action: 'create',
-        data: transaction,
-        timestamp: new Date(),
-        retryCount: 0,
-        status: 'pending'
-      });
-    });
 
-    return transaction;
+      // 4. Enqueue Sync
+      await syncQueueService.enqueue('transactions', 'create', transaction, business_id);
+      await syncQueueService.enqueue('services', 'create', service, business_id);
+      
+      return { transaction, service };
+    });
   },
 
-  async confirmCreditPayment(receivableId: string, amount: number, paymentMethod: 'cash' | 'transfer') {
-    const receivable = await db.receivables.where('localId').equals(receivableId).first();
+  async confirmCreditPayment(receivableId: string, amount: number, payment_method: 'cash' | 'transfer') {
+    const receivable = await db.receivables.where('local_id').equals(receivableId).first();
     if (!receivable) throw new Error('Receivable not found');
 
-    const businessId = receivable.businessId;
-    const base = createBaseEntity(businessId);
+    const business_id = receivable.business_id;
+    const base = createBaseEntity(business_id);
 
-    return await db.transaction('rw', [db.receivables, db.transactions, db.ledger_entries, db.customers, db.sync_queue], async () => {
-      const newPaidAmount = receivable.paidAmount + amount;
+    return await db.transaction('rw', [
+      db.receivables, 
+      db.transactions, 
+      db.ledger_entries, 
+      db.customers, 
+      db.sync_queue
+    ], async () => {
+      const newPaidAmount = receivable.paid_amount + amount;
       const status = newPaidAmount >= receivable.amount ? 'paid' : 'partially-paid';
 
-      await db.receivables.update(receivable.id!, {
-        paidAmount: newPaidAmount,
+      const updatedReceivable = {
+        ...receivable,
+        paid_amount: newPaidAmount,
         status,
-        updatedAt: new Date()
-      });
+        updated_at: new Date(),
+        sync_status: 'pending' as const
+      };
+      await db.receivables.update(receivable.id!, updatedReceivable);
+      await syncQueueService.enqueue('receivables', 'update', updatedReceivable, business_id);
 
       // Update customer debt
-      const customer = await db.customers.where('localId').equals(receivable.customerId).first();
+      const customer = await db.customers.where('local_id').equals(receivable.customer_id).first();
       if (customer) {
-        await db.customers.update(customer.id!, {
-          totalDebt: Math.max(0, customer.totalDebt - amount),
-          updatedAt: new Date()
-        });
+        const updatedCustomer = {
+          ...customer,
+          total_debt: Math.max(0, (customer.total_debt || 0) - amount),
+          updated_at: new Date(),
+          sync_status: 'pending' as const
+        };
+        await db.customers.update(customer.id!, updatedCustomer);
+        await syncQueueService.enqueue('customers', 'update', updatedCustomer, business_id);
       }
 
-      // Create a virtual transaction for the payment to update ledger
+      // 3. Create a payment transaction for ledger tracking
       const paymentTx: Transaction = {
         ...base,
-        type: 'service', // Or a new type 'credit-payment'
+        type: 'credit_payment',
         amount: amount,
-        paymentMethod: paymentMethod,
+        payment_method: payment_method,
         status: 'completed',
-        note: `Credit payment for transaction ${receivable.transactionId}`,
+        reference_id: receivable.local_id,
+        note: `Credit payment for transaction ${receivable.transaction_id}`,
       };
-      
-      // Manually handle accounting for credit payment
-      // Debit Cash/Bank, Credit Receivable
-      const ledgerBase = createBaseEntity(businessId);
-      await db.ledger_entries.bulkAdd([
-        {
-          ...ledgerBase,
-          transactionId: paymentTx.localId,
-          accountName: paymentMethod === 'cash' ? 'Cash' : 'Bank',
-          debit: amount,
-          credit: 0
-        },
-        {
-          ...ledgerBase,
-          transactionId: paymentTx.localId,
-          accountName: 'Receivables',
-          debit: 0,
-          credit: amount
-        }
-      ] as any);
+      await db.transactions.add(paymentTx);
 
-      await db.sync_queue.add({
-        table: 'receivables',
-        action: 'update',
-        data: { localId: receivableId, paidAmount: newPaidAmount, status },
-        timestamp: new Date(),
-        retryCount: 0,
-        status: 'pending'
-      });
+      // 4. Process Accounting (Credit payment logic handled in processAccounting)
+      await processAccounting(paymentTx);
+      
+      // 5. Enqueue Sync
+      await syncQueueService.enqueue('transactions', 'create', paymentTx, business_id);
+
+      return paymentTx;
     });
   }
 };
