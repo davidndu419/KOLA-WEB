@@ -59,7 +59,7 @@ export function ProductDetailSheet({
             <h2 className="text-xl font-bold tracking-tight">{product.name}</h2>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold px-2 py-1 bg-primary/10 text-primary rounded-lg uppercase tracking-wider">
-                {product.category}
+                {(product as any).category}
               </span>
               <span className="text-[10px] font-bold px-2 py-1 bg-secondary text-muted-foreground rounded-lg uppercase tracking-wider">
                 {product.sku || 'No SKU'}
