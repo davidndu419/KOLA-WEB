@@ -57,7 +57,7 @@ export async function adjustStock(
       const valueChange = (new_stock - previous_stock) * product.buying_price;
       if (valueChange === 0) return movement;
 
-      const entry: Omit<LedgerEntry, 'id'> = {
+      const entry: any= {
         ...createBaseEntity(product.business_id),
         local_id: crypto.randomUUID(),
         transaction_id: movement.local_id,

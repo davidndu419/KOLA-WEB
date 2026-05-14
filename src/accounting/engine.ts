@@ -30,7 +30,7 @@ export async function processAccounting(
       is_reversal: false,
       is_correction: false,
       description: `Sale: ${transaction.local_id}`
-    });
+    }as any);
 
     // COGS & Inventory Entry
     for (const item of items) {
@@ -50,7 +50,7 @@ export async function processAccounting(
           is_reversal: false,
           is_correction: false,
           description: `COGS for ${product.name}`
-        });
+        }as any);
 
         // Update stock
         await db.products.update(product.id!, {
@@ -89,7 +89,7 @@ export async function processAccounting(
       is_reversal: false,
       is_correction: false,
       description: `Service: ${transaction.local_id}`
-    });
+    }as any);
   }
 
   // 3. Handle Expenses
@@ -106,7 +106,7 @@ export async function processAccounting(
       is_reversal: false,
       is_correction: false,
       description: `Expense: ${transaction.local_id}`
-    });
+    }as any);
   }
 
   // 4. Handle Credit Payments
@@ -123,7 +123,7 @@ export async function processAccounting(
       is_reversal: false,
       is_correction: false,
       description: `Credit Payment: ${transaction.local_id}`
-    });
+    } as any);
   }
 
   // Perform bulk operations
