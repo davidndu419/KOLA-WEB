@@ -177,7 +177,7 @@ export const analyticsService = {
         .reduce((total, transaction) => total + transaction.amount, 0)
     );
     const paymentRecoveries = roundCurrency(
-      ledgerEntries.filter((entry) => entry.credit_account === 'Receivables' && entry.amount > 0).reduce((total, entry) => total + entry.amount, 0)
+      ledgerEntries.filter((entry: any) => entry.credit_account === 'Receivables').reduce((total: any, entry: any) => total + entry.amount, 0)
     );
 
     const previousCashFlow = roundCurrency(
