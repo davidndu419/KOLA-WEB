@@ -85,9 +85,9 @@ export const receivableReportService = {
     }
 
     const recentPayments = ledgerEntries
-      .filter((entry) => !entry.deleted_at && entry.credit_account === 'Receivables' && entry.amount > 0)
-      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
-      .slice(0, 8);
+  .filter((entry: any) => !entry.deleted_at && entry.credit_account === 'Receivables' && entry.amount > 0)
+  .sort((a: any, b: any) => b.created_at.getTime() - a.created_at.getTime())
+  .slice(0, 8);
 
 
     return {
