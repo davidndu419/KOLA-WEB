@@ -56,7 +56,7 @@ export const exportService = {
         item.transaction.type,
         item.title,
         item.transaction.payment_method,
-        item.transaction.customer || item.transaction.customer_id || '',
+        item.transaction.customer || item.transaction.customer || '',
         item.transaction.amount,
         item.transaction.status,
         item.ledgerImpact.debits,
