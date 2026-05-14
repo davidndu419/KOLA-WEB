@@ -34,18 +34,18 @@ export const reversalService = {
 
       // 2. Reverse Ledger Entries
       const originalEntries = await db.ledger_entries.where('transaction_id').equals(transaction_id).toArray();
-      const reversalEntries: LedgerEntry[] = originalEntries.map(entry => ({
-        ...createBaseEntity(business_id),
-        transaction_id: transaction_id,
-        source_type: entry.source_type,
-        source_id: entry.source_id,
-        debit_account: entry.credit_account, // Swap
-        credit_account: entry.debit_account, // Swap
-        amount: entry.amount,
-        is_reversal: true,
-        is_correction: false,
-        description: `Reversal of: ${entry.description || 'Transaction'}`
-      } as any));
+      const reversalEntries: LedgerEntry[] = originalEntries.map((entry: any) => ({
+    ...createBaseEntity(business_id),
+    transaction_id: transaction_id,
+    source_type: entry.source_type,
+    source_id: entry.source_id,
+    debit_account: entry.credit_account, 
+    credit_account: entry.debit_account, 
+    amount: entry.amount,
+    is_reversal: true,
+    is_correction: false,
+    description: `Reversal of: ${entry.description || 'Transaction'}`
+} as any)); 
 
       if (reversalEntries.length > 0) {
         await db.ledger_entries.bulkAdd(reversalEntries);
