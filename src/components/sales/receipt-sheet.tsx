@@ -4,7 +4,7 @@
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import { Printer, Share2, CheckCircle2 } from 'lucide-react';
-import { Transaction } from '@/db/schema';
+import type { TransactionWithItems } from '@/db/schema';
 import { useStore } from '@/store/use-store';
 
 export function ReceiptSheet({ 
@@ -12,7 +12,7 @@ export function ReceiptSheet({
   isOpen, 
   onClose 
 }: { 
-  transaction: Transaction | null;
+  transaction: TransactionWithItems | null;
   isOpen: boolean; 
   onClose: () => void; 
 }) {
@@ -45,19 +45,20 @@ export function ReceiptSheet({
             </div>
 
             <div className="border-y border-border/50 py-4 space-y-3">
-              {(transaction as any).items?.map((item: any, idx: number) => (
+              {transaction.items?.map((item: any, idx: number) => (
                 <div key={idx} className="flex justify-between items-center text-sm font-bold">
                    <span>{item.quantity}x Product</span>
                    <span className="tabular-nums">₦{(item.price * item.quantity).toLocaleString()}</span>
                 </div>
               ))}
-              {(!(transaction as any).items || (transaction as any).items.length === 0) && (
+              {(!transaction.items || transaction.items.length === 0) && (
                 <div className="flex justify-between items-center text-sm font-bold">
                    <span>{transaction.note || transaction.type}</span>
                    <span className="tabular-nums">₦{transaction.amount.toLocaleString()}</span>
                 </div>
               )}
             </div>
+
 
             <div className="flex justify-between items-center">
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Amount</p>

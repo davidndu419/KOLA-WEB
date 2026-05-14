@@ -102,6 +102,11 @@ export interface Transaction extends BaseEntity {
   note?: string;
 }
 
+export interface TransactionWithItems extends Transaction {
+  items?: any[];
+}
+
+
 
 export interface LedgerEntry extends BaseEntity {
   transaction_id: string;
