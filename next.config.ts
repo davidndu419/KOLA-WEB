@@ -11,6 +11,9 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Config options here
+  webpack: (config) => {
+    return config;
+  },
 };
 
 export default withPWA(nextConfig);
