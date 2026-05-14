@@ -214,7 +214,7 @@ export const reportsService = {
     const expenses = expenseService.analyze(transactions, previousTransactions, range);
     const profitLoss = profitLossService.calculate(transactions, currentLedger, previousTransactions, previousLedger);
     const inventory = inventoryReportService.analyze(products, transactions, inventoryMovements);
-    const receivableLedger = allLedger.filter((entry) => entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables' || entry.debit_account === 'Cash' || entry.credit_account === 'Cash' || entry.debit_account === 'Bank' || entry.credit_account === 'Bank');
+    const receivableLedger = allLedger.filter((entry: any) => entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables' || entry.debit_account === 'Cash' || entry.credit_account === 'Cash' || entry.debit_account === 'Bank' || entry.credit_account === 'Bank');
     const receivablesReport = receivableReportService.analyze(receivables as Receivable[], customers as Customer[], receivableLedger);
     const sales = analyticsService.sales(transactions, products);
     const services = analyticsService.services(transactions);
