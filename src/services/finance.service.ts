@@ -167,16 +167,17 @@ export const financeService = {
       db.sync_queue
     ], async () => {
       const newPaidAmount = receivable.paid_amount + amount;
-      const status = newPaidAmount >= receivable.amount ? 'paid' : 'partially-paid';
+    // Force the ternary result to the specific union type
+const status = (newPaidAmount >= receivable.amount ? 'paid' : 'partially-paid') as 'paid' | 'partially-paid';
 
-      const updatedReceivable = {
-        ...receivable,
-        paid_amount: newPaidAmount,
-        status,
-        updated_at: new Date(),
-        sync_status: 'pending' as const
-      };
-      await db.receivables.update(receivable.id!, updatedReceivable);
+const updatedReceivable = {
+  ...receivable,
+  paid_amount: newPaidAmount,
+  status, // This will now match the Receivable interface perfectly
+  updated_at: new Date(),
+  sync_status: 'pending' as const
+};
+      await db.receivables.update(receivable.id!, updatedReceivable as any);
       await syncQueueService.enqueue('receivables', 'update', updatedReceivable, business_id);
 
       // Update customer debt
