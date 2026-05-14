@@ -180,8 +180,8 @@ export const reportsService = {
     const previousTransactions = applyFilters(previousTransactionsRaw, filters);
     const transaction_ids = new Set(transactions.map((transaction) => transaction.local_id));
     const previousTransactionIds = new Set(previousTransactions.map((transaction) => transaction.local_id));
-    const currentLedger = currentLedgerRaw.filter((entry) => transaction_ids.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
-    const previousLedger = previousLedgerRaw.filter((entry) => previousTransactionIds.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
+    const currentLedger = currentLedgerRaw.filter((entry: any) => transaction_ids.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
+    const previousLedger = previousLedgerRaw.filter((entry: any) => previousTransactionIds.has(entry.transaction_id) || entry.debit_account === 'Receivables' || entry.credit_account === 'Receivables');
 
     // Enrich transactions with items for downstream services
     const saleMap = new Map(salesRaw.map(s => [s.transaction_id, s]));
