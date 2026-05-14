@@ -24,10 +24,11 @@ export class ProductRepository extends BaseRepository<Product> {
     return await this.table
       .where('business_id')
       .equals(business_id)
-      .filter(p => 
-        !p.deleted_at && 
-        (p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)))
-      )
+      .filter(p => {
+  const isNotDeleted = !p.deleted_at;
+  const matchesQuery = p.name.toLowerCase().includes(q.toLowerCase()) ||  !!(p.sku && p.sku.toLowerCase().includes(q.toLowerCase()));
+  return !!(isNotDeleted && matchesQuery);
+})
       .toArray();
   }
 }

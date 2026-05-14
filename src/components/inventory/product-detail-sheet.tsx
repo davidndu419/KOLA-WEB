@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import { Package, Trash2, Edit3, Plus, Minus, History } from 'lucide-react';
-import { Product } from '@/db/schema';
+import { Product, ProductWithCategory } from '@/db/schema';
 import { inventoryService } from '@/services/inventory.service';
+
 import { cn } from '@/lib/utils';
 
 export function ProductDetailSheet({ 
@@ -14,10 +15,11 @@ export function ProductDetailSheet({
   isOpen, 
   onClose 
 }: { 
-  product: Product | null;
+  product: ProductWithCategory | null;
   isOpen: boolean; 
   onClose: () => void; 
 }) {
+
   const [isEditingStock, setIsEditingStock] = useState(false);
   const [adjustment, setAdjustment] = useState(0);
 
@@ -59,8 +61,9 @@ export function ProductDetailSheet({
             <h2 className="text-xl font-bold tracking-tight">{product.name}</h2>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold px-2 py-1 bg-primary/10 text-primary rounded-lg uppercase tracking-wider">
-                {(product as any).category}
+                {product.category}
               </span>
+
               <span className="text-[10px] font-bold px-2 py-1 bg-secondary text-muted-foreground rounded-lg uppercase tracking-wider">
                 {product.sku || 'No SKU'}
               </span>

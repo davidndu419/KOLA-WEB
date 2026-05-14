@@ -66,9 +66,10 @@ export abstract class BaseRepository<T extends BaseEntity> {
       sync_status: 'pending' as const
     };
 
-    await this.table.update(existing.id!, updatedEntity as any) ;
+    await this.table.update(existing.id!, updatedEntity as any);
     await syncQueueService.enqueue(this.table_name, 'update', updatedEntity, existing.business_id);
   }
+
 
   /**
    * Optimistic Update Helper

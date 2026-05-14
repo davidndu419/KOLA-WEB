@@ -104,30 +104,30 @@ export function TransactionDetailSheet({
   };
 
   const isRecent = transaction ? (new Date().getTime() - new Date(transaction.created_at).getTime()) < 24 * 60 * 60 * 1000 : false;
-  // Bypassing isReversed check for build
-  const canModify = transaction && !(transaction as any).isReversed && isRecent;
-  const tx = transaction as any;
+  const canModify = transaction && !transaction.is_reversed && isRecent;
 
   return (
     <BottomSheet isOpen={Boolean(transaction)} onClose={onClose} title="Transaction Info" bottomOffset={64}>
-      {tx && (
+      {transaction && (
         <div className="space-y-5 py-4 pb-10">
-          {tx.isReversed && (
+          {transaction.is_reversed && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
               <p className="text-red-500 text-xs font-bold uppercase tracking-widest">Reversed Transaction</p>
-              <p className="text-[10px] text-red-500/80 font-medium mt-1">{tx.reversalReason}</p>
+              <p className="text-[10px] text-red-500/80 font-medium mt-1">{transaction.reversal_reason}</p>
             </div>
           )}
 
+
           <div className="bg-secondary/60 rounded-[24px] p-4 space-y-3">
-            <InfoRow label="Status" value={tx.status} color={tx.isReversed ? 'text-red-500' : tx.isEdited ? 'text-amber-500' : ''} />
-            <InfoRow label="Type" value={tx.type} />
-            <InfoRow label="Amount" value={money(tx.amount)} />
-            <InfoRow label="Payment Method" value={tx.payment_method} />
-            <InfoRow label="Transaction Date" value={formatFullTransactionDate(tx.created_at)} />
-            {tx.customer && <InfoRow label="Customer" value={tx.customer} />}
-            {tx.note && <InfoRow label="Note" value={tx.note} />}
+            <InfoRow label="Status" value={transaction.status} color={transaction.is_reversed ? 'text-red-500' : transaction.is_edited ? 'text-amber-500' : ''} />
+            <InfoRow label="Type" value={transaction.type} />
+            <InfoRow label="Amount" value={money(transaction.amount)} />
+            <InfoRow label="Payment Method" value={transaction.payment_method} />
+            <InfoRow label="Transaction Date" value={formatFullTransactionDate(transaction.created_at)} />
+            {transaction.customer && <InfoRow label="Customer" value={transaction.customer} />}
+            {transaction.note && <InfoRow label="Note" value={transaction.note} />}
           </div>
+
 
           <div className="grid grid-cols-2 gap-3">
             <Touchable
@@ -137,9 +137,10 @@ export function TransactionDetailSheet({
               <Share2 size={16} /> Share
             </Touchable>
             <Touchable
-              onPress={() => printReceipt(tx)}
+              onPress={() => printReceipt(transaction)}
               className="bg-secondary text-foreground rounded-2xl py-4 flex items-center justify-center gap-2 text-xs font-bold border border-border"
             >
+
               <FileText size={16} /> PDF
             </Touchable>
           </div>
@@ -147,13 +148,13 @@ export function TransactionDetailSheet({
           {canModify && (
             <div className="grid grid-cols-2 gap-3">
               <Touchable
-                onPress={() => onReverse?.(transaction as any)}
+                onPress={() => onReverse?.(transaction)}
                 className="bg-red-500/10 text-red-600 rounded-2xl py-4 flex items-center justify-center gap-2 text-xs font-bold border border-red-500/20"
               >
                 <RotateCcw size={16} /> Reverse
               </Touchable>
               <Touchable
-                onPress={() => onCorrect?.(transaction as any)}
+                onPress={() => onCorrect?.(transaction)}
                 className="bg-amber-500/10 text-amber-600 rounded-2xl py-4 flex items-center justify-center gap-2 text-xs font-bold border border-amber-500/20"
               >
                 <Edit3 size={16} /> Correct
@@ -161,14 +162,15 @@ export function TransactionDetailSheet({
             </div>
           )}
 
-          {(tx.isEdited || tx.isReversed) && onViewAuditTrail && (
+          {(transaction.is_edited || transaction.is_reversed) && onViewAuditTrail && (
             <Touchable
-              onPress={() => onViewAuditTrail(transaction as any)}
+              onPress={() => onViewAuditTrail(transaction)}
               className="w-full bg-indigo-500/10 text-indigo-600 rounded-2xl py-4 flex items-center justify-center gap-2 text-xs font-bold border border-indigo-500/20"
             >
               <History size={16} /> View Audit Trail
             </Touchable>
           )}
+
         </div>
       )}
     </BottomSheet>

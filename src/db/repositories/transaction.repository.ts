@@ -28,10 +28,16 @@ export class TransactionRepository extends BaseRepository<Transaction> {
     return await this.table
       .where('business_id')
       .equals(business_id)
-      .filter(t => 
-        !t.deleted_at && 
-        (t.type.toLowerCase().includes(q) || (t.note && t.note.toLowerCase().includes(q)))
-      )
+      .filter(t => {
+        const isNotDeleted = !t.deleted_at;
+        const matchesQuery = !!(
+          t.type.toLowerCase().includes(q) || 
+          t.note?.toLowerCase().includes(q) || 
+          t.customer?.toLowerCase().includes(q)
+        );
+        return !!(isNotDeleted && matchesQuery);
+      })
+
       .toArray();
   }
 }
