@@ -37,12 +37,14 @@ export default function SalesPage() {
     // Receivables usually remain lifetime unless filtered
     const allLedger = await db.ledger_entries.toArray();
     const receivables = allLedger
-      .reduce((acc, entry) => {
-        let balance = 0;
-        if (entry.debit_account === 'Receivables') balance += entry.amount;
-        if (entry.credit_account === 'Receivables') balance -= entry.amount;
-        return acc + balance;
-      }, 0);
+     .reduce((acc, entry: any) => {
+  let balance = 0;
+  
+  if (entry.debit_account === 'Receivables') balance += entry.amount;
+  if (entry.credit_account === 'Receivables') balance -= entry.amount;
+  
+  return acc + balance;
+}, 0);
 
 
     const cashSales = transactions
