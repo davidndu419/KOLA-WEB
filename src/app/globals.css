@@ -171,20 +171,15 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    overscroll-behavior-y: none;
-    overflow: hidden;
-    height: 100%;
+    min-height: 100vh;
     width: 100%;
-    position: fixed;
   }
   
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     scroll-behavior: smooth;
-    overflow: hidden;
-    height: 100%;
-    overscroll-behavior: none;
+    min-height: 100vh;
   }
   
   button, a, [role="button"] {

@@ -27,39 +27,9 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
 /**
- * AUTH HELPERS
- */
-export const authService = {
-  async signUp(email: string, password: string, metadata: any) {
-    return await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: metadata }
-    });
-  },
-
-  async signIn(email: string, password: string) {
-    return await supabase.auth.signInWithPassword({ email, password });
-  },
-
-  async signOut() {
-    return await supabase.auth.signOut();
-  },
-
-  async getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
-  },
-
-  async getSession() {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session;
-  }
-};
-
-/**
  * STORAGE HELPERS
  */
+
 export const storageService = {
   async uploadFile(bucket: string, path: string, file: File | Blob) {
     const { data, error } = await supabase.storage
