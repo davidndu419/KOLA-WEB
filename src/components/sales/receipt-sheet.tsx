@@ -45,7 +45,7 @@ export function ReceiptSheet({
             </div>
 
             <div className="border-y border-border/50 py-4 space-y-3">
-              {transaction.items?.map((item, idx) => (
+              {(transaction as any).items?.map((item: any, idx: number) => (
                 <div key={idx} className="flex justify-between items-center text-sm font-bold">
                    <span>{item.quantity}x Product</span>
                    <span className="tabular-nums">₦{(item.price * item.quantity).toLocaleString()}</span>
