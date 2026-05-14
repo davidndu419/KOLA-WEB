@@ -34,12 +34,16 @@ export default function SalesPage() {
       
     const transactionCount = transactions.filter(tx => tx.type === 'sale').length;
 
-    // Receivables usually remain lifetime unless filtered, but let's keep it lifetime for the card context
-    const receivablesEntries = await db.ledger_entries
-      .where('account_name')
-      .equals('Receivables')
-      .toArray();
-    const receivables = receivablesEntries.reduce((acc, entry) => acc + (entry.debit - entry.credit), 0);
+    // Receivables usually remain lifetime unless filtered
+    const allLedger = await db.ledger_entries.toArray();
+    const receivables = allLedger
+      .reduce((acc, entry) => {
+        let balance = 0;
+        if (entry.debit_account === 'Receivables') balance += entry.amount;
+        if (entry.credit_account === 'Receivables') balance -= entry.amount;
+        return acc + balance;
+      }, 0);
+
 
     const cashSales = transactions
       .filter(tx => tx.type === 'sale' && tx.payment_method === 'cash')
