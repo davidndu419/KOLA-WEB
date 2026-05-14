@@ -19,12 +19,14 @@ export interface ProfitLossReport {
 function ledgerBalance(entries: LedgerEntry[], account_name: string) {
   return roundCurrency(
     entries
-      .reduce((total, entry) => {
-        let balance = 0;
-        if (entry.debit_account === account_name) balance += entry.amount;
-        if (entry.credit_account === account_name) balance -= entry.amount;
-        return total + balance;
-      }, 0)
+      .reduce((total, entry: any) => {
+  let balance = 0;
+  
+  if (entry.debit_account === account_name) balance += entry.amount;
+  if (entry.credit_account === account_name) balance -= entry.amount;
+  
+  return total + balance;
+}, 0)
   );
 }
 
