@@ -47,11 +47,12 @@ export const contactService = {
 
   // Suppliers
   async addSupplier(data: Omit<Supplier, keyof import('@/db/schema').BaseEntity | 'id' | 'total_balance'>, business_id: string) {
-    const supplier: Supplier = {
-      ...createBaseEntity(business_id),
-      ...data,
-      total_balance: 0,
-    };
+   const supplier: Supplier = {
+    ...createBaseEntity(business_id),
+    ...data,
+    // Ensure this matches your schema (e.g., balance or totalBalance)
+    balance: 0, 
+} as any;
     await db.suppliers.add(supplier);
     await syncQueueService.enqueue('suppliers', 'create', supplier, business_id);
     return supplier;

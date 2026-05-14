@@ -30,11 +30,11 @@ export const correctionService = {
     ], async () => {
       // 1. Reverse Original Financial Impact (Ledger only for simplicity, or full reversal)
       const originalEntries = await db.ledger_entries.where('transaction_id').equals(transaction_id).toArray();
-      const reversalEntries: LedgerEntry[] = originalEntries.map(entry => ({
-        ...createBaseEntity(business_id),
-        transaction_id: transaction_id,
-        source_type: entry.source_type,
-        source_id: entry.source_id,
+      const reversalEntries: LedgerEntry[] = originalEntries.map((entry: any) => ({
+    ...createBaseEntity(business_id),
+    transaction_id: transaction_id,
+    source_type: entry.source_type,
+    source_id: entry.source_id,
         debit_account: entry.credit_account,
         credit_account: entry.debit_account,
         amount: entry.amount,

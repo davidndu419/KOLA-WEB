@@ -150,17 +150,17 @@ export const creditService = {
 
       // 4. Ledger Entries
       const ledgerBase = createBaseEntity(business_id);
-      const entry: LedgerEntry = {
-        ...ledgerBase,
-        transaction_id: paymentTx.local_id,
-        source_type: 'credit_payment',
-        source_id: receivable.local_id,
-        debit_account: input.payment_method === 'cash' ? 'Cash' : 'Bank',
-        credit_account: 'Receivables',
-        amount,
-        is_reversal: false,
-        is_correction: false,
-      };
+      const entry: any = {
+    ...ledgerBase,
+    transaction_id: paymentTx.local_id,
+    source_type: 'credit_payment',
+    source_id: receivable.local_id,
+    debit_account: input.payment_method === 'cash' ? 'Cash' : 'Bank',
+    credit_account: 'Receivables',
+    amount,
+    is_reversal: false,
+    is_correction: false,
+};
       await db.ledger_entries.add(entry);
       await syncQueueService.enqueue('ledger_entries', 'create', entry, business_id);
 
