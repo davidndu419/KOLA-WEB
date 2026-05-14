@@ -47,11 +47,17 @@ export default function DashboardPage() {
 
     // 1. Total Balance calculation (Net of all Cash/Receivables entries)
     let totalBalance = 0;
-    await db.ledger_entries.each(entry => {
-      const accounts = ['Cash', 'Bank', 'Receivables'];
-      if (accounts.includes(entry.debit_account)) totalBalance += entry.amount;
-      if (accounts.includes(entry.credit_account)) totalBalance -= entry.amount;
-    });
+    await db.ledger_entries.each((entry: any) => {
+  const accounts = ['Cash', 'Bank', 'Receivables'];
+  
+  if (accounts.includes(entry.debit_account)) {
+    totalBalance += entry.amount;
+  }
+  
+  if (accounts.includes(entry.credit_account)) {
+    totalBalance -= entry.amount;
+  }
+});
 
 
     // 2. Range Profit calculation
