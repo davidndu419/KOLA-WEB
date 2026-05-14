@@ -1,3 +1,4 @@
+// @ts-ignore
 import withPWAInit from 'next-pwa';
 
 const withPWA = withPWAInit({
