@@ -115,10 +115,10 @@ export const reportService = {
     await db.ledger_entries
       .where('created_at')
       .between(startDate, endDate)
-      .each(entry => {
-        if (entry.debit_account === 'Cash' || entry.debit_account === 'Bank') cashIn += entry.amount;
-        if (entry.credit_account === 'Cash' || entry.credit_account === 'Bank') cashOut += entry.amount;
-      });
+      .each((entry: any) => {
+  if (entry.debit_account === 'Cash' || entry.debit_account === 'Bank') cashIn += entry.amount;
+  if (entry.credit_account === 'Cash' || entry.credit_account === 'Bank') cashOut += entry.amount;
+});
 
     return { cashIn, cashOut, netCash: cashIn - cashOut };
   },
