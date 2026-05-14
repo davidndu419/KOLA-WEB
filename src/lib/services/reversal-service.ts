@@ -151,13 +151,12 @@ export class ReversalService {
 
   private static async reverseCreditPayment(payment: Transaction, business_id: string) {
     // 1. Find the receivable being paid
-    // Credit payments usually link back to a receivable via sourceId or something similar
-    // Assuming credit payments store the receivableId in sourceId
-    const receivableId = payment.sourceId;
+    const receivableId = payment.source_id;
     if (!receivableId) return;
 
     const receivable = await db.receivables.where('local_id').equals(receivableId).first();
     if (!receivable) return;
+
 
     // 2. Reverse Ledger Entries
     const entries = await db.ledger_entries.where('transaction_id').equals(payment.local_id).toArray();
@@ -196,11 +195,13 @@ export class ReversalService {
       payment_method: original.payment_method,
       status: 'active',
       original_transaction_id: original.local_id,
-      source_type: original.type as any,
+      source_type: original.type,
       source_id: original.local_id,
       reversal_reason: reason,
-      note: `Reversal of ${original.type}: ${original.local_id}`
-    } as any);
+      note: `Reversal of ${original.type}: ${original.local_id}`,
+      reference_id: ''
+    });
+
 
   }
 

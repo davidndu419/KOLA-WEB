@@ -29,7 +29,7 @@ export class TransactionRepository extends BaseRepository<Transaction> {
       .where('business_id')
       .equals(business_id)
       .filter(t => {
-        const isNotDeleted = !t.deleted_at;
+        const isNotDeleted = !!(!t.deleted_at);
         const matchesQuery = !!(
           t.type.toLowerCase().includes(q) || 
           t.note?.toLowerCase().includes(q) || 
@@ -37,6 +37,7 @@ export class TransactionRepository extends BaseRepository<Transaction> {
         );
         return !!(isNotDeleted && matchesQuery);
       })
+
 
       .toArray();
   }

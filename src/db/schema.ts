@@ -111,10 +111,13 @@ export interface Transaction extends BaseEntity {
   is_edited?: boolean;
   reversal_reason?: string;
   original_transaction_id?: string;
+  source_type?: string;
+  source_id?: string;
   correction_version?: number;
   corrected_at?: Date;
   original_payload?: any;
 }
+
 
 export interface TransactionWithItems extends Transaction {
   items?: any[];
