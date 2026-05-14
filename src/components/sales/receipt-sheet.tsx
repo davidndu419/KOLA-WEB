@@ -51,7 +51,7 @@ export function ReceiptSheet({
                    <span className="tabular-nums">₦{(item.price * item.quantity).toLocaleString()}</span>
                 </div>
               ))}
-              {(!transaction.items || transaction.items.length === 0) && (
+              {(!(transaction as any).items || (transaction as any).items.length === 0) && (
                 <div className="flex justify-between items-center text-sm font-bold">
                    <span>{transaction.note || transaction.type}</span>
                    <span className="tabular-nums">₦{transaction.amount.toLocaleString()}</span>
