@@ -18,9 +18,20 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { Touchable } from '@/components/touchable';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function LandingPage() {
   const [logoError, setLogoError] = React.useState(false);
+  const { isAuthenticated, business, isInitialized } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isInitialized && isAuthenticated && business) {
+      router.replace('/dashboard');
+    }
+  }, [isInitialized, isAuthenticated, business, router]);
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">

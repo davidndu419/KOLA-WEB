@@ -30,6 +30,7 @@ const syncTables = {
   sales: db.sales,
   sale_items: db.sale_items,
   expenses: db.expenses,
+  services: db.services,
   transactions: db.transactions,
   ledger_entries: db.ledger_entries,
   receivables: db.receivables,
@@ -37,6 +38,8 @@ const syncTables = {
   customers: db.customers,
   suppliers: db.suppliers,
   categories: db.categories,
+  audit_logs: db.audit_logs,
+  receipts: db.receipts,
 } as const;
 
 
@@ -205,19 +208,23 @@ export const syncService = {
   async processQueue() {
     if (this.isProcessing || !onlineStatusService.getOnlineStatus()) return;
     
-    this.isProcessing = true;
-    
-    // Get business_id from queue or store (assuming all items in queue have business_id)
+    // Get business_id from queue or app_settings
+    let business_id;
     const firstItem = await db.sync_queue.limit(1).first();
-    const business_id = firstItem?.business_id;
-
-    if (business_id) {
-      await this.updateMetadata(business_id, 'last_sync_attempt_at', new Date().toISOString());
-      await this.updateMetadata(business_id, 'last_sync_status', 'syncing');
+    if (firstItem?.business_id) {
+      business_id = firstItem.business_id;
+    } else {
+      const activeSetting = await db.app_settings.where('key').equals('active_business_id').first();
+      business_id = activeSetting?.value;
     }
 
+    if (!business_id) return;
+
+    this.isProcessing = true;
+    await this.updateMetadata(business_id, 'last_sync_attempt_at', new Date().toISOString());
+    await this.updateMetadata(business_id, 'last_sync_status', 'syncing');
+
     try {
-      // Fetch more than BATCH_SIZE so we can sort them and still have a good batch
       const items = await db.sync_queue
         .where('status')
         .anyOf(['pending', 'failed'])
@@ -226,10 +233,8 @@ export const syncService = {
 
       if (items.length === 0) {
         this.isProcessing = false;
-        if (business_id) {
-          await this.updateMetadata(business_id, 'last_sync_status', 'synced');
-          await this.updateMetadata(business_id, 'last_successful_sync_at', new Date().toISOString());
-        }
+        await this.updateMetadata(business_id, 'last_sync_status', 'synced');
+        await this.updateMetadata(business_id, 'last_successful_sync_at', new Date().toISOString());
         return;
       }
 
@@ -320,69 +325,67 @@ export const syncService = {
     if (!onlineStatusService.getOnlineStatus()) return;
 
     const tables = Object.keys(ENTITY_PRIORITY).sort((a, b) => ENTITY_PRIORITY[a] - ENTITY_PRIORITY[b]);
+    let hasError = false;
 
     for (const table of tables) {
-      // Get last sync time for this table
-      const syncKey = `last_sync_${table}`;
-      const lastSyncSetting = await db.app_settings.where('key').equals(syncKey).first();
-      const lastSyncTime = lastSyncSetting?.value || new Date(0).toISOString();
+      try {
+        const syncKey = `last_sync_${table}`;
+        const lastSyncSetting = await db.app_settings.where({ business_id, key: syncKey }).first();
+        const lastSyncTime = lastSyncSetting?.value || new Date(0).toISOString();
 
-      // Delta Pull: Only get records updated since last sync
-      const { data, error } = await supabase
-        .from(table)
-        .select('*')
-        .eq('business_id', business_id)
-        .gt('updated_at', lastSyncTime)
-        .order('updated_at', { ascending: true })
-        .limit(200); // Paginated pull
+        const { data, error } = await supabase
+          .from(table)
+          .select('*')
+          .eq('business_id', business_id)
+          .gt('updated_at', lastSyncTime)
+          .order('updated_at', { ascending: true })
+          .limit(200);
 
-      if (error) {
-        console.error(`[SyncService] Error pulling ${table}:`, error);
-        continue;
-      }
+        if (error) throw error;
 
-      if (data && data.length > 0) {
-        for (const remoteItem of data) {
-          const localTable = syncTables[table as keyof typeof syncTables];
-          if (!localTable) continue;
+        if (data && data.length > 0) {
+          for (const remoteItem of data) {
+            const localTable = syncTables[table as keyof typeof syncTables];
+            if (!localTable) continue;
 
-          const localItem = await localTable.where('local_id').equals((remoteItem as any).local_id).first();
+            const localItem = await localTable.where('local_id').equals((remoteItem as any).local_id).first();
+            const processedItem: any = {
+              ...(remoteItem as object),
+              created_at: (remoteItem as any).created_at ? new Date((remoteItem as any).created_at) : new Date(),
+              updated_at: (remoteItem as any).updated_at ? new Date((remoteItem as any).updated_at) : new Date(),
+              deleted_at: (remoteItem as any).deleted_at ? new Date((remoteItem as any).deleted_at) : null,
+              sync_status: 'synced'
+            };
 
-          
-          // Convert string dates to Date objects for Dexie
-          const processedItem: any = {
-            ...(remoteItem as object),
-            created_at: (remoteItem as any).created_at ? new Date((remoteItem as any).created_at) : new Date(),
-            updated_at: (remoteItem as any).updated_at ? new Date((remoteItem as any).updated_at) : new Date(),
-            deleted_at: (remoteItem as any).deleted_at ? new Date((remoteItem as any).deleted_at) : null,
-            sync_status: 'synced'
-          };
-
-
-
-          if (localItem) {
-            // Local exists: Check for conflict
-            if (localItem.sync_status === 'pending' || localItem.sync_status === 'failed') {
-               await conflictResolver.resolve(table, localItem, processedItem);
+            if (localItem) {
+              if (localItem.sync_status === 'pending' || localItem.sync_status === 'failed') {
+                 await conflictResolver.resolve(table, localItem, processedItem);
+              } else {
+                 await localTable.update(localItem.id, processedItem);
+              }
             } else {
-               // Safe to overwrite local with newer cloud data
-               await localTable.update(localItem.id, processedItem);
+              await localTable.add(processedItem);
             }
+          }
+
+          const latestTime = (data[data.length - 1] as any).updated_at;
+          if (lastSyncSetting) {
+            await db.app_settings.update(lastSyncSetting.id!, { value: latestTime, updated_at: new Date() });
           } else {
-            // New from cloud
-            await localTable.add(processedItem);
+            await db.app_settings.add({ business_id, key: syncKey, value: latestTime, updated_at: new Date() });
           }
         }
-
-        // Update last sync time to the latest record's updated_at
-        const latestTime = (data[data.length - 1] as any).updated_at;
-
-        if (lastSyncSetting) {
-          await db.app_settings.update(lastSyncSetting.id!, { value: latestTime, updated_at: new Date() });
-        } else {
-          await db.app_settings.add({ business_id, key: syncKey, value: latestTime, updated_at: new Date() });
-        }
+      } catch (err: any) {
+        console.error(`[SyncService] Error pulling ${table}:`, err);
+        hasError = true;
+        await this.updateMetadata(business_id, 'last_sync_status', 'failed');
+        await this.updateMetadata(business_id, 'last_sync_error', `Pull failed for ${table}: ${err.message}`);
       }
+    }
+
+    if (!hasError) {
+      await this.updateMetadata(business_id, 'last_sync_status', 'synced');
+      await this.updateMetadata(business_id, 'last_successful_sync_at', new Date().toISOString());
     }
   }
 

@@ -23,16 +23,18 @@ export const authService = {
     if (error) throw error;
 
     if (data.user) {
-      // Attempt to load business from Dexie first (offline-first)
-      // If not found, we will handle redirection in the UI
+      const activeBusinessSetting = await db.app_settings.where('key').equals('active_business_id').first();
+      const profileSetting = await db.app_settings.where('key').equals('business_profile').first();
+
       const userProfile = {
         id: data.user.id,
         email: data.user.email!,
         full_name: data.user.user_metadata?.full_name,
+        business_id: activeBusinessSetting?.value
       };
 
-      // Set initial auth state
-      useAuthStore.getState().setAuth(userProfile, null);
+      // Set auth state with recovered business if available
+      useAuthStore.getState().setAuth(userProfile, profileSetting?.value || null);
     }
 
     return data;
@@ -45,13 +47,16 @@ export const authService = {
 
   async setupBusiness(userId: string, details: { name: string; type: string; currency: string }) {
     const business_id = crypto.randomUUID();
+    const user = useAuthStore.getState().user;
     
     const businessData = {
       local_id: business_id,
-      business_id, // For multi-tenant alignment
+      business_id, 
       name: details.name,
       type: details.type,
       currency: details.currency,
+      ownerName: user?.full_name || 'Owner',
+      address: '',
       created_at: new Date(),
       updated_at: new Date(),
       sync_status: 'pending' as const,
@@ -79,9 +84,9 @@ export const authService = {
     });
 
     // 3. Update Auth Store
-    const user = useAuthStore.getState().user;
-    if (user) {
-      useAuthStore.getState().setAuth({ ...user, business_id }, businessData as any);
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser) {
+      useAuthStore.getState().setAuth({ ...currentUser, business_id }, businessData as any);
     }
 
     return businessData;

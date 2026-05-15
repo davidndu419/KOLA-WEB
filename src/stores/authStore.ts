@@ -13,6 +13,8 @@ interface BusinessProfile {
   name: string;
   type: string;
   currency: string;
+  ownerName?: string;
+  address?: string;
 }
 
 interface AuthState {
@@ -22,6 +24,7 @@ interface AuthState {
   isInitialized: boolean;
   
   setAuth: (user: UserProfile, business: BusinessProfile | null) => void;
+  updateBusiness: (business: BusinessProfile) => void;
   clearAuth: () => void;
   setInitialized: (value: boolean) => void;
 }
@@ -39,6 +42,8 @@ export const useAuthStore = create<AuthState>()(
         business, 
         isAuthenticated: true 
       }),
+
+      updateBusiness: (business) => set({ business }),
 
       clearAuth: () => set({ 
         user: null, 

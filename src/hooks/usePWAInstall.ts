@@ -31,25 +31,39 @@ export function usePWAInstall() {
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setStatus('can-install');
+      // Only set to can-install if not already standalone
+      const isStandalone = 
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true;
+      
+      if (!isStandalone) {
+        setStatus('can-install');
+      }
     };
 
     const handleAppInstalled = () => {
       setDeferredPrompt(null);
       setStatus('installed');
+      console.log('[PWA] App successfully installed');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+    
+    // Check for display-mode changes
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const handleModeChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setStatus('installed');
+      else checkStatus();
+    };
+    mediaQuery.addEventListener('change', handleModeChange);
 
-    // Periodic check for display mode changes (e.g. user manually installs)
     checkStatus();
-    const interval = setInterval(checkStatus, 2000);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
-      clearInterval(interval);
+      mediaQuery.removeEventListener('change', handleModeChange);
     };
   }, [checkStatus]);
 

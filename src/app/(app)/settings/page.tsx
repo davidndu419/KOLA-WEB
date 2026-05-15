@@ -21,27 +21,36 @@ import { db } from '@/db/dexie';
 import { useStore } from '@/store/use-store';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/authStore';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { syncService } from '@/services/sync.service';
 import { onlineStatusService } from '@/services/onlineStatusService';
 import { formatDistanceToNow } from 'date-fns';
 
-
 export default function SettingsPage() {
   const { 
     business, 
-    setBusiness, 
+    updateBusiness,
+    user,
+    clearAuth
+  } = useAuthStore();
+  const { 
     theme, 
     setTheme, 
     notificationsEnabled, 
     setNotificationsEnabled,
-    logout,
     lastSyncTime
   } = useStore();
 
+
   const [activeSheet, setActiveSheet] = useState<'profile' | 'notifications' | 'sync' | null>(null);
-  const [profileForm, setProfileForm] = useState({ name: business?.name || '', address: business?.address || '' });
+
+  const [profileForm, setProfileForm] = useState({ 
+    name: business?.name || '', 
+    address: business?.address || '',
+    ownerName: business?.ownerName || user?.full_name || ''
+  });
 
   const handleClearData = async () => {
     if (confirm('Are you sure? This will delete all local data!')) {
@@ -53,7 +62,7 @@ export default function SettingsPage() {
 
   const handleLogout = () => {
     if (confirm('Logout from this device?')) {
-      logout();
+      clearAuth();
       window.location.href = '/';
     }
   };
@@ -61,13 +70,28 @@ export default function SettingsPage() {
   const toggleTheme = () => {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(nextTheme);
-    // In a real app, we would apply the class to html/body
     document.documentElement.classList.toggle('dark', nextTheme === 'dark');
   };
 
-  const saveProfile = () => {
+  const saveProfile = async () => {
     if (business) {
-      setBusiness({ ...business, name: profileForm.name, address: profileForm.address });
+      const updatedBusiness = { 
+        ...business, 
+        name: profileForm.name, 
+        address: profileForm.address,
+        ownerName: profileForm.ownerName 
+      };
+      
+      updateBusiness(updatedBusiness);
+      
+      // Persist to Dexie
+      await db.app_settings.put({
+        key: 'business_profile',
+        value: updatedBusiness,
+        business_id: business.id,
+        updated_at: new Date()
+      });
+      
       setActiveSheet(null);
     }
   };
@@ -86,7 +110,7 @@ export default function SettingsPage() {
         </div>
         <div>
           <h3 className="font-bold text-lg">{business?.name || 'Kola Business'}</h3>
-          <p className="text-xs text-muted-foreground font-medium">{business?.ownerName || 'Owner'} • Basic Plan</p>
+          <p className="text-xs text-muted-foreground font-medium">{business?.ownerName || user?.full_name || 'Owner'} • {business?.type || 'Business'}</p>
         </div>
         <Touchable 
           onPress={() => setActiveSheet('profile')}
@@ -266,7 +290,7 @@ function SyncSettingItem({ onOpenSheet }: { onOpenSheet: () => void }) {
 }
 
 function SyncBottomSheetContent({ onClose }: { onClose: () => void }) {
-  const { business } = useStore();
+  const { business } = useAuthStore();
   const isOnline = onlineStatusService.getOnlineStatus();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
 
