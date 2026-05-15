@@ -1,157 +1,282 @@
-// src/components/inventory/product-detail-sheet.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/db/dexie';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
-import { Package, Trash2, Edit3, Plus, Minus, History } from 'lucide-react';
-import { Product, ProductWithCategory } from '@/db/schema';
+import { useRouter } from 'next/navigation';
+import { 
+  Package, 
+  Trash2, 
+  Edit3, 
+  Plus, 
+  History as HistoryIcon, 
+  TrendingUp, 
+  Info,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Clock,
+  ChevronRight,
+  Activity
+} from 'lucide-react';
+import { Product, ProductWithCategory, InventoryMovement } from '@/db/schema';
 import { inventoryService } from '@/services/inventory.service';
-
 import { cn } from '@/lib/utils';
+import { RestockSheet } from './restock-sheet';
 
 export function ProductDetailSheet({ 
-  product,
+  product: initialProduct,
   isOpen, 
   onClose 
 }: { 
-  product: ProductWithCategory | null;
+  product: Product | null;
   isOpen: boolean; 
   onClose: () => void; 
 }) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'info' | 'history'>('info');
+  const [isRestockOpen, setIsRestockOpen] = useState(false);
 
-  const [isEditingStock, setIsEditingStock] = useState(false);
-  const [adjustment, setAdjustment] = useState(0);
-
-  if (!product) return null;
-
-  const handleAdjustStock = async () => {
-    if (adjustment === 0) return;
-    try {
-      if (adjustment > 0) {
-        await inventoryService.restock(product.local_id, adjustment, undefined, 'Manual adjustment');
-      } else {
-        // For negative adjustment, we use the same adjustStock logic via service
-        // Actually our service has restock but we can add a generic adjustment
-        await inventoryService.restock(product.local_id, adjustment, undefined, 'Manual adjustment');
-      }
-      setAdjustment(0);
-      setIsEditingStock(false);
-    } catch (err: any) {
-      alert(err.message);
+  // Re-fetch product and category for reactivity
+  const product = useLiveQuery(async () => {
+    if (!initialProduct) return null;
+    const p = await db.products.where('local_id').equals(initialProduct.local_id).first();
+    if (!p) return null;
+    
+    let categoryName = 'Uncategorized';
+    if (p.category_id) {
+      const cat = await db.categories.where('local_id').equals(p.category_id).first();
+      if (cat) categoryName = cat.name;
     }
-  };
+    
+    return { ...p, category: categoryName } as ProductWithCategory;
+  }, [initialProduct, isOpen]);
+
+  // Fetch product history
+  const history = useLiveQuery(async () => {
+    if (!initialProduct) return [];
+    
+    const movements = await db.inventory_movements
+      .where('product_id').equals(initialProduct.local_id)
+      .toArray();
+
+    const saleItems = await db.sale_items
+      .where('product_id').equals(initialProduct.local_id)
+      .toArray();
+
+    const unifiedHistory = [
+      ...movements.map(m => ({
+        id: m.local_id,
+        type: m.type,
+        quantity: m.quantity,
+        date: m.created_at,
+        note: m.note || m.reason || 'Inventory movement',
+        isPositive: m.type === 'stock-in' || m.type === 'return'
+      })),
+      ...saleItems.map(si => ({
+        id: si.local_id,
+        type: 'sale' as const,
+        quantity: si.quantity,
+        date: si.created_at,
+        note: `Sold at ₦${si.unit_price.toLocaleString()}`,
+        isPositive: false
+      }))
+    ];
+
+    return unifiedHistory.sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [initialProduct, isOpen]);
+
+  if (!initialProduct) return null;
+  
+  // Use the reactive product if available, fallback to initial
+  const displayProduct = product || initialProduct;
+  const totalValue = displayProduct.stock * displayProduct.buying_price;
 
   const handleArchive = async () => {
-    if (confirm(`Are you sure you want to archive ${product.name}?`)) {
-      await inventoryService.deleteProduct(product.local_id);
+    if (confirm(`Are you sure you want to archive ${displayProduct.name}?`)) {
+      await inventoryService.deleteProduct(displayProduct.local_id);
       onClose();
     }
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Product Details">
-      <div className="space-y-8 py-4 pb-2">
-        {/* Product Header */}
-        <div className="flex items-start gap-4">
-          <div className="w-20 h-20 bg-secondary rounded-[32px] flex items-center justify-center text-muted-foreground border-2 border-border/50">
-            <Package size={32} />
-          </div>
-          <div className="flex-1 space-y-1">
-            <h2 className="text-xl font-bold tracking-tight">{product.name}</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold px-2 py-1 bg-primary/10 text-primary rounded-lg uppercase tracking-wider">
-                {product.category}
-              </span>
-
-              <span className="text-[10px] font-bold px-2 py-1 bg-secondary text-muted-foreground rounded-lg uppercase tracking-wider">
-                {product.sku || 'No SKU'}
-              </span>
+    <>
+      <BottomSheet isOpen={isOpen} onClose={onClose} title="Product Intelligence">
+        <div className="flex flex-col min-h-[500px] max-h-[85vh]">
+          {/* Hero Header */}
+          <div className="flex items-center gap-5 pb-6">
+            <div className="w-20 h-20 bg-secondary rounded-[32px] flex items-center justify-center text-muted-foreground border-2 border-border/50 shadow-inner">
+              <Package size={32} />
+            </div>
+            <div className="flex-1 min-w-0 space-y-1">
+              <h2 className="text-xl font-black tracking-tight truncate">{displayProduct.name}</h2>
+              <div className="flex flex-wrap gap-2">
+                <span className="text-[10px] font-black px-2.5 py-1 bg-primary/10 text-primary rounded-lg uppercase tracking-widest">
+                  {(displayProduct as any).category || 'Uncategorized'}
+                </span>
+                <span className="text-[10px] font-black px-2.5 py-1 bg-secondary text-muted-foreground rounded-lg uppercase tracking-widest">
+                  {displayProduct.sku || 'No SKU'}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="glass-card p-4 rounded-3xl space-y-1">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Selling Price</p>
-            <p className="text-xl font-bold tracking-tight">₦{product.selling_price.toLocaleString()}</p>
-          </div>
-          <div className="glass-card p-4 rounded-3xl space-y-1">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Cost Price</p>
-            <p className="text-xl font-bold tracking-tight text-muted-foreground">₦{product.buying_price.toLocaleString()}</p>
-          </div>
-        </div>
-
-        {/* Stock Management */}
-        <div className="glass-card p-6 rounded-[32px] space-y-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Current Stock</p>
-              <p className={cn(
-                "text-4xl font-black tracking-tighter tabular-nums",
-                product.stock <= product.min_stock ? "text-amber-500" : "text-emerald-500"
-              )}>
-                {product.stock} <span className="text-lg font-bold text-muted-foreground uppercase">{product.unit_type}s</span>
-              </p>
-            </div>
-            <Touchable 
-              onPress={() => setIsEditingStock(!isEditingStock)}
-              className="w-12 h-12 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20"
+          {/* Tab Switcher */}
+          <div className="flex bg-secondary/50 p-1 rounded-2xl mb-6">
+            <button 
+              onClick={() => setActiveTab('info')}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                activeTab === 'info' ? "bg-card text-primary shadow-sm" : "text-muted-foreground"
+              )}
             >
-              <Plus size={24} />
-            </Touchable>
+              <Info size={16} /> Summary
+            </button>
+            <button 
+              onClick={() => setActiveTab('history')}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                activeTab === 'history' ? "bg-card text-primary shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              <Activity size={16} /> History
+            </button>
           </div>
 
-          {isEditingStock && (
-            <div className="pt-4 border-t border-border/50 space-y-4 animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center justify-center gap-8">
-                <Touchable 
-                  onPress={() => setAdjustment(prev => prev - 1)}
-                  className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center"
-                >
-                  <Minus size={24} />
-                </Touchable>
-                <div className="text-center">
-                  <p className={cn(
-                    "text-3xl font-bold tabular-nums",
-                    adjustment > 0 ? "text-emerald-500" : adjustment < 0 ? "text-red-500" : ""
-                  )}>
-                    {adjustment > 0 ? '+' : ''}{adjustment}
-                  </p>
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground">Adjustment</p>
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto pr-1 scrollbar-none pb-4">
+            {activeTab === 'info' ? (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-secondary/40 p-4 rounded-[28px] border border-border/50">
+                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Selling Price</p>
+                    <p className="text-xl font-black tracking-tighter">₦{displayProduct.selling_price.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-secondary/40 p-4 rounded-[28px] border border-border/50">
+                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Cost Price</p>
+                    <p className="text-xl font-black tracking-tighter text-muted-foreground/60">₦{displayProduct.buying_price.toLocaleString()}</p>
+                  </div>
                 </div>
+
+                {/* Inventory Card */}
+                <div className="bg-primary/5 border border-primary/10 p-6 rounded-[32px] relative overflow-hidden">
+                  <div className="relative z-10 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-[10px] font-black text-primary/60 uppercase tracking-widest">Available Stock</p>
+                        <p className={cn(
+                          "text-5xl font-black tracking-tighter tabular-nums transition-colors duration-500",
+                          displayProduct.stock <= displayProduct.min_stock ? "text-amber-500" : "text-primary"
+                        )}>
+                          {displayProduct.stock}
+                        </p>
+                        <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mt-1">
+                          {displayProduct.unit_type}s in warehouse
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Total Value</p>
+                        <p className="text-lg font-black tracking-tight">₦{totalValue.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    {displayProduct.stock <= displayProduct.min_stock && (
+                      <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl flex items-center gap-3">
+                        <TrendingUp size={16} className="text-amber-600" />
+                        <p className="text-[10px] font-black text-amber-700 uppercase tracking-wide">
+                          Low stock alert: Threshold is {displayProduct.min_stock}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute -right-8 -bottom-8 text-primary/5 rotate-12">
+                    <Package size={160} />
+                  </div>
+                </div>
+
+                {/* Additional Info */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-2xl border border-border/40">
+                     <div className="flex items-center gap-3 text-muted-foreground">
+                        <Clock size={16} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Date Added</span>
+                     </div>
+                     <span className="text-xs font-bold">{new Date(displayProduct.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 gap-3 pt-4">
+                  <Touchable 
+                    onPress={() => setIsRestockOpen(true)}
+                    className="w-full bg-primary text-white p-5 rounded-[24px] shadow-xl shadow-primary/20 flex items-center justify-center gap-3 font-bold active:scale-95 transition-transform"
+                  >
+                    <Plus size={20} strokeWidth={3} /> Restock
+                  </Touchable>
+                  <Touchable 
+                    onPress={() => router.push(`/inventory/add?id=${displayProduct.local_id}`)}
+                    className="w-full bg-secondary p-5 rounded-[24px] flex items-center justify-center gap-3 font-bold active:scale-95 transition-transform"
+                  >
+                    <Edit3 size={20} /> Edit Info
+                  </Touchable>
+                </div>
+
                 <Touchable 
-                  onPress={() => setAdjustment(prev => prev + 1)}
-                  className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center"
+                  onPress={handleArchive}
+                  className="w-full flex items-center justify-center gap-2 p-4 text-red-500 font-bold opacity-60 hover:opacity-100"
                 >
-                  <Plus size={24} />
+                  <Trash2 size={16} /> Archive Product
                 </Touchable>
               </div>
-              <Touchable 
-                onPress={handleAdjustStock}
-                disabled={adjustment === 0}
-                className="w-full bg-primary text-white font-bold py-4 rounded-2xl disabled:opacity-50"
-              >
-                Confirm Stock Change
-              </Touchable>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {history?.length === 0 ? (
+                  <div className="text-center py-20 space-y-3 opacity-40">
+                    <HistoryIcon size={48} className="mx-auto" />
+                    <p className="text-xs font-black uppercase tracking-widest">No activity recorded yet</p>
+                  </div>
+                ) : (
+                  history?.map((item) => (
+                    <div key={item.id} className="flex gap-4 items-start group">
+                      <div className={cn(
+                        "w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 border-2",
+                        item.isPositive ? "bg-emerald-50 border-emerald-500/10 text-emerald-600" : "bg-secondary border-border/50 text-muted-foreground"
+                      )}>
+                        {item.isPositive ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                      </div>
+                      <div className="flex-1 border-b border-border/40 pb-4 group-last:border-0">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-sm font-black tracking-tight capitalize">{item.type.replace('-', ' ')}</p>
+                            <p className="text-[10px] font-bold text-muted-foreground mt-0.5">{item.note}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={cn(
+                              "text-sm font-black tabular-nums",
+                              item.isPositive ? "text-emerald-600" : "text-red-500"
+                            )}>
+                              {item.isPositive ? '+' : '-'}{item.quantity}
+                            </p>
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase">{new Date(item.date).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
+      </BottomSheet>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3">
-          <Touchable className="w-full bg-secondary p-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm">
-            <Edit3 size={18} /> Edit Info
-          </Touchable>
-          <Touchable 
-            onPress={handleArchive}
-            className="w-full bg-red-50 text-red-600 p-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm"
-          >
-            <Trash2 size={18} /> Archive
-          </Touchable>
-        </div>
-      </div>
-    </BottomSheet>
+      <RestockSheet 
+        product={displayProduct} 
+        isOpen={isRestockOpen} 
+        onClose={() => setIsRestockOpen(false)} 
+      />
+    </>
   );
 }

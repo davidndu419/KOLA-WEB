@@ -2,15 +2,15 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { Plus, Search, Filter, X } from 'lucide-react';
 import { InventoryHeroCard } from '@/components/inventory/inventory-hero-card';
 import { ProductList } from '@/components/inventory/product-list';
-import { AddProductSheet } from '@/components/inventory/add-product-sheet';
 import { Touchable } from '@/components/touchable';
 import { useInventoryMetrics } from '@/hooks/use-inventory-metrics';
 
 export default function InventoryPage() {
-  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
+  const router = useRouter();
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -88,18 +88,13 @@ export default function InventoryPage() {
           className="fixed bottom-24 right-6 z-30"
         >
           <Touchable 
-            onPress={() => setIsAddSheetOpen(true)}
+            onPress={() => router.push('/inventory/add')}
             className="w-16 h-16 bg-primary text-white rounded-2xl shadow-2xl shadow-primary/40 flex items-center justify-center"
           >
             <Plus size={32} strokeWidth={2.5} />
           </Touchable>
         </motion.div>
       )}
-
-      <AddProductSheet 
-        isOpen={isAddSheetOpen} 
-        onClose={() => setIsAddSheetOpen(false)} 
-      />
     </div>
   );
 }
