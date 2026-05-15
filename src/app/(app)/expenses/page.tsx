@@ -11,12 +11,24 @@ import { CompactMetricCard } from '@/components/reports/report-cards';
 import { TransactionDetailSheet } from '@/components/transactions/transaction-detail-sheet';
 import { Transaction } from '@/db/schema';
 import { reportService } from '@/services/reportService';
+import { reportsService } from '@/services/reportsService';
 import { motion } from 'framer-motion';
+import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
+import { HeroSummaryCard } from '@/components/dashboard/hero-summary-card';
+import { Calendar } from 'lucide-react';
 
 export default function ExpensesPage() {
   const [isExpenseSheetOpen, setIsExpenseSheetOpen] = useState(false);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [selectedRange, setSelectedRange] = useState<DateRange>('thisMonth');
+  const [customDate, setCustomDate] = useState<Date>(new Date());
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const reportsData = useLiveQuery(
+    () => reportsService.getSnapshot(selectedRange, customDate),
+    [selectedRange, customDate]
+  );
 
   const expenses = useLiveQuery(async () => {
     let collection = db.transactions
@@ -24,8 +36,16 @@ export default function ExpensesPage() {
       .equals('expense')
       .reverse();
     
-    const results = await collection.toArray();
+    let results = await collection.toArray();
     
+    // Filter by date range if not allTime
+    if (reportsData?.range) {
+        results = results.filter(tx => 
+            tx.created_at >= reportsData.range.startDate && 
+            tx.created_at <= reportsData.range.endDate
+        );
+    }
+
     if (searchQuery) {
       return results.filter(tx => 
         tx.note?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -35,16 +55,7 @@ export default function ExpensesPage() {
     }
     
     return results;
-  }, [searchQuery]);
-
-  const stats = useLiveQuery(async () => {
-    const today = await reportService.getProfitLoss('today');
-    const thisMonth = await reportService.getProfitLoss('thisMonth');
-    return {
-      today: today.expenses,
-      thisMonth: thisMonth.expenses
-    };
-  }, []);
+  }, [searchQuery, reportsData]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -57,24 +68,20 @@ export default function ExpensesPage() {
           </div>
         </div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-2 gap-3"
-        >
-          <CompactMetricCard 
-            label="Today" 
-            value={stats?.today || 0} 
-            icon={TrendingDown}
-            tone="red"
-          />
-          <CompactMetricCard 
-            label="This Month" 
-            value={stats?.thisMonth || 0} 
-            icon={Receipt}
-            tone="red"
-          />
-        </motion.div>
+        <HeroSummaryCard
+          title="Total Expenses"
+          subtitle={reportsData?.range.label || 'Loading...'}
+          mainValue={reportsData?.summary.totalExpenses || 0}
+          icon={Receipt}
+          variant="red"
+          watermarkIcon={TrendingDown}
+          rangeLabel={reportsData?.range.label}
+          onOpenDatePicker={() => setIsDatePickerOpen(true)}
+          stats={[
+            { label: 'Total Records', value: expenses?.length || 0 },
+            { label: 'Selected Period', value: reportsData?.range.label || 'Selected' }
+          ]}
+        />
       </section>
 
       {/* Search */}
@@ -145,6 +152,15 @@ export default function ExpensesPage() {
       <TransactionDetailSheet 
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
+      />
+
+      <DateRangePickerSheet
+        isOpen={isDatePickerOpen}
+        onClose={() => setIsDatePickerOpen(false)}
+        selectedRange={selectedRange}
+        onSelectRange={setSelectedRange}
+        customDate={customDate}
+        onSelectCustomDate={setCustomDate}
       />
     </div>
   );

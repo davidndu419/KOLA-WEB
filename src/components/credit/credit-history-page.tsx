@@ -10,6 +10,8 @@ import {
   FileText,
   ReceiptText,
   WalletCards,
+  Calendar,
+  Zap,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BottomSheet } from '@/components/bottom-sheet';
@@ -23,6 +25,8 @@ import {
   type CreditSourceType,
 } from '@/services/credit.service';
 import type { Transaction } from '@/db/schema';
+import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
+import { HeroSummaryCard } from '@/components/dashboard/hero-summary-card';
 
 const currency = new Intl.NumberFormat('en-NG', {
   style: 'currency',
@@ -65,6 +69,9 @@ function isFilterMatch(item: CreditHistoryItem, filter: CreditFilter) {
 export function CreditHistoryPage({ sourceType }: { sourceType: CreditSourceType }) {
   const router = useRouter();
   const [filter, setFilter] = useState<CreditFilter>('all');
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [selectedRange, setSelectedRange] = useState<DateRange>('allTime');
+  const [customDate, setCustomDate] = useState<Date>(new Date());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [paymentRequest, setPaymentRequest] = useState<{
     item: CreditHistoryItem;
@@ -90,32 +97,42 @@ export function CreditHistoryPage({ sourceType }: { sourceType: CreditSourceType
 
   const title = sourceType === 'sale' ? 'Sales Credit' : 'Service Credit';
   const subtitle = sourceType === 'sale' ? 'Unpaid sales history' : 'Unpaid service history';
+  const themeVariant = sourceType === 'sale' ? 'emerald' : 'indigo';
+  const themeIcon = sourceType === 'sale' ? ReceiptText : Zap;
 
   return (
-    <div className="px-5 space-y-5">
-      <header className="py-4 flex items-center gap-3">
-        <Touchable
-          onPress={() => router.back()}
-          className="w-11 h-11 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground"
-        >
-          <ArrowLeft size={20} />
-        </Touchable>
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-          <p className="text-sm text-muted-foreground font-medium">{subtitle}</p>
+    <div className="px-5 space-y-6 pb-20">
+      <header className="py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+            <Touchable
+            onPress={() => router.back()}
+            className="w-11 h-11 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground"
+            >
+            <ArrowLeft size={20} />
+            </Touchable>
+            <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{subtitle}</p>
+            </div>
         </div>
       </header>
 
-      <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
-        <SummaryPill label="Pending" value={money(data?.summary.totalPending || 0)} />
-        <SummaryPill label="Open" value={String(data?.summary.pendingCount || 0)} />
-        <SummaryPill label="Paid" value={String(data?.summary.paidCount || 0)} />
-        <SummaryPill
-          label="Overdue"
-          value={String(data?.summary.overdueCount || 0)}
-          danger={(data?.summary.overdueCount || 0) > 0}
-        />
-      </div>
+      <HeroSummaryCard
+        title="Total Credit"
+        subtitle={title}
+        mainValue={data?.summary.totalPending || 0}
+        icon={themeIcon}
+        variant={themeVariant}
+        watermarkIcon={WalletCards}
+        rangeLabel={selectedRange === 'allTime' ? 'All Time' : 'Filtered'}
+        onOpenDatePicker={() => setIsDatePickerOpen(true)}
+        stats={[
+          { label: 'Pending', value: data?.summary.pendingCount || 0 },
+          { label: 'Open', value: data?.summary.pendingCount || 0 },
+          { label: 'Paid', value: data?.summary.paidCount || 0 },
+          { label: 'Overdue', value: data?.summary.overdueCount || 0, color: (data?.summary.overdueCount || 0) > 0 ? 'text-red-300' : 'text-white' }
+        ]}
+      />
 
       <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
         {filters.map((item) => (
@@ -164,6 +181,15 @@ export function CreditHistoryPage({ sourceType }: { sourceType: CreditSourceType
       <TransactionDetailSheet
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
+      />
+
+      <DateRangePickerSheet
+        isOpen={isDatePickerOpen}
+        onClose={() => setIsDatePickerOpen(false)}
+        selectedRange={selectedRange}
+        onSelectRange={setSelectedRange}
+        customDate={customDate}
+        onSelectCustomDate={setCustomDate}
       />
     </div>
   );

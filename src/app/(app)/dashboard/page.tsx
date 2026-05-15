@@ -8,6 +8,9 @@ import { QuickActions } from '@/components/dashboard/quick-actions';
 import { CompactMetricCard, MetricGrid } from '@/components/reports/report-cards';
 import { RecordSaleSheet } from '@/components/sales/record-sale-sheet';
 import { RecordExpenseSheet } from '@/components/finance/record-expense-sheet';
+import { RecordServiceSheet } from '@/components/service/record-service-sheet';
+import { AddProductSheet } from '@/components/inventory/add-product-sheet';
+import { useRouter } from 'next/navigation';
 import { Touchable } from '@/components/touchable';
 import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
 import { TransactionDetailSheet } from '@/components/transactions/transaction-detail-sheet';
@@ -26,12 +29,15 @@ import { AuditTrailSheet } from '@/components/transactions/audit-trail-sheet';
 export default function DashboardPage() {
   const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
   const [isExpenseSheetOpen, setIsExpenseSheetOpen] = useState(false);
+  const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
+  const [isStockSheetOpen, setIsStockSheetOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [isReversalOpen, setIsReversalOpen] = useState(false);
   const [isCorrectionOpen, setIsCorrectionOpen] = useState(false);
   const [isAuditTrailOpen, setIsAuditTrailOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange>('today');
+  const router = useRouter();
   const [customDate, setCustomDate] = useState<Date>(new Date());
 
   const transactions = useLiveQuery(() =>
@@ -91,18 +97,13 @@ export default function DashboardPage() {
       <QuickActions onAction={(label) => {
         if (label === 'Sale') setIsSaleSheetOpen(true);
         if (label === 'Expense') setIsExpenseSheetOpen(true);
+        if (label === 'Service') setIsServiceSheetOpen(true);
+        if (label === 'Stock') setIsStockSheetOpen(true);
+        if (label === 'Report') router.push('/reports');
       }} />
 
       <section className="px-4 mb-8 space-y-2.5">
         {reportsSnapshot && <MetricGrid snapshot={reportsSnapshot} />}
-        <div className="grid grid-cols-2 gap-2.5">
-          <CompactMetricCard
-            label={selectedRange === 'today' ? 'Daily Profit' : 'Profit'}
-            value={stats?.rangeProfit || 0}
-            icon={TrendingUp}
-            tone={(stats?.rangeProfit || 0) >= 0 ? 'emerald' : 'red'}
-          />
-        </div>
       </section>
 
       <section className="px-4 mt-8 pb-10">
@@ -138,6 +139,16 @@ export default function DashboardPage() {
       <RecordExpenseSheet
         isOpen={isExpenseSheetOpen}
         onClose={() => setIsExpenseSheetOpen(false)}
+      />
+
+      <RecordServiceSheet
+        isOpen={isServiceSheetOpen}
+        onClose={() => setIsServiceSheetOpen(false)}
+      />
+
+      <AddProductSheet
+        isOpen={isStockSheetOpen}
+        onClose={() => setIsStockSheetOpen(false)}
       />
 
       <TransactionDetailSheet

@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, ShoppingBag, Receipt, Package, TrendingUp } from 'lucide-react';
+import { Plus, ShoppingBag, Receipt, Package, TrendingUp, Zap } from 'lucide-react';
 import { Touchable } from '@/components/touchable';
 import { cn } from '@/lib/utils';
 
@@ -8,6 +8,7 @@ const actions = [
   { icon: Plus, label: 'Sale', color: 'bg-emerald-500 shadow-emerald-500/20' },
   { icon: Package, label: 'Stock', color: 'bg-blue-500 shadow-blue-500/20' },
   { icon: Receipt, label: 'Expense', color: 'bg-red-500 shadow-red-500/20' },
+  { icon: Zap, label: 'Service', color: 'bg-indigo-500 shadow-indigo-500/20' },
   { icon: TrendingUp, label: 'Report', color: 'bg-amber-500 shadow-amber-500/20' },
 ];
 

@@ -175,7 +175,7 @@ export function MetricGrid({ snapshot }: { snapshot: ReportsSnapshot }) {
     { label: 'Expenses', value: snapshot.summary.totalExpenses, icon: Receipt, tone: 'red' },
     { label: 'Receivables', value: snapshot.summary.totalReceivables, icon: CreditCard, tone: 'amber' },
     { label: 'Inventory', value: snapshot.summary.inventoryValue, icon: Package, tone: 'blue' },
-    { label: 'Avg Tx', value: snapshot.summary.averageTransactionValue, icon: Wallet, tone: 'slate' },
+    { label: 'Daily Profit', value: snapshot.summary.netProfit, icon: TrendingUp, tone: 'emerald' },
   ];
 
   return (
