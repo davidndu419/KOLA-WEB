@@ -18,6 +18,8 @@ interface BusinessProfile {
   business_name?: string;
   business_type?: string;
   currency: string;
+  ownerName?: string;
+  address?: string;
   created_at?: Date | string;
   updated_at?: Date | string;
   sync_status?: 'pending' | 'synced' | 'failed' | 'conflict';
@@ -34,6 +36,7 @@ interface AuthState {
   isInitialized: boolean;
   
   setAuth: (user: UserProfile, business: BusinessProfile | null) => void;
+  updateBusiness: (business: BusinessProfile) => void;
   clearAuth: () => void;
   setInitialized: (value: boolean) => void;
 }
@@ -58,6 +61,13 @@ export const useAuthStore = create<AuthState>()(
         businessName: business?.name || business?.business_name || null,
         businessType: business?.type || business?.business_type || null,
         isAuthenticated: true 
+      }),
+
+      updateBusiness: (business) => set({
+        business,
+        activeBusinessId: business.id || business.business_id || null,
+        businessName: business.name || business.business_name || null,
+        businessType: business.type || business.business_type || null,
       }),
 
       clearAuth: () => set({ 

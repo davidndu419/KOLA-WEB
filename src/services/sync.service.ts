@@ -32,6 +32,7 @@ const syncTables = {
   sales: db.sales,
   sale_items: db.sale_items,
   expenses: db.expenses,
+  services: db.services,
   transactions: db.transactions,
   ledger_entries: db.ledger_entries,
   receivables: db.receivables,
@@ -39,6 +40,8 @@ const syncTables = {
   customers: db.customers,
   suppliers: db.suppliers,
   categories: db.categories,
+  audit_logs: db.audit_logs,
+  receipts: db.receipts,
 } as const;
 
 

@@ -20,17 +20,8 @@ import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-ran
 import { reportsService } from '@/services/reportsService';
 import { AlertTriangle, Package, Receipt, Sparkles, TrendingUp, Zap } from 'lucide-react';
 
-const RevenueChartCard = dynamic(
-  () => import('@/components/reports/revenue-chart-card').then((mod) => mod.RevenueChartCard),
-  {
-    loading: () => (
-      <div className="bg-card border border-border/60 shadow-lg shadow-black/5 rounded-[28px] p-5 text-sm font-bold text-muted-foreground">
-        Loading revenue trend...
-      </div>
-    ),
-    ssr: false,
-  }
-);
+import { RevenueChartCard } from '@/components/reports/revenue-chart-card';
+
 
 export default function ReportsPage() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);

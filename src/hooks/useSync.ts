@@ -43,10 +43,12 @@ export function useSync() {
         wasOfflineRef.current = true;
       }
     });
+    window.addEventListener('online', triggerSync);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       unsubscribe();
+      window.removeEventListener('online', triggerSync);
     };
   }, [business?.id]);
 
