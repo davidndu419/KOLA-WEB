@@ -1,12 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { financeService } from '@/services/finance.service';
-import { useStore } from '@/store/use-store';
+import { useAuthStore } from '@/stores/authStore';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
-import { Briefcase, User, Zap, Coins } from 'lucide-react';
+import { Briefcase, User, Zap, Coins, Plus, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db, createBaseEntity } from '@/db/dexie';
+import { ServiceCategory } from '@/db/schema';
+import { syncQueueService } from '@/services/syncQueueService';
+import { notificationService } from '@/services/notificationService';
 
 export function RecordServiceSheet({ 
   isOpen, 
@@ -15,31 +20,57 @@ export function RecordServiceSheet({
   isOpen: boolean; 
   onClose: () => void; 
 }) {
-  const { business } = useStore();
+  const business = useAuthStore((state) => state.business);
+  const businessId = business?.id || business?.business_id;
+
   const [serviceName, setServiceName] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [amount, setAmount] = useState<number>(0);
   const [customerName, setCustomerName] = useState('');
   const [payment_method, setPaymentMethod] = useState<'cash' | 'transfer' | 'credit'>('cash');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Quick Create State
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+
+  const categories = useLiveQuery(
+    () => businessId 
+      ? db.service_categories
+          .where('business_id')
+          .equals(businessId)
+          .filter(c => c.status === 'active')
+          .toArray()
+      : Promise.resolve([] as ServiceCategory[]),
+    [businessId]
+  ) || [];
+
+  // Handle category selection and price autofill
+  useEffect(() => {
+    if (selectedCategoryId) {
+      const cat = categories.find(c => c.local_id === selectedCategoryId);
+      if (cat) {
+        if (!serviceName) setServiceName(cat.name);
+        if (cat.default_price && amount === 0) setAmount(cat.default_price);
+      }
+    }
+  }, [selectedCategoryId, categories]);
 
   const handleConfirm = async () => {
-    if (!serviceName || amount <= 0 || !business) return;
+    if (!serviceName || amount <= 0 || !businessId) return;
     setIsSubmitting(true);
     
     try {
       await financeService.recordService({
         name: serviceName,
+        category_id: selectedCategoryId || undefined,
         amount: amount,
         payment_method: payment_method,
         customer_id: payment_method === 'credit' ? 'walk-in-customer' : undefined,
         note: serviceName,
-      }, business.id);
+      }, businessId);
 
-
-      setServiceName('');
-      setAmount(0);
-      setCustomerName('');
-      alert('Service recorded successfully!');
+      resetForm();
       onClose();
     } catch (err: any) {
       alert(err.message || 'Failed to record service');
@@ -48,85 +79,171 @@ export function RecordServiceSheet({
     }
   };
 
+  const resetForm = () => {
+    setServiceName('');
+    setSelectedCategoryId(null);
+    setAmount(0);
+    setCustomerName('');
+    setPaymentMethod('cash');
+  };
+
+  const handleQuickCreate = async () => {
+    if (!newCatName || !businessId) return;
+    try {
+      const newCat: ServiceCategory = {
+        ...createBaseEntity(businessId),
+        name: newCatName,
+        status: 'active',
+      };
+      await db.service_categories.add(newCat);
+      await syncQueueService.enqueue('service_categories', 'create', newCat, businessId);
+      
+      setSelectedCategoryId(newCat.local_id);
+      setServiceName(newCatName);
+      setNewCatName('');
+      setIsQuickCreateOpen(false);
+    } catch (error) {
+      console.error('Failed to quick-create category:', error);
+    }
+  };
+
   return (
-    <BottomSheet 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title="Record Service" 
-      dismissible={false}
-    >
-      <div className="space-y-6 py-4 pb-2">
-        <div className="space-y-4">
-          <div className="relative">
-            <Zap size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              value={serviceName}
-              onChange={(e) => setServiceName(e.target.value)}
-              placeholder="What service was rendered?"
-              className="w-full bg-secondary rounded-2xl p-4 pl-12 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+    <>
+      <BottomSheet 
+        isOpen={isOpen} 
+        onClose={onClose} 
+        title="Record Service" 
+        dismissible={false}
+      >
+        <div className="space-y-6 py-4 pb-2">
+          <div className="space-y-5">
+            {/* Category Selection */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2">Service Category</label>
+              <div className="flex flex-wrap gap-2 px-1">
+                {categories.map(cat => (
+                  <Touchable 
+                    key={cat.local_id}
+                    onPress={() => setSelectedCategoryId(cat.local_id)}
+                    className={cn(
+                      "px-4 py-2.5 rounded-xl border-2 transition-all flex items-center gap-2",
+                      selectedCategoryId === cat.local_id 
+                        ? "bg-indigo-50 border-indigo-500 text-indigo-700" 
+                        : "bg-secondary border-transparent text-muted-foreground/60"
+                    )}
+                  >
+                    {selectedCategoryId === cat.local_id && <Check size={14} strokeWidth={3} />}
+                    <span className="text-[11px] font-black uppercase tracking-wider">{cat.name}</span>
+                  </Touchable>
+                ))}
+                <Touchable 
+                  onPress={() => setIsQuickCreateOpen(true)}
+                  className="px-4 py-2.5 rounded-xl border-2 border-dashed border-muted-foreground/20 text-muted-foreground/60 flex items-center gap-2"
+                >
+                  <Plus size={14} />
+                  <span className="text-[11px] font-black uppercase tracking-wider">Add New</span>
+                </Touchable>
+              </div>
+            </div>
+
+            {/* Service Name */}
+            <div className="relative">
+              <Zap size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input 
+                value={serviceName}
+                onChange={(e) => setServiceName(e.target.value)}
+                placeholder="What service was rendered?"
+                className="w-full bg-secondary rounded-2xl p-4 pl-12 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Amount */}
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-muted-foreground">₦</span>
+              <input 
+                type="number"
+                value={amount || ''}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                placeholder="Amount Charged"
+                className="w-full bg-secondary rounded-2xl p-4 pl-10 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500 tabular-nums"
+              />
+            </div>
+
+            {/* Customer (Optional) */}
+            <div className="relative">
+              <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input 
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Customer Name (Optional)"
+                className="w-full bg-secondary rounded-2xl p-4 pl-12 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Payment Method */}
+            <div className="grid grid-cols-3 gap-2">
+              {(['cash', 'transfer', 'credit'] as const).map((method) => (
+                <Touchable 
+                  key={method}
+                  onPress={() => setPaymentMethod(method)}
+                  className={cn(
+                    "p-3 rounded-2xl border-2 transition-all text-center",
+                    payment_method === method 
+                      ? "bg-indigo-50 border-indigo-500 text-indigo-700" 
+                      : "bg-secondary border-transparent text-muted-foreground/40"
+                  )}
+                >
+                  <p className="text-[10px] font-black uppercase tracking-[0.15em]">{method}</p>
+                </Touchable>
+              ))}
+            </div>
           </div>
 
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₦</span>
-            <input 
-              type="number"
-              value={amount || ''}
-              onChange={(e) => setAmount(Number(e.target.value))}
-              placeholder="Amount Charged"
-              className="w-full bg-secondary rounded-2xl p-4 pl-10 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-
-          <div className="relative">
-            <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Customer Name (Optional)"
-              className="w-full bg-secondary rounded-2xl p-4 pl-12 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <Touchable 
-              onPress={() => setPaymentMethod('cash')}
-              className={cn(
-                "p-3 rounded-2xl border-2 transition-all text-center",
-                payment_method === 'cash' ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-secondary border-transparent text-muted-foreground"
-              )}
-            >
-              <p className="text-[10px] font-bold uppercase tracking-widest">Cash</p>
-            </Touchable>
-            <Touchable 
-              onPress={() => setPaymentMethod('transfer')}
-              className={cn(
-                "p-3 rounded-2xl border-2 transition-all text-center",
-                payment_method === 'transfer' ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-secondary border-transparent text-muted-foreground"
-              )}
-            >
-              <p className="text-[10px] font-bold uppercase tracking-widest">Transfer</p>
-            </Touchable>
-            <Touchable 
-              onPress={() => setPaymentMethod('credit')}
-              className={cn(
-                "p-3 rounded-2xl border-2 transition-all text-center",
-                payment_method === 'credit' ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-secondary border-transparent text-muted-foreground"
-              )}
-            >
-              <p className="text-[10px] font-bold uppercase tracking-widest">Credit</p>
-            </Touchable>
-          </div>
+          <Touchable 
+            onPress={handleConfirm}
+            disabled={!serviceName || amount <= 0 || isSubmitting}
+            className={cn(
+              "w-full font-black py-5 rounded-[24px] shadow-xl flex items-center justify-center transition-all active:scale-[0.98]",
+              !serviceName || amount <= 0 || isSubmitting
+                ? "bg-muted text-muted-foreground"
+                : "bg-indigo-600 text-white shadow-indigo-500/20"
+            )}
+          >
+            {isSubmitting ? 'Recording...' : 'Complete Service'}
+          </Touchable>
         </div>
+      </BottomSheet>
 
-        <Touchable 
-          onPress={handleConfirm}
-          disabled={!serviceName || amount <= 0 || isSubmitting}
-          className="w-full bg-indigo-600 text-white font-bold py-5 rounded-[24px] shadow-xl shadow-indigo-500/20 flex items-center justify-center disabled:opacity-50"
-        >
-          {isSubmitting ? 'Recording...' : 'Complete Service'}
-        </Touchable>
-      </div>
-    </BottomSheet>
+      {/* Quick Create Category Sheet */}
+      <BottomSheet
+        isOpen={isQuickCreateOpen}
+        onClose={() => setIsQuickCreateOpen(false)}
+        title="New Category"
+      >
+        <div className="space-y-6 py-6 pb-2">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2">Category Name</label>
+            <input 
+              type="text"
+              placeholder="e.g. Haircut, Consulting"
+              value={newCatName}
+              onChange={e => setNewCatName(e.target.value)}
+              className="w-full bg-secondary p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary"
+              autoFocus
+            />
+          </div>
+          <Touchable 
+            onPress={handleQuickCreate}
+            disabled={!newCatName}
+            className={cn(
+              "w-full p-5 rounded-2xl font-black text-center shadow-lg transition-all",
+              newCatName ? "bg-primary text-white shadow-primary/20" : "bg-muted text-muted-foreground"
+            )}
+          >
+            Create Category
+          </Touchable>
+        </div>
+      </BottomSheet>
+    </>
   );
 }

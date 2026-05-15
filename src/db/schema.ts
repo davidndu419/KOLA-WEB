@@ -54,6 +54,13 @@ export interface Category extends BaseEntity {
   icon?: string;
 }
 
+export interface ServiceCategory extends BaseEntity {
+  name: string;
+  description?: string;
+  default_price?: number;
+  status: 'active' | 'inactive';
+}
+
 export interface InventoryMovement extends BaseEntity {
   product_id: string;
   type: 'stock-in' | 'stock-out' | 'adjustment' | 'damage' | 'return';
@@ -89,6 +96,7 @@ export interface SaleItem extends BaseEntity {
 export interface Service extends BaseEntity {
   transaction_id: string;
   name: string;
+  category_id?: string;
   customer_id?: string;
   amount: number;
   payment_method: 'cash' | 'transfer' | 'credit';

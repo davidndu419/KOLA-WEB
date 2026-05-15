@@ -28,6 +28,7 @@ import { ReceiptSheet } from './receipt-sheet';
 import { cn } from '@/lib/utils';
 import { Transaction, Product, TransactionWithItems } from '@/db/schema';
 import { AnimatePresence, motion } from 'framer-motion';
+import { notificationService } from '@/services/notificationService';
 
 type CartItem = {
   product_id: string;
@@ -214,6 +215,7 @@ export function RecordSaleSheet({
       };
 
       setLastTransaction(transactionWithItems);
+      notificationService.notifyTransaction('sale', `₦${totalAmount.toLocaleString()}`);
       onClose();
     } catch (err: any) {
       alert(err.message || 'Failed to record sale');

@@ -11,6 +11,7 @@ const BATCH_SIZE = 20;
 const ENTITY_PRIORITY: Record<string, number> = {
   'businesses': 0,
   'categories': 1,
+  'service_categories': 1,
   'customers': 2,
   'suppliers': 3,
   'products': 4,
@@ -40,6 +41,7 @@ const syncTables = {
   customers: db.customers,
   suppliers: db.suppliers,
   categories: db.categories,
+  service_categories: db.service_categories,
   audit_logs: db.audit_logs,
   receipts: db.receipts,
 } as const;
@@ -74,10 +76,6 @@ const serializeBusinessForSync = (payload: any) => ({
   ...serializeBase(payload),
   owner_id: payload.user_id,
   name: payload.business_name || payload.name,
-
-
-
-
 });
 
 const serializeLedgerEntryForSync = (payload: any) => ({
@@ -194,6 +192,14 @@ const serializeProductForSync = (payload: any) => ({
   is_archived: !!payload.is_archived,
 });
 
+const serializeServiceCategoryForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  name: payload.name,
+  description: payload.description,
+  default_price: payload.default_price,
+  status: payload.status,
+});
+
 /**
  * Main Dispatcher: Strips all local-only or legacy fields.
  */
@@ -208,6 +214,7 @@ const serializeForSync = (entity: string, payload: any) => {
     case 'receivables': return serializeReceivableForSync(payload);
     case 'inventory_movements': return serializeInventoryMovementForSync(payload);
     case 'products': return serializeProductForSync(payload);
+    case 'service_categories': return serializeServiceCategoryForSync(payload);
     default:
       return stripDexieId(payload);
   }
@@ -482,8 +489,6 @@ export const syncService = {
             deleted_at: (remoteItem as any).deleted_at ? new Date((remoteItem as any).deleted_at) : null,
             sync_status: 'synced'
           };
-
-
 
           if (localItem) {
             // Local exists: Check for conflict

@@ -68,6 +68,7 @@ export const financeService = {
   async recordService(
     data: {
       name: string;
+      category_id?: string;
       amount: number;
       payment_method: 'cash' | 'transfer' | 'credit';
       customer_id?: string;
@@ -85,6 +86,7 @@ export const financeService = {
       payment_method: data.payment_method,
       status: 'completed',
       reference_id: '', // Will be set to service local_id
+      category_id: data.category_id,
       note: data.note,
     };
 
@@ -104,6 +106,7 @@ export const financeService = {
         ...createBaseEntity(business_id),
         transaction_id: transaction.local_id,
         name: data.name,
+        category_id: data.category_id,
         customer_id: data.customer_id,
         amount: data.amount,
         payment_method: data.payment_method,

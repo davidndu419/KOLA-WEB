@@ -8,6 +8,7 @@ import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import { Receipt, Tag, Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { notificationService } from '@/services/notificationService';
 
 const categories = [
   'Rent', 'Utilities', 'Salary', 'Transport', 'Marketing', 'Maintenance', 'Others'
@@ -42,6 +43,7 @@ export function RecordExpenseSheet({
       setAmount(0);
       setCategory('Others');
       setNote('');
+      notificationService.notifyTransaction('expense', `₦${amount.toLocaleString()}`);
       onClose();
     } catch (err: any) {
       alert(err.message || 'Failed to record expense');

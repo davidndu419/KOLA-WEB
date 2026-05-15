@@ -15,7 +15,8 @@ import {
   LogOut,
   Moon,
   Sun,
-  Info
+  Info,
+  Zap
 } from 'lucide-react';
 import { Touchable } from '@/components/touchable';
 import { db } from '@/db/dexie';
@@ -29,6 +30,7 @@ import { syncService } from '@/services/sync.service';
 import { onlineStatusService } from '@/services/onlineStatusService';
 import { formatDistanceToNow } from 'date-fns';
 import { authService } from '@/services/authService';
+import { notificationService } from '@/services/notificationService';
 
 function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(onlineStatusService.getOnlineStatus());
@@ -101,6 +103,20 @@ export default function SettingsPage() {
     document.documentElement.classList.toggle('dark', nextTheme === 'dark');
   };
 
+  const toggleNotifications = async () => {
+    const nextState = !notificationsEnabled;
+    if (nextState) {
+      const permission = await notificationService.requestPermission();
+      if (permission === 'granted') {
+        setNotificationsEnabled(true);
+      } else {
+        alert('Please enable notifications in your browser settings to receive alerts.');
+      }
+    } else {
+      setNotificationsEnabled(false);
+    }
+  };
+
   const saveProfile = () => {
     if (business) {
       setBusiness({ ...business, name: profileForm.name, address: profileForm.address });
@@ -143,6 +159,12 @@ export default function SettingsPage() {
             label="Business Profile" 
             sub="Store name, address, tax info" 
             onPress={() => setActiveSheet('profile')}
+          />
+          <SettingItem 
+            icon={<Zap size={18} />} 
+            label="Service Categories" 
+            sub="Manage professional services" 
+            onPress={() => router.push('/settings/service-categories')}
           />
           <SettingItem 
             icon={<Bell size={18} />} 
@@ -240,7 +262,7 @@ export default function SettingsPage() {
               <p className="text-[10px] text-muted-foreground font-bold">Alerts for stock & sales</p>
             </div>
             <button 
-              onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+              onClick={toggleNotifications}
               className={cn(
                 "w-12 h-6 rounded-full transition-colors relative",
                 notificationsEnabled ? "bg-primary" : "bg-muted"
