@@ -157,23 +157,29 @@ export function CreditHistoryPage({ sourceType }: { sourceType: CreditSourceType
             Loading credits...
           </div>
         ) : filteredHistory.length === 0 ? (
-          <div className="bg-secondary/60 rounded-[28px] p-8 text-center text-muted-foreground font-bold">
-            No {filter === 'all' ? '' : filter} credit found.
+          <div className="py-20 flex flex-col items-center justify-center text-center animate-in fade-in duration-500">
+             <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mx-auto mb-4 opacity-20">
+                <WalletCards size={32} />
+             </div>
+             <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">No credits found</p>
+             <p className="text-[10px] font-bold text-muted-foreground/60 mt-1 uppercase tracking-tighter">Your debt records will appear here</p>
           </div>
         ) : (
-          filteredHistory.map((item) => (
-            <CreditCompactRow
-              key={item.receivable.local_id}
-              item={item}
-              isExpanded={expandedId === item.receivable.local_id}
-              onToggle={() => {
-                setExpandedId((current) => current === item.receivable.local_id ? null : item.receivable.local_id);
-              }}
-              onConfirmPayment={() => setPaymentRequest({ item, mode: 'confirm' })}
-              onPartialPayment={() => setPaymentRequest({ item, mode: 'partial' })}
-              onViewTransaction={() => setSelectedTransaction(item.transaction)}
-            />
-          ))
+          <div className="divide-y divide-border/30">
+            {filteredHistory.map((item) => (
+              <CreditCompactRow
+                key={item.receivable.local_id}
+                item={item}
+                isExpanded={expandedId === item.receivable.local_id}
+                onToggle={() => {
+                  setExpandedId((current) => current === item.receivable.local_id ? null : item.receivable.local_id);
+                }}
+                onConfirmPayment={() => setPaymentRequest({ item, mode: 'confirm' })}
+                onPartialPayment={() => setPaymentRequest({ item, mode: 'partial' })}
+                onViewTransaction={() => setSelectedTransaction(item.transaction)}
+              />
+            ))}
+          </div>
         )}
       </section>
 
@@ -233,42 +239,51 @@ function CreditCompactRow({
   const status = statusLabel(item);
 
   return (
-    <div className="bg-card border border-border/60 shadow-md shadow-black/5 rounded-[22px] overflow-hidden">
-      <div className="flex items-center justify-between gap-3 p-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="font-bold text-sm tracking-tight truncate">{item.customerName}</p>
-            <span
-              className={cn(
-                'px-2 py-1 rounded-full text-[9px] font-black uppercase flex-shrink-0',
-                item.receivable.status === 'paid'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : item.isOverdue
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-amber-100 text-amber-700'
-              )}
-            >
-              {status}
-            </span>
+    <div className="group">
+      <div className="flex items-center justify-between py-4 transition-colors active:bg-secondary/40 rounded-2xl px-1">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className={cn(
+            "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-transform group-active:scale-95",
+            item.receivable.status === 'paid' ? 'bg-emerald-500/10 text-emerald-600' : 
+            item.isOverdue ? 'bg-red-500/10 text-red-600' : 'bg-amber-500/10 text-amber-600'
+          )}>
+            <WalletCards size={20} strokeWidth={2.5} />
           </div>
-          <p className="text-xs font-black truncate">{item.sourceName}</p>
-          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide truncate">
-            {shortDate(item.transaction.created_at)} | Due {shortDate(item.due_date)}
-          </p>
+
+          <div className="min-w-0 space-y-0.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="font-black text-[15px] tracking-tight truncate">{item.customerName}</p>
+              <span
+                className={cn(
+                  'px-2 py-0.5 rounded-full text-[8px] font-black uppercase flex-shrink-0 tracking-tighter',
+                  item.receivable.status === 'paid'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : item.isOverdue
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-amber-100 text-amber-700'
+                )}
+              >
+                {status}
+              </span>
+            </div>
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+              {item.sourceName} • {shortDate(item.transaction.created_at)}
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-3 flex-shrink-0">
           <div className="text-right">
-            <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">Balance</p>
-            <p className="text-sm font-black tabular-nums">{money(item.balance)}</p>
+            <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mb-0.5">Balance</p>
+            <p className="text-[15px] font-black tabular-nums tracking-tighter">{money(item.balance)}</p>
           </div>
           <Touchable
             onPress={onToggle}
-            className="w-9 h-9 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground"
+            className="w-10 h-10 rounded-2xl bg-secondary/50 flex items-center justify-center text-muted-foreground"
           >
             <ChevronDown
               size={18}
-              className={cn('transition-transform duration-200', isExpanded && 'rotate-180')}
+              className={cn('transition-transform duration-300', isExpanded && 'rotate-180')}
             />
           </Touchable>
         </div>
@@ -283,7 +298,7 @@ function CreditCompactRow({
             transition={{ duration: 0.18, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            <div className="px-3 pb-3 space-y-3">
+            <div className="px-1 pb-4 space-y-4">
               <div className="grid grid-cols-3 gap-2">
                 <SummaryPill label="Owed" value={money(item.amountOwed)} />
                 <SummaryPill label="Paid" value={money(item.amountPaid)} />

@@ -4,11 +4,10 @@ import { useState } from 'react';
 import { Plus, Search, Receipt, TrendingDown } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
-import { TransactionRow } from '@/components/transactions/transaction-row';
+import { TransactionList } from '@/components/sales/transaction-list';
 import { RecordExpenseSheet } from '@/components/finance/record-expense-sheet';
 import { Touchable } from '@/components/touchable';
 import { CompactMetricCard } from '@/components/reports/report-cards';
-import { TransactionDetailSheet } from '@/components/transactions/transaction-detail-sheet';
 import { Transaction } from '@/db/schema';
 import { reportService } from '@/services/reportService';
 import { reportsService } from '@/services/reportsService';
@@ -107,30 +106,10 @@ export default function ExpensesPage() {
           </span>
         </div>
 
-        <div className="space-y-3">
-          {expenses?.map((expense, index) => (
-            <motion.div
-              key={expense.local_id}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <TransactionRow 
-                transaction={expense} 
-                onPress={() => setSelectedTransaction(expense)}
-              />
-            </motion.div>
-          ))}
-          {expenses && expenses.length === 0 && (
-            <div className="text-center py-16 bg-secondary/20 rounded-[32px] border border-dashed border-border/50">
-              <div className="w-12 h-12 bg-secondary rounded-full flex items-center justify-center mx-auto mb-4">
-                <Receipt size={24} className="text-muted-foreground/40" />
-              </div>
-              <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground">No expenses found</p>
-              <p className="text-[10px] font-medium text-muted-foreground/60 mt-1">Tap the + button to add one</p>
-            </div>
-          )}
-        </div>
+        <TransactionList 
+          transactions={expenses} 
+          type="expense"
+        />
       </section>
 
       {/* Floating Action Button */}
@@ -147,11 +126,6 @@ export default function ExpensesPage() {
       <RecordExpenseSheet 
         isOpen={isExpenseSheetOpen} 
         onClose={() => setIsExpenseSheetOpen(false)} 
-      />
-
-      <TransactionDetailSheet 
-        transaction={selectedTransaction}
-        onClose={() => setSelectedTransaction(null)}
       />
 
       <DateRangePickerSheet

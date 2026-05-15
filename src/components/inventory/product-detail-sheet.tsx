@@ -239,32 +239,36 @@ export function ProductDetailSheet({
                   </div>
                 ) : (
                   history?.map((item) => (
-                    <div key={item.id} className="flex gap-4 items-start group">
+                  <div key={item.id} className="flex items-center justify-between py-4 group active:bg-secondary/40 px-1 rounded-2xl transition-colors">
+                    <div className="flex items-center gap-4 min-w-0">
                       <div className={cn(
-                        "w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 border-2",
-                        item.isPositive ? "bg-emerald-50 border-emerald-500/10 text-emerald-600" : "bg-secondary border-border/50 text-muted-foreground"
+                        "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-transform group-active:scale-95",
+                        item.isPositive ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-slate-500"
                       )}>
-                        {item.isPositive ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                        {item.isPositive ? <ArrowDownLeft size={20} strokeWidth={2.5} /> : <ArrowUpRight size={20} strokeWidth={2.5} />}
                       </div>
-                      <div className="flex-1 border-b border-border/40 pb-4 group-last:border-0">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-sm font-black tracking-tight capitalize">{item.type.replace('-', ' ')}</p>
-                            <p className="text-[10px] font-bold text-muted-foreground mt-0.5">{item.note}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className={cn(
-                              "text-sm font-black tabular-nums",
-                              item.isPositive ? "text-emerald-600" : "text-red-500"
-                            )}>
-                              {item.isPositive ? '+' : '-'}{item.quantity}
-                            </p>
-                            <p className="text-[9px] font-bold text-muted-foreground uppercase">{new Date(item.date).toLocaleDateString()}</p>
-                          </div>
-                        </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="font-black text-[15px] tracking-tight capitalize truncate">
+                          {item.type.replace('-', ' ')}
+                        </p>
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+                          {item.note}
+                        </p>
                       </div>
                     </div>
-                  ))
+                    <div className="text-right flex-shrink-0">
+                      <p className={cn(
+                        "font-black text-[16px] tabular-nums tracking-tighter",
+                        item.isPositive ? "text-emerald-600" : "text-red-500"
+                      )}>
+                        {item.isPositive ? '+' : '-'}{item.quantity}
+                      </p>
+                      <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                        {new Date(item.date).toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+                ))
                 )}
               </div>
             )}

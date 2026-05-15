@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, Calendar, Download, Receipt, FileText, Printer } from 'lucide-react';
 import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
-import { TransactionHistoryEngine } from '@/components/reports/report-cards';
+import { TransactionList } from '@/components/sales/transaction-list';
 import { HeroSummaryCard } from '@/components/dashboard/hero-summary-card';
 import { Touchable } from '@/components/touchable';
 import { exportService } from '@/services/exportService';
@@ -63,9 +63,10 @@ export default function ReportTransactionsPage() {
       {!reportsData ? (
         <div className="p-8 text-center animate-pulse text-muted-foreground font-bold">Loading transactions...</div>
       ) : (
-        <>
-          <TransactionHistoryEngine transactions={reportsData.transactions} />
-        </>
+        <TransactionList 
+          startDate={reportsData.range.startDate} 
+          endDate={reportsData.range.endDate} 
+        />
       )}
 
       <DateRangePickerSheet

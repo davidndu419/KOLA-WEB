@@ -3,11 +3,12 @@
 
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ShoppingBag } from 'lucide-react';
+import { ShoppingBag, Receipt, Zap, History, Filter } from 'lucide-react';
 import { db } from '@/db/dexie';
 import { TransactionDetailSheet } from '@/components/transactions/transaction-detail-sheet';
 import { TransactionRow } from '@/components/transactions/transaction-row';
 import type { Transaction } from '@/db/schema';
+import { cn } from '@/lib/utils';
 
 import { ReversalSheet } from '@/components/transactions/reversal-sheet';
 import { CorrectionSheet } from '@/components/transactions/correction-sheet';
@@ -17,62 +18,107 @@ interface TransactionListProps {
   startDate?: Date;
   endDate?: Date;
   type?: Transaction['type'] | 'all';
+  limit?: number;
+  transactions?: Transaction[];
 }
 
-function emptyTitle(type: TransactionListProps['type']) {
-  if (type === 'service') return 'No Services Yet';
-  if (type === 'expense') return 'No Expenses Yet';
-  return 'No Sales Yet';
+function getEmptyState(type: TransactionListProps['type']) {
+  const states = {
+    service: {
+      icon: Zap,
+      title: 'No Services Yet',
+      message: 'Record your first professional service to track earnings here.'
+    },
+    expense: {
+      icon: Receipt,
+      title: 'Zero Expenses',
+      message: 'Track your business spending to manage your cash flow better.'
+    },
+    sale: {
+      icon: ShoppingBag,
+      title: 'No Sales Recorded',
+      message: 'Every sale you record helps build your business intelligence.'
+    },
+    all: {
+      icon: History,
+      title: 'Clean Slate',
+      message: 'Your business activity timeline will appear here automatically.'
+    }
+  };
+
+  return (states as any)[type || 'all'] || states.all;
 }
 
-export function TransactionList({ startDate, endDate, type = 'all' }: TransactionListProps) {
+export function TransactionList({ startDate, endDate, type = 'all', limit, transactions }: TransactionListProps) {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [isReversalOpen, setIsReversalOpen] = useState(false);
   const [isCorrectionOpen, setIsCorrectionOpen] = useState(false);
   const [isAuditTrailOpen, setIsAuditTrailOpen] = useState(false);
 
-  const transactions = useLiveQuery(async () => {
+  const transactionsQuery = useLiveQuery(async () => {
+    if (transactions) return transactions;
+
     const applyTypeFilter = (items: Transaction[]) => (
       type === 'all' ? items : items.filter((tx) => tx.type === type)
     );
 
+    let query: any;
+    
     if (startDate && endDate) {
-      const rangeItems = await db.transactions
+      query = db.transactions
         .where('created_at')
         .between(startDate, endDate)
-        .reverse()
-        .toArray();
-      return applyTypeFilter(rangeItems);
+        .reverse();
+    } else {
+      query = db.transactions.orderBy('created_at').reverse();
     }
 
-    const allItems = await db.transactions.orderBy('created_at').reverse().toArray();
-    return applyTypeFilter(allItems);
-  }, [startDate, endDate, type]);
+    const items = await query.toArray();
+    const filtered = applyTypeFilter(items);
+    
+    return limit ? filtered.slice(0, limit) : filtered;
+  }, [startDate, endDate, type, limit, transactions]);
 
-  if (!transactions) {
-    return <div className="p-8 text-center animate-pulse text-muted-foreground font-bold">Loading Transactions...</div>;
+  const displayTransactions = transactions || transactionsQuery;
+
+  if (!displayTransactions) {
+    return (
+      <div className="space-y-4 pt-4">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="flex items-center gap-4 animate-pulse">
+            <div className="w-12 h-12 bg-secondary rounded-full" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-secondary rounded w-1/3" />
+              <div className="h-3 bg-secondary rounded w-1/2" />
+            </div>
+            <div className="w-16 h-5 bg-secondary rounded" />
+          </div>
+        ))}
+      </div>
+    );
   }
 
-  if (transactions.length === 0) {
+  if (displayTransactions.length === 0) {
+    const empty = getEmptyState(type);
+    const EmptyIcon = empty.icon;
+    
     return (
-      <div className="glass-card p-10 rounded-[28px] flex flex-col items-center justify-center text-center space-y-4">
-        <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-          <ShoppingBag size={28} />
+      <div className="py-20 px-6 flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95 duration-500">
+        <div className="w-20 h-20 bg-secondary/50 rounded-[32px] flex items-center justify-center text-muted-foreground/40 mb-6 border-2 border-dashed border-border/50">
+          <EmptyIcon size={32} strokeWidth={1.5} />
         </div>
-        <div>
-          <h3 className="font-bold text-lg">{emptyTitle(type)}</h3>
-          <p className="text-sm text-muted-foreground max-w-[200px] mx-auto">
-            Your {type === 'all' ? 'transaction' : type} history will appear here once you record the first one.
-          </p>
-        </div>
+        <h3 className="font-black text-lg tracking-tight mb-2">{empty.title}</h3>
+        <p className="text-sm text-muted-foreground max-w-[240px] leading-relaxed font-medium">
+          {empty.message}
+        </p>
       </div>
     );
   }
 
   return (
     <>
-      <div className="space-y-2.5 pb-32">
-        {transactions.map((tx) => (
+      <div className="divide-y divide-border/30">
+        {displayTransactions.map((tx) => (
           <TransactionRow
             key={tx.local_id}
             transaction={tx}
@@ -80,6 +126,9 @@ export function TransactionList({ startDate, endDate, type = 'all' }: Transactio
           />
         ))}
       </div>
+
+      <div className="h-32 w-full" />
+
       <TransactionDetailSheet
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}

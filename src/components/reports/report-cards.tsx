@@ -209,24 +209,24 @@ export const CompactMetricCard = memo(({
   tone: MetricTone;
 }) => {
   return (
-    <div className="bg-card border border-border/60 shadow-md shadow-black/5 p-3 rounded-[24px] min-h-[92px]">
-      <div className="flex items-center gap-2 mb-3">
-        <div
-          className={cn(
-            'w-8 h-8 rounded-2xl flex items-center justify-center',
-            tone === 'emerald' && 'bg-emerald-500/10 text-emerald-600',
-            tone === 'indigo' && 'bg-indigo-500/10 text-indigo-600',
-            tone === 'red' && 'bg-red-500/10 text-red-600',
-            tone === 'amber' && 'bg-amber-500/10 text-amber-600',
-            tone === 'blue' && 'bg-blue-500/10 text-blue-600',
-            tone === 'slate' && 'bg-slate-500/10 text-slate-600'
-          )}
-        >
-          <Icon size={15} />
-        </div>
-        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground truncate">{label}</p>
+    <div className="bg-secondary/40 border border-border/20 p-4 rounded-[28px] min-h-[100px] flex flex-col justify-between transition-colors active:bg-secondary/60">
+      <div
+        className={cn(
+          'w-9 h-9 rounded-2xl flex items-center justify-center mb-3',
+          tone === 'emerald' && 'bg-emerald-500/10 text-emerald-600',
+          tone === 'indigo' && 'bg-indigo-500/10 text-indigo-600',
+          tone === 'red' && 'bg-red-500/10 text-red-600',
+          tone === 'amber' && 'bg-amber-500/10 text-amber-600',
+          tone === 'blue' && 'bg-blue-500/10 text-blue-600',
+          tone === 'slate' && 'bg-slate-500/10 text-slate-600'
+        )}
+      >
+        <Icon size={18} />
       </div>
-      <p className="text-base font-black tabular-nums truncate">{money(value)}</p>
+      <div>
+        <p className="text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground/60 mb-0.5">{label}</p>
+        <p className="text-lg font-black tabular-nums tracking-tighter truncate">{money(value)}</p>
+      </div>
     </div>
   );
 });
@@ -297,14 +297,14 @@ export function InsightCard({
   };
 
   return (
-    <div className="bg-secondary/50 p-4 rounded-[24px] flex items-center gap-4">
-      <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center', colors[color])}>
-        <Icon size={20} />
+    <div className="bg-secondary/40 p-4 rounded-[28px] flex items-center gap-4 transition-colors active:bg-secondary/60">
+      <div className={cn('w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0', colors[color])}>
+        <Icon size={20} strokeWidth={2.5} />
       </div>
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{title}</p>
-        <p className="text-lg font-bold truncate">{value}</p>
-        <p className="text-[10px] font-medium text-muted-foreground/70 leading-tight">{insight}</p>
+      <div className="min-w-0 space-y-0.5">
+        <p className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground/60">{title}</p>
+        <p className="text-lg font-black tracking-tighter truncate">{value}</p>
+        <p className="text-[11px] font-bold text-muted-foreground leading-tight">{insight}</p>
       </div>
     </div>
   );
@@ -320,26 +320,28 @@ export function ProfitLossCard({ snapshot }: { snapshot: ReportsSnapshot }) {
   ];
 
   return (
-    <section className="bg-card border border-border/60 shadow-lg shadow-black/5 p-5 rounded-[28px] space-y-4">
-      <div className="flex items-center justify-between">
+    <section className="bg-secondary/20 p-6 rounded-[32px] space-y-5">
+      <div className="flex items-center justify-between px-1">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Profit & Loss</p>
-          <h3 className="text-lg font-bold">Margin {snapshot.profitLoss.profit_margin}%</h3>
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60 mb-0.5">Profit & Loss</p>
+          <h3 className="text-xl font-black tracking-tighter">Margin {snapshot.profitLoss.profit_margin}%</h3>
         </div>
         <div
           className={cn(
-            'px-2 py-1 rounded-full text-xs font-bold',
+            'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest',
             snapshot.profitLoss.netProfit >= 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'
           )}
         >
           {snapshot.profitLoss.netProfit >= 0 ? 'Healthy' : 'Watch costs'}
         </div>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-4 px-1">
         {rows.map(([label, value]) => (
           <div key={label} className="flex items-center justify-between text-sm">
-            <span className="font-bold text-muted-foreground">{label}</span>
-            <span className={cn('font-bold tabular-nums', Number(value) < 0 ? 'text-red-500' : 'text-foreground')}>{money(Number(value))}</span>
+            <span className="font-bold text-muted-foreground/70 uppercase text-[11px] tracking-wider">{label}</span>
+            <span className={cn('font-black tabular-nums tracking-tight text-base', Number(value) < 0 ? 'text-red-500' : 'text-foreground')}>
+               {Number(value) < 0 ? '-' : ''}{money(Math.abs(Number(value)))}
+            </span>
           </div>
         ))}
       </div>
@@ -352,11 +354,11 @@ export function BreakdownCard({ snapshot }: { snapshot: ReportsSnapshot }) {
   const total = segments.reduce((sum, segment) => sum + segment.value, 0);
 
   return (
-    <section className="bg-card border border-border/60 shadow-lg shadow-black/5 p-5 rounded-[28px] space-y-4">
-      <div className="flex items-center justify-between">
+    <section className="bg-secondary/20 p-6 rounded-[32px] space-y-6">
+      <div className="flex items-center justify-between px-1">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Payment Mix</p>
-          <h3 className="text-lg font-bold">{money(total)}</h3>
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60 mb-0.5">Payment Mix</p>
+          <h3 className="text-xl font-black tracking-tighter">{money(total)}</h3>
         </div>
         <Banknote size={20} className="text-primary" />
       </div>
@@ -495,22 +497,26 @@ export function RankedListCard({
   valueLabel?: 'revenue' | 'profit';
 }) {
   return (
-    <section className="glass-card p-5 rounded-[28px] space-y-4">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{title}</p>
+    <section className="bg-secondary/20 p-6 rounded-[32px] space-y-5">
+      <p className="text-[11px] font-black uppercase tracking-[0.15em] text-primary/60 px-1">{title}</p>
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground font-medium">{emptyText}</p>
+        <p className="text-sm text-muted-foreground font-medium px-1">{emptyText}</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {items.map((item, index) => (
-            <div key={item.id} className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center text-xs font-black">{index + 1}</div>
+            <div key={item.id} className="flex items-center justify-between gap-4 group active:opacity-70 transition-opacity">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-secondary border border-border/50 flex items-center justify-center text-[13px] font-black tabular-nums shadow-sm">
+                  {index + 1}
+                </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-bold truncate">{item.name}</p>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">{item.quantity} activity</p>
+                  <p className="text-[15px] font-black tracking-tight truncate">{item.name}</p>
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">{item.quantity} activity</p>
                 </div>
               </div>
-              <p className="text-sm font-bold tabular-nums">{money(valueLabel === 'profit' ? item.profit : item.revenue)}</p>
+              <p className="text-[16px] font-black tabular-nums tracking-tighter text-emerald-600">
+                {money(valueLabel === 'profit' ? item.profit : item.revenue)}
+              </p>
             </div>
           ))}
         </div>
@@ -580,9 +586,14 @@ export function TransactionHistoryEngine({ transactions }: { transactions: Trans
         ))}
       </div>
 
-      <div ref={parentRef} className="h-[420px] overflow-y-auto scrollbar-none">
+      <div ref={parentRef} className="h-[500px] overflow-y-auto scrollbar-none">
         {filtered.length === 0 ? (
-          <div className="glass-card rounded-[28px] p-10 text-center text-muted-foreground font-bold">No matching transactions</div>
+          <div className="py-20 text-center animate-in fade-in duration-500">
+             <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mx-auto mb-4 opacity-20">
+                <Search size={32} />
+             </div>
+             <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground">No matching transactions</p>
+          </div>
         ) : (
           <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
@@ -592,7 +603,7 @@ export function TransactionHistoryEngine({ transactions }: { transactions: Trans
                   key={item.transaction.local_id}
                   style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
                 >
-                  <div className="pb-2">
+                  <div className="border-b border-border/30">
                     <TransactionRow
                       transaction={item.transaction}
                       onPress={() => setSelected(item.transaction)}

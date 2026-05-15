@@ -13,29 +13,19 @@ import { AddProductSheet } from '@/components/inventory/add-product-sheet';
 import { useRouter } from 'next/navigation';
 import { Touchable } from '@/components/touchable';
 import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
-import { TransactionDetailSheet } from '@/components/transactions/transaction-detail-sheet';
-import { TransactionRow } from '@/components/transactions/transaction-row';
-import { db } from '@/db/dexie';
-import { resolveReportDateRange } from '@/services/reportSelectors';
-import { reportsService } from '@/services/reportsService';
 import { reportService } from '@/services/reportService';
+import { reportsService } from '@/services/reportsService';
+import { TransactionList } from '@/components/sales/transaction-list';
+import { db } from '@/db/dexie';
+import Link from 'next/link';
 
 import type { Transaction, LedgerEntry } from '@/db/schema';
-
-import { ReversalSheet } from '@/components/transactions/reversal-sheet';
-import { CorrectionSheet } from '@/components/transactions/correction-sheet';
-import { AuditTrailSheet } from '@/components/transactions/audit-trail-sheet';
 
 export default function DashboardPage() {
   const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
   const [isExpenseSheetOpen, setIsExpenseSheetOpen] = useState(false);
   const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
-  const [isStockSheetOpen, setIsStockSheetOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [isReversalOpen, setIsReversalOpen] = useState(false);
-  const [isCorrectionOpen, setIsCorrectionOpen] = useState(false);
-  const [isAuditTrailOpen, setIsAuditTrailOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange>('today');
   const router = useRouter();
   const [customDate, setCustomDate] = useState<Date>(new Date());
@@ -95,7 +85,7 @@ export default function DashboardPage() {
         if (label === 'Sale') setIsSaleSheetOpen(true);
         if (label === 'Expense') setIsExpenseSheetOpen(true);
         if (label === 'Service') setIsServiceSheetOpen(true);
-        if (label === 'Stock') setIsStockSheetOpen(true);
+        if (label === 'Stock') router.push('/inventory/add');
         if (label === 'Report') router.push('/reports');
       }} />
 
@@ -106,25 +96,12 @@ export default function DashboardPage() {
       <section className="px-4 mt-8 pb-10">
         <div className="flex items-center justify-between px-2 mb-4">
           <h3 className="text-lg font-bold tracking-tight">Recent Activity</h3>
-          <Touchable className="text-primary text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+          <Link href="/reports/transactions" className="text-primary text-xs font-bold uppercase tracking-wider flex items-center gap-1">
             See All <ArrowRight size={14} />
-          </Touchable>
+          </Link>
         </div>
 
-        <div className="space-y-2.5">
-          {transactions?.map((item) => (
-            <TransactionRow
-              key={item.local_id}
-              transaction={item}
-              onPress={() => setSelectedTransaction(item)}
-            />
-          ))}
-          {(!transactions || transactions.length === 0) && (
-            <div className="text-center py-12 text-muted-foreground">
-              <p className="text-sm font-bold uppercase tracking-widest">No Recent Activity</p>
-            </div>
-          )}
-        </div>
+        <TransactionList limit={5} />
       </section>
 
 
@@ -143,38 +120,9 @@ export default function DashboardPage() {
         onClose={() => setIsServiceSheetOpen(false)}
       />
 
-      <AddProductSheet
-        isOpen={isStockSheetOpen}
-        onClose={() => setIsStockSheetOpen(false)}
-      />
 
-      <TransactionDetailSheet
-        transaction={selectedTransaction}
-        onClose={() => setSelectedTransaction(null)}
-        onReverse={() => setIsReversalOpen(true)}
-        onCorrect={() => setIsCorrectionOpen(true)}
-        onViewAuditTrail={() => setIsAuditTrailOpen(true)}
-      />
 
-      <ReversalSheet 
-        transaction={selectedTransaction}
-        isOpen={isReversalOpen}
-        onClose={() => setIsReversalOpen(false)}
-        onSuccess={() => setSelectedTransaction(null)}
-      />
 
-      <CorrectionSheet
-        transaction={selectedTransaction}
-        isOpen={isCorrectionOpen}
-        onClose={() => setIsCorrectionOpen(false)}
-        onSuccess={() => setSelectedTransaction(null)}
-      />
-
-      <AuditTrailSheet 
-        transaction_id={selectedTransaction?.local_id || null}
-        isOpen={isAuditTrailOpen}
-        onClose={() => setIsAuditTrailOpen(false)}
-      />
 
 
       <DateRangePickerSheet
