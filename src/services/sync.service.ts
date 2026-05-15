@@ -72,12 +72,12 @@ const stripDexieId = (payload: any) => {
 
 const serializeBusinessForSync = (payload: any) => ({
   ...serializeBase(payload),
-  user_id: payload.user_id,
-  business_name: payload.business_name || payload.name,
-  business_type: payload.business_type || payload.type,
-  name: payload.name || payload.business_name,
-  type: payload.type || payload.business_type,
-  currency: payload.currency || 'NGN',
+  owner_id: payload.user_id,
+  name: payload.business_name || payload.name,
+
+
+
+
 });
 
 const serializeLedgerEntryForSync = (payload: any) => ({
@@ -290,6 +290,12 @@ export const syncService = {
     const activeBusinessId = business_id || firstItem?.business_id;
 
     if (activeBusinessId) {
+      // Auto-recovery for businesses schema mismatch
+      await db.sync_queue
+        .where('entity').equals('businesses')
+        .and(item => !!(item.status === 'failed' && (item.error?.includes('business_name') || item.error?.includes('PGRST204'))))
+        .modify({ status: 'pending', retry_count: 0, error: undefined });
+
       await db.sync_queue
         .where('business_id')
         .equals(activeBusinessId)
@@ -301,6 +307,7 @@ export const syncService = {
       await this.updateMetadata(activeBusinessId, 'last_sync_attempt_at', new Date().toISOString());
       await this.updateMetadata(activeBusinessId, 'last_sync_status', 'syncing');
     }
+
 
     try {
       // Fetch more than BATCH_SIZE so we can sort them and still have a good batch

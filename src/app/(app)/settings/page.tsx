@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   User, 
   Store, 
@@ -52,8 +53,9 @@ function latestSettingValue(settings: { key: string; value: any; updated_at: Dat
     })[0]?.value;
 }
 
-
 export default function SettingsPage() {
+  const router = useRouter();
+
   const { 
     setBusiness, 
     theme, 
@@ -63,6 +65,7 @@ export default function SettingsPage() {
   } = useStore();
   const authBusiness = useAuthStore((state) => state.business);
   const authUser = useAuthStore((state) => state.user);
+  
   const business = authBusiness
     ? {
         id: authBusiness.id,
@@ -74,7 +77,7 @@ export default function SettingsPage() {
       }
     : null;
 
-  const [activeSheet, setActiveSheet] = useState<'profile' | 'notifications' | 'sync' | null>(null);
+  const [activeSheet, setActiveSheet] = useState<'profile' | 'notifications' | null>(null);
   const [profileForm, setProfileForm] = useState({ name: business?.name || '', address: business?.address || '' });
 
   const handleClearData = async () => {
@@ -95,7 +98,6 @@ export default function SettingsPage() {
   const toggleTheme = () => {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(nextTheme);
-    // In a real app, we would apply the class to html/body
     document.documentElement.classList.toggle('dark', nextTheme === 'dark');
   };
 
@@ -161,7 +163,15 @@ export default function SettingsPage() {
           
           <PWASettingItem />
           
-          <SyncSettingItem onOpenSheet={() => setActiveSheet('sync')} />
+          <SyncSettingItem onOpenSheet={() => router.push('/settings/sync')} />
+          
+          <SettingItem 
+            icon={<Smartphone size={18} />} 
+            label="PWA Diagnostics" 
+            sub="Check offline cache status" 
+            onPress={() => router.push('/settings/pwa-cache')}
+          />
+          
           <SettingItem 
             icon={<Trash2 size={18} className="text-red-500" />} 
             label="Clear Local Data" 
@@ -234,10 +244,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </BottomSheet>
-
-      <BottomSheet isOpen={activeSheet === 'sync'} onClose={() => setActiveSheet(null)} title="Sync Settings">
-        <SyncBottomSheetContent onClose={() => setActiveSheet(null)} />
-      </BottomSheet>
     </div>
   );
 }
@@ -245,7 +251,7 @@ export default function SettingsPage() {
 function SyncSettingItem({ onOpenSheet }: { onOpenSheet: () => void }) {
   const business = useAuthStore((state) => state.business);
   const isOnline = useOnlineStatus();
-  const businessId = business?.id;
+  const businessId = business?.id || business?.business_id;
   
   const metadata = useLiveQuery(async () => {
     if (!businessId) return null;
@@ -311,216 +317,6 @@ function SyncSettingItem({ onOpenSheet }: { onOpenSheet: () => void }) {
       badgeColor={getBadgeColor()}
       onPress={onOpenSheet}
     />
-  );
-}
-
-function SyncBottomSheetContent({ onClose }: { onClose: () => void }) {
-  const business = useAuthStore((state) => state.business);
-  const isOnline = useOnlineStatus();
-  const [isManualSyncing, setIsManualSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [syncTick, setSyncTick] = useState(0);
-  const businessId = business?.id;
-
-  const metadata = useLiveQuery(async () => {
-    if (!businessId) return null;
-    const settings = await db.app_settings.where('business_id').equals(businessId).toArray();
-    return {
-      lastSuccess: latestSettingValue(settings, 'last_successful_sync_at'),
-      lastAttempt: latestSettingValue(settings, 'last_sync_attempt_at'),
-      status: latestSettingValue(settings, 'last_sync_status'),
-      error: latestSettingValue(settings, 'last_sync_error'),
-    };
-  }, [businessId]);
-
-  const diagnostics = useLiveQuery(
-    () => businessId ? syncService.getQueueDiagnostics(businessId) : Promise.resolve(null),
-    [businessId, syncTick]
-  );
-  const pendingCount = diagnostics?.pendingCount || 0;
-  const failedCount = diagnostics?.failedCount || 0;
-  const firstProblem = diagnostics?.firstProblem;
-
-  const handleForceSync = async () => {
-    if (!isOnline || !businessId) return;
-    setIsManualSyncing(true);
-    setSyncMessage(null);
-    try {
-      const success = await syncService.runFullSync(businessId);
-      const latestDiagnostics = await syncService.getQueueDiagnostics(businessId);
-      setSyncTick((value) => value + 1);
-
-      if (success) {
-        window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Changes synced successfully' } }));
-        setSyncMessage('Changes synced successfully');
-      } else {
-        const item = latestDiagnostics.firstProblem;
-        const detail = item
-          ? `${item.entity} ${item.action} is ${item.status}${item.error ? `: ${item.error}` : ''}`
-          : 'Pending or failed changes remain in the local queue';
-        setSyncMessage(detail);
-        window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Sync needs attention' } }));
-      }
-    } catch (err: any) {
-      console.error(err);
-      const message = err?.message || 'Sync failed';
-      setSyncMessage(message);
-      window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message } }));
-    } finally {
-      setIsManualSyncing(false);
-    }
-  };
-
-  const handleRetryFailed = async () => {
-    if (!businessId) return;
-    await syncService.retryFailed(businessId);
-    setSyncMessage('Failed sync items moved back to pending');
-    setSyncTick((value) => value + 1);
-  };
-
-  const handleClearFailedItem = async (id?: number) => {
-    if (!id) return;
-    if (!confirm('Clear this failed sync item? Local data will stay on this device, but this queued cloud sync attempt will be removed.')) return;
-    await syncService.clearFailedItem(id);
-    setSyncMessage('Failed sync item cleared');
-    setSyncTick((value) => value + 1);
-  };
-
-  const formatTime = (timeStr?: string) => {
-    if (!timeStr) return 'Never';
-    try {
-      const date = new Date(timeStr);
-      return date.toLocaleString('en-NG', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch (e) {
-      return 'Never';
-    }
-  };
-
-  return (
-    <div className="space-y-6 py-6 pb-12">
-      <div className="text-center space-y-2 py-4">
-        <Database size={48} className={cn("mx-auto transition-colors", isOnline ? "text-primary opacity-20" : "text-slate-400 opacity-20")} />
-        <h4 className="font-bold">Offline Sync Engine</h4>
-        <p className="text-xs text-muted-foreground font-medium px-8">All your data is stored locally and will sync when you are online.</p>
-      </div>
-
-      <div className="p-4 glass-card rounded-[24px] space-y-4">
-        <div className="flex justify-between items-center">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Cloud Connection</p>
-          <span className={cn("text-xs font-bold", isOnline ? "text-emerald-500" : "text-slate-500")}>
-            {isOnline ? 'Connected' : 'Offline'}
-          </span>
-        </div>
-        <div className="flex justify-between items-center">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Last Successful Sync</p>
-          <span className="text-xs font-bold">{formatTime(metadata?.lastSuccess)}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Pending Changes</p>
-          <span className={cn("text-xs font-bold", pendingCount > 0 ? "text-amber-500" : "text-muted-foreground")}>
-            {pendingCount === 0 ? '0 pending' : `${pendingCount} waiting to sync`}
-          </span>
-        </div>
-        <div className="flex justify-between items-center">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Failed Changes</p>
-          <span className={cn("text-xs font-bold", failedCount > 0 ? "text-red-500" : "text-muted-foreground")}>
-            {failedCount === 0 ? '0 failed' : `${failedCount} need attention`}
-          </span>
-        </div>
-        <div className="flex justify-between items-center">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Status</p>
-          <span className={cn("text-xs font-bold capitalize",
-            isManualSyncing ? "text-primary animate-pulse" :
-            !isOnline ? "text-slate-500" :
-            failedCount > 0 || metadata?.status === 'failed' ? "text-red-500" :
-            pendingCount > 0 ? "text-amber-500" :
-            metadata?.status === 'syncing' ? "text-primary animate-pulse" : "text-emerald-500")}>
-            {isManualSyncing ? 'Syncing...' : !isOnline ? 'Offline' : pendingCount > 0 ? 'Pending' : failedCount > 0 ? 'Failed' : metadata?.status === 'syncing' ? 'Syncing' : metadata?.lastSuccess ? 'Synced' : 'Not synced yet'}
-          </span>
-        </div>
-        {metadata?.error && (
-          <div className="rounded-2xl bg-red-500/10 p-3 text-xs font-bold text-red-600">
-            Last sync error: {metadata.error}
-          </div>
-        )}
-        {firstProblem && (
-          <div className="rounded-2xl bg-amber-500/10 p-3 space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">First Queue Problem</p>
-            <p className="text-xs font-bold text-foreground">{firstProblem.entity} • {firstProblem.action} • {firstProblem.status}</p>
-            <p className="text-[11px] font-bold text-muted-foreground">Retry count: {firstProblem.retry_count}</p>
-            <p className="text-[11px] font-medium text-muted-foreground break-words">{firstProblem.error || 'No error captured yet. Retry to capture the exact Supabase/network response.'}</p>
-          </div>
-        )}
-        {syncMessage && (
-          <div className="rounded-2xl bg-secondary p-3 text-xs font-bold text-muted-foreground break-words">
-            {syncMessage}
-          </div>
-        )}
-      </div>
-
-      <Touchable 
-        onPress={handleForceSync}
-        disabled={!isOnline || isManualSyncing || !businessId}
-        className={cn(
-          "w-full p-5 rounded-[24px] font-bold text-center transition-all",
-          isOnline && !isManualSyncing ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-secondary text-muted-foreground"
-        )}
-      >
-        {isManualSyncing ? 'Processing...' : 'Force Manual Sync'}
-      </Touchable>
-
-      {failedCount > 0 && (
-        <div className="grid grid-cols-2 gap-2">
-          <Touchable
-            onPress={handleRetryFailed}
-            className="p-4 rounded-2xl bg-secondary text-primary text-center text-xs font-bold"
-          >
-            Retry Failed Sync
-          </Touchable>
-          <Touchable
-            onPress={() => handleClearFailedItem(firstProblem?.status === 'failed' ? firstProblem.id : undefined)}
-            className="p-4 rounded-2xl bg-red-500/10 text-red-600 text-center text-xs font-bold"
-          >
-            Clear Failed Item
-          </Touchable>
-        </div>
-      )}
-
-      <div className="p-4 glass-card rounded-[24px] space-y-3">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Developer Sync Queue Debug</p>
-          <p className="text-[10px] font-bold text-muted-foreground">Visible in development and test builds for stuck offline sync inspection.</p>
-        </div>
-        {diagnostics?.items.length ? (
-          <div className="space-y-2">
-            {diagnostics.items.map((item) => (
-              <div key={item.id || item.entity_id} className="rounded-2xl bg-secondary/70 p-3 space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-black truncate">{item.entity}</p>
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground">{item.status}</span>
-                </div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">{item.action} • retries {item.retry_count}</p>
-                {item.error && <p className="text-[10px] font-medium text-red-500 break-words">{item.error}</p>}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs font-bold text-muted-foreground">Queue is empty.</p>
-        )}
-      </div>
-      
-      {!isOnline && (
-        <p className="text-[10px] text-center text-red-400 font-bold uppercase tracking-widest animate-pulse">
-          Connection required to sync
-        </p>
-      )}
-    </div>
   );
 }
 

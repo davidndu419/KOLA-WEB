@@ -13,11 +13,13 @@ const appShellRoutes = [
   '/reports',
   '/reports/transactions',
   '/settings',
+  '/settings/sync',
+  '/settings/pwa-cache',
   '/auth/login',
   '/auth/register',
   '/auth/business-setup',
   '/auth/forgot-password',
-  '/_offline',
+  '/offline',
 ];
 
 const withPWA = withPWAInit({
@@ -28,10 +30,9 @@ const withPWA = withPWAInit({
   clientsClaim: true,
   reloadOnOnline: false,
   cacheOnFrontEndNav: true,
-  dynamicStartUrl: true,
-  dynamicStartUrlRedirect: '/dashboard',
+  dynamicStartUrl: false,
   fallbacks: {
-    document: '/_offline',
+    document: '/offline',
     image: '',
     audio: '',
     video: '',
@@ -73,7 +74,7 @@ const withPWA = withPWAInit({
             pathname === '/auth/register' ||
             pathname === '/auth/business-setup' ||
             pathname === '/auth/forgot-password' ||
-            pathname === '/_offline')
+            pathname === '/offline')
         );
       },
       handler: 'CacheFirst',
@@ -87,7 +88,7 @@ const withPWA = withPWAInit({
           statuses: [0, 200],
         },
         precacheFallback: {
-          fallbackURL: '/_offline',
+          fallbackURL: '/offline',
         },
       },
     },
@@ -106,7 +107,7 @@ const withPWA = withPWAInit({
           statuses: [0, 200],
         },
         precacheFallback: {
-          fallbackURL: '/_offline',
+          fallbackURL: '/offline',
         },
       },
     },
@@ -117,7 +118,6 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Give 'config' the 'any' type to satisfy the compiler
   webpack: (config: any) => {
     return config;
   },

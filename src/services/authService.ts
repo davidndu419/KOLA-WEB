@@ -41,7 +41,7 @@ function normalizeBusiness(raw: any, userId: string): BusinessProfile {
     local_id: businessId,
     id: businessId,
     business_id: businessId,
-    user_id: raw?.user_id || userId,
+    user_id: raw?.owner_id || raw?.user_id || userId,
     business_name: name,
     business_type: type,
     name,
@@ -139,7 +139,7 @@ async function pullBusinessFromCloud(userId: string): Promise<BusinessProfile | 
     const { data, error } = await supabase
       .from('businesses')
       .select('*')
-      .eq('user_id', userId)
+      .eq('owner_id', userId)
       .limit(1)
       .maybeSingle();
 
