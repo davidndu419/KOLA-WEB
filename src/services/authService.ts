@@ -1,6 +1,158 @@
 import { supabase } from '@/lib/supabase';
 import { db } from '@/db/dexie';
 import { useAuthStore } from '@/stores/authStore';
+import { useStore } from '@/store/use-store';
+import { syncService } from './sync.service';
+
+type UserProfile = {
+  id: string;
+  email: string;
+  full_name?: string;
+  business_id?: string;
+};
+
+type BusinessProfile = {
+  id: string;
+  local_id: string;
+  business_id: string;
+  user_id: string;
+  name: string;
+  type: string;
+  business_name: string;
+  business_type: string;
+  currency: string;
+  created_at: Date;
+  updated_at: Date;
+  sync_status: 'pending' | 'synced' | 'failed' | 'conflict';
+  version: number;
+  device_id: string;
+};
+
+function isBrowserOnline() {
+  return typeof navigator === 'undefined' || navigator.onLine;
+}
+
+function normalizeBusiness(raw: any, userId: string): BusinessProfile {
+  const businessId = raw?.business_id || raw?.local_id || raw?.id || crypto.randomUUID();
+  const name = raw?.business_name || raw?.name || 'Kola Business';
+  const type = raw?.business_type || raw?.type || 'retail';
+
+  return {
+    local_id: businessId,
+    id: businessId,
+    business_id: businessId,
+    user_id: raw?.user_id || userId,
+    business_name: name,
+    business_type: type,
+    name,
+    type,
+    currency: raw?.currency || 'NGN',
+    created_at: raw?.created_at ? new Date(raw.created_at) : new Date(),
+    updated_at: raw?.updated_at ? new Date(raw.updated_at) : new Date(),
+    sync_status: raw?.sync_status || 'synced',
+    version: raw?.version || 1,
+    device_id: raw?.device_id || 'web-pwa',
+  };
+}
+
+async function upsertSetting(business_id: string, key: string, value: any) {
+  const existing = await db.app_settings
+    .where('business_id')
+    .equals(business_id)
+    .filter((setting) => setting.key === key)
+    .first();
+
+  if (existing?.id) {
+    await db.app_settings.update(existing.id, { value, updated_at: new Date() });
+  } else {
+    await db.app_settings.add({ business_id, key, value, updated_at: new Date() });
+  }
+}
+
+async function saveBusinessLocally(business: BusinessProfile) {
+  const { id: _authId, ...dexieBusiness } = business;
+  const existing = await db.businesses.where('business_id').equals(business.business_id).first();
+
+  if (existing?.id) {
+    await db.businesses.update(existing.id, dexieBusiness);
+  } else {
+    await db.businesses.add(dexieBusiness);
+  }
+
+  await upsertSetting(business.business_id, 'active_business_id', business.business_id);
+  await upsertSetting(business.business_id, 'business_profile', business);
+}
+
+function hydrateStores(user: UserProfile, business: BusinessProfile | null) {
+  useAuthStore.getState().setAuth(
+    business ? { ...user, business_id: business.business_id } : user,
+    business
+  );
+
+  const appStore = useStore.getState();
+  appStore.setUser({
+    id: user.id,
+    name: user.full_name || user.email,
+    role: 'owner',
+  });
+
+  if (business) {
+    appStore.setBusiness({
+      id: business.business_id,
+      name: business.business_name,
+      currency: business.currency,
+      ownerName: user.full_name || user.email,
+    });
+  }
+}
+
+async function loadLocalBusiness(userId: string): Promise<BusinessProfile | null> {
+  const activeSetting = await db.app_settings.where('key').equals('active_business_id').first();
+  const activeBusinessId = activeSetting?.value;
+
+  if (activeBusinessId) {
+    const active = await db.businesses.where('business_id').equals(activeBusinessId).first();
+    if (active && (!active.user_id || active.user_id === userId)) {
+      const normalized = normalizeBusiness(active, userId);
+      if (!active.user_id) await saveBusinessLocally(normalized);
+      return normalized;
+    }
+  }
+
+  const byUser = await db.businesses.where('user_id').equals(userId).first();
+  if (byUser) return normalizeBusiness(byUser, userId);
+
+  const profileSetting = await db.app_settings.where('key').equals('business_profile').first();
+  if (profileSetting?.value) {
+    const normalized = normalizeBusiness(profileSetting.value, userId);
+    await saveBusinessLocally(normalized);
+    return normalized;
+  }
+
+  return null;
+}
+
+async function pullBusinessFromCloud(userId: string): Promise<BusinessProfile | null> {
+  if (!isBrowserOnline()) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('user_id', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    const business = normalizeBusiness(data, userId);
+    await saveBusinessLocally(business);
+    return business;
+  } catch (error) {
+    console.warn('[Auth] Unable to pull business profile from cloud:', error);
+    return null;
+  }
+}
 
 export const authService = {
   async signUp(email: string, password: string, fullName: string) {
@@ -23,16 +175,19 @@ export const authService = {
     if (error) throw error;
 
     if (data.user) {
-      // Attempt to load business from Dexie first (offline-first)
-      // If not found, we will handle redirection in the UI
       const userProfile = {
         id: data.user.id,
         email: data.user.email!,
         full_name: data.user.user_metadata?.full_name,
       };
 
-      // Set initial auth state
-      useAuthStore.getState().setAuth(userProfile, null);
+      const business = (await loadLocalBusiness(data.user.id)) || (await pullBusinessFromCloud(data.user.id));
+      hydrateStores(userProfile, business);
+
+      if (business && isBrowserOnline()) {
+        await syncService.pullFromCloud(business.business_id);
+        await syncService.updateMetadata(business.business_id, 'last_successful_sync_at', new Date().toISOString());
+      }
     }
 
     return data;
@@ -41,32 +196,32 @@ export const authService = {
   async signOut() {
     await supabase.auth.signOut();
     useAuthStore.getState().clearAuth();
+    useStore.getState().logout();
   },
 
   async setupBusiness(userId: string, details: { name: string; type: string; currency: string }) {
     const business_id = crypto.randomUUID();
+    const now = new Date();
     
-    const businessData = {
+    const businessData: BusinessProfile = {
+      id: business_id,
       local_id: business_id,
-      business_id, // For multi-tenant alignment
+      business_id,
+      user_id: userId,
+      business_name: details.name,
+      business_type: details.type,
       name: details.name,
       type: details.type,
       currency: details.currency,
-      created_at: new Date(),
-      updated_at: new Date(),
+      created_at: now,
+      updated_at: now,
       sync_status: 'pending' as const,
       version: 1,
       device_id: 'web-pwa'
     };
 
-    // 1. Save to Dexie (Local-first)
-    // We'll assume a 'businesses' table exists or we add it to settings
-    await db.app_settings.bulkAdd([
-      { key: 'active_business_id', value: business_id, business_id, updated_at: new Date() },
-      { key: 'business_profile', value: businessData, business_id, updated_at: new Date() }
-    ]);
+    await saveBusinessLocally(businessData);
 
-    // 2. Add to Sync Queue
     await db.sync_queue.add({
       business_id,
       entity: 'businesses',
@@ -78,39 +233,41 @@ export const authService = {
       created_at: new Date()
     });
 
-    // 3. Update Auth Store
     const user = useAuthStore.getState().user;
     if (user) {
-      useAuthStore.getState().setAuth({ ...user, business_id }, businessData as any);
+      hydrateStores({ ...user, business_id }, businessData);
     }
 
     return businessData;
   },
 
   async checkSession() {
-    const { data: { session } } = await supabase.auth.getSession();
+    let session = null;
+    try {
+      const result = await supabase.auth.getSession();
+      session = result.data.session;
+    } catch (error) {
+      console.warn('[Auth] Supabase session check failed, using local session if available:', error);
+    }
     
     if (session?.user) {
-      // Check for local business profile
-      const activeBusinessSetting = await db.app_settings.where('key').equals('active_business_id').first();
-      const profileSetting = await db.app_settings.where('key').equals('business_profile').first();
-
       const userProfile = {
         id: session.user.id,
         email: session.user.email!,
         full_name: session.user.user_metadata?.full_name,
-        business_id: activeBusinessSetting?.value
       };
 
-      useAuthStore.getState().setAuth(userProfile, profileSetting?.value || null);
+      const business = (await loadLocalBusiness(session.user.id)) || (await pullBusinessFromCloud(session.user.id));
+      hydrateStores(userProfile, business);
     } else {
-      // Check for local persistent session (Offline mode)
       const store = useAuthStore.getState();
       if (store.isAuthenticated && store.user) {
-        // We have a local session, allow it (Offline-First)
         console.log('[Auth] Using local persistent session (Offline)');
+        const business = store.business || await loadLocalBusiness(store.user.id);
+        hydrateStores(store.user, business as BusinessProfile | null);
       } else {
         store.clearAuth();
+        useStore.getState().logout();
       }
     }
     

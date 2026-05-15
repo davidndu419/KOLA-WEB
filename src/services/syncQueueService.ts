@@ -8,10 +8,15 @@ export const syncQueueService = {
     payload: any,
     business_id: string,
   ): Omit<SyncQueue, 'id'> {
+    const entity_id = payload?.local_id || payload?.business_id || payload?.id?.toString();
+    if (!business_id || !entity || !action || !payload || !entity_id) {
+      throw new Error(`Invalid sync queue item for ${entity || 'unknown entity'}`);
+    }
+
     return {
       business_id,
       entity,
-      entity_id: payload.local_id || payload.id?.toString(),
+      entity_id,
       action,
       payload,
       status: 'pending',
@@ -30,6 +35,5 @@ export const syncQueueService = {
     return await db.sync_queue.bulkAdd(syncItems as SyncQueue[]);
   },
 };
-
 
 

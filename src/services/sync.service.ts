@@ -9,6 +9,7 @@ const BATCH_SIZE = 20;
 
 // Strict ordering of entities to maintain referential integrity in Supabase
 const ENTITY_PRIORITY: Record<string, number> = {
+  'businesses': 0,
   'categories': 1,
   'customers': 2,
   'suppliers': 3,
@@ -26,6 +27,7 @@ const ENTITY_PRIORITY: Record<string, number> = {
 };
 
 const syncTables = {
+  businesses: db.businesses,
   products: db.products,
   sales: db.sales,
   sale_items: db.sale_items,
@@ -46,12 +48,33 @@ const syncTables = {
 const serializeBase = (payload: any) => ({
   local_id: payload.local_id,
   business_id: payload.business_id,
-  created_at: payload.created_at,
-  updated_at: payload.updated_at,
-  deleted_at: payload.deleted_at || null,
+  created_at: toIsoDate(payload.created_at),
+  updated_at: toIsoDate(payload.updated_at),
+  deleted_at: payload.deleted_at ? toIsoDate(payload.deleted_at) : null,
   sync_status: payload.sync_status,
   version: payload.version || 1,
   device_id: payload.device_id || 'unknown',
+});
+
+const toIsoDate = (value: any) => {
+  if (!value) return new Date().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  return value;
+};
+
+const stripDexieId = (payload: any) => {
+  const { id: _, ...clean } = payload;
+  return clean;
+};
+
+const serializeBusinessForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  user_id: payload.user_id,
+  business_name: payload.business_name || payload.name,
+  business_type: payload.business_type || payload.type,
+  name: payload.name || payload.business_name,
+  type: payload.type || payload.business_type,
+  currency: payload.currency || 'NGN',
 });
 
 const serializeLedgerEntryForSync = (payload: any) => ({
@@ -173,6 +196,7 @@ const serializeProductForSync = (payload: any) => ({
  */
 const serializeForSync = (entity: string, payload: any) => {
   switch (entity) {
+    case 'businesses': return serializeBusinessForSync(payload);
     case 'ledger_entries': return serializeLedgerEntryForSync(payload);
     case 'transactions': return serializeTransactionForSync(payload);
     case 'sales': return serializeSaleForSync(payload);
@@ -182,9 +206,7 @@ const serializeForSync = (entity: string, payload: any) => {
     case 'inventory_movements': return serializeInventoryMovementForSync(payload);
     case 'products': return serializeProductForSync(payload);
     default:
-      // For other entities, just remove the local Dexie ID
-      const { id: _, ...clean } = payload;
-      return clean;
+      return stripDexieId(payload);
   }
 };
 
@@ -192,9 +214,14 @@ const serializeForSync = (entity: string, payload: any) => {
 
 export const syncService = {
   isProcessing: false,
+  isFullSyncing: false,
 
   async updateMetadata(business_id: string, key: string, value: any) {
-    const existing = await db.app_settings.where({ business_id, key }).first();
+    const existing = await db.app_settings
+      .where('business_id')
+      .equals(business_id)
+      .filter((setting) => setting.key === key)
+      .first();
     if (existing) {
       await db.app_settings.update(existing.id!, { value, updated_at: new Date() });
     } else {
@@ -202,33 +229,36 @@ export const syncService = {
     }
   },
 
-  async processQueue() {
+  async processQueue(business_id?: string) {
     if (this.isProcessing || !onlineStatusService.getOnlineStatus()) return;
     
     this.isProcessing = true;
     
-    // Get business_id from queue or store (assuming all items in queue have business_id)
-    const firstItem = await db.sync_queue.limit(1).first();
-    const business_id = firstItem?.business_id;
+    const firstItem = business_id
+      ? await db.sync_queue.where('business_id').equals(business_id).first()
+      : await db.sync_queue.limit(1).first();
+    const activeBusinessId = business_id || firstItem?.business_id;
 
-    if (business_id) {
-      await this.updateMetadata(business_id, 'last_sync_attempt_at', new Date().toISOString());
-      await this.updateMetadata(business_id, 'last_sync_status', 'syncing');
+    if (activeBusinessId) {
+      await this.updateMetadata(activeBusinessId, 'last_sync_attempt_at', new Date().toISOString());
+      await this.updateMetadata(activeBusinessId, 'last_sync_status', 'syncing');
     }
 
     try {
       // Fetch more than BATCH_SIZE so we can sort them and still have a good batch
-      const items = await db.sync_queue
-        .where('status')
-        .anyOf(['pending', 'failed'])
-        .limit(100)
-        .toArray();
+      let items = await db.sync_queue.where('status').anyOf(['pending', 'failed']).limit(100).toArray();
+      if (activeBusinessId) {
+        items = items.filter((item) => item.business_id === activeBusinessId);
+      }
 
       if (items.length === 0) {
         this.isProcessing = false;
-        if (business_id) {
-          await this.updateMetadata(business_id, 'last_sync_status', 'synced');
-          await this.updateMetadata(business_id, 'last_successful_sync_at', new Date().toISOString());
+        if (activeBusinessId) {
+          const failedCount = await db.sync_queue.where('business_id').equals(activeBusinessId).filter((item) => item.status === 'failed').count();
+          await this.updateMetadata(activeBusinessId, 'last_sync_status', failedCount > 0 ? 'failed' : 'synced');
+          if (failedCount === 0) {
+            await this.updateMetadata(activeBusinessId, 'last_successful_sync_at', new Date().toISOString());
+          }
         }
         return;
       }
@@ -251,19 +281,30 @@ export const syncService = {
         await this.syncItem(item);
       }
 
-      // Check if there are more
-      const remaining = await db.sync_queue.where('status').anyOf(['pending', 'failed']).count();
-      if (remaining > 0) {
-        setTimeout(() => this.processQueue(), 500);
-      } else if (business_id) {
-        await this.updateMetadata(business_id, 'last_sync_status', 'synced');
-        await this.updateMetadata(business_id, 'last_successful_sync_at', new Date().toISOString());
+      const remainingPending = await db.sync_queue
+        .where('status')
+        .equals('pending')
+        .filter((item) => !activeBusinessId || item.business_id === activeBusinessId)
+        .count();
+      const failedCount = await db.sync_queue
+        .where('status')
+        .equals('failed')
+        .filter((item) => !activeBusinessId || item.business_id === activeBusinessId)
+        .count();
+
+      if (remainingPending > 0) {
+        setTimeout(() => this.processQueue(activeBusinessId), 500);
+      } else if (activeBusinessId) {
+        await this.updateMetadata(activeBusinessId, 'last_sync_status', failedCount > 0 ? 'failed' : 'synced');
+        if (failedCount === 0) {
+          await this.updateMetadata(activeBusinessId, 'last_successful_sync_at', new Date().toISOString());
+        }
       }
     } catch (error: any) {
       console.error('[SyncService] Error processing queue:', error);
-      if (business_id) {
-        await this.updateMetadata(business_id, 'last_sync_status', 'failed');
-        await this.updateMetadata(business_id, 'last_sync_error', error.message || 'Unknown error');
+      if (activeBusinessId) {
+        await this.updateMetadata(activeBusinessId, 'last_sync_status', 'failed');
+        await this.updateMetadata(activeBusinessId, 'last_sync_error', error.message || 'Unknown error');
       }
     } finally {
       this.isProcessing = false;
@@ -274,6 +315,10 @@ export const syncService = {
     const { entity, action, payload, id, retry_count } = item;
     
     try {
+      if (!item.business_id || !entity || !action || !payload || !item.entity_id) {
+        throw new Error('Invalid sync queue item');
+      }
+
       const localTable = syncTables[entity as keyof typeof syncTables];
       if (!localTable) {
         throw new Error(`Unsupported sync entity: ${entity}`);
@@ -324,7 +369,11 @@ export const syncService = {
     for (const table of tables) {
       // Get last sync time for this table
       const syncKey = `last_sync_${table}`;
-      const lastSyncSetting = await db.app_settings.where('key').equals(syncKey).first();
+      const lastSyncSetting = await db.app_settings
+        .where('business_id')
+        .equals(business_id)
+        .filter((setting) => setting.key === syncKey)
+        .first();
       const lastSyncTime = lastSyncSetting?.value || new Date(0).toISOString();
 
       // Delta Pull: Only get records updated since last sync
@@ -345,13 +394,14 @@ export const syncService = {
         for (const remoteItem of data) {
           const localTable = syncTables[table as keyof typeof syncTables];
           if (!localTable) continue;
+          const { id: _remoteId, ...remoteWithoutId } = remoteItem as any;
 
           const localItem = await localTable.where('local_id').equals((remoteItem as any).local_id).first();
 
           
           // Convert string dates to Date objects for Dexie
           const processedItem: any = {
-            ...(remoteItem as object),
+            ...remoteWithoutId,
             created_at: (remoteItem as any).created_at ? new Date((remoteItem as any).created_at) : new Date(),
             updated_at: (remoteItem as any).updated_at ? new Date((remoteItem as any).updated_at) : new Date(),
             deleted_at: (remoteItem as any).deleted_at ? new Date((remoteItem as any).deleted_at) : null,
@@ -383,6 +433,51 @@ export const syncService = {
           await db.app_settings.add({ business_id, key: syncKey, value: latestTime, updated_at: new Date() });
         }
       }
+    }
+  },
+
+  async runFullSync(business_id: string) {
+    if (this.isFullSyncing || !onlineStatusService.getOnlineStatus()) return false;
+
+    this.isFullSyncing = true;
+    await this.updateMetadata(business_id, 'last_sync_attempt_at', new Date().toISOString());
+    await this.updateMetadata(business_id, 'last_sync_status', 'syncing');
+
+    try {
+      await this.processQueue(business_id);
+      await this.pullFromCloud(business_id);
+
+      const pendingCount = await db.sync_queue
+        .where('business_id')
+        .equals(business_id)
+        .filter((item) => item.status === 'pending' || item.status === 'syncing')
+        .count();
+      const failedCount = await db.sync_queue
+        .where('business_id')
+        .equals(business_id)
+        .filter((item) => item.status === 'failed')
+        .count();
+
+      if (pendingCount > 0) {
+        await this.updateMetadata(business_id, 'last_sync_status', 'pending');
+        return false;
+      }
+
+      if (failedCount > 0) {
+        await this.updateMetadata(business_id, 'last_sync_status', 'failed');
+        return false;
+      }
+
+      await this.updateMetadata(business_id, 'last_successful_sync_at', new Date().toISOString());
+      await this.updateMetadata(business_id, 'last_sync_status', 'synced');
+      await this.updateMetadata(business_id, 'last_sync_error', null);
+      return true;
+    } catch (error: any) {
+      await this.updateMetadata(business_id, 'last_sync_status', 'failed');
+      await this.updateMetadata(business_id, 'last_sync_error', error.message || 'Unknown error');
+      throw error;
+    } finally {
+      this.isFullSyncing = false;
     }
   }
 

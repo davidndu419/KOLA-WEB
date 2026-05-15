@@ -13,6 +13,15 @@ export interface BaseEntity {
   device_id: string;
 }
 
+export interface Business extends BaseEntity {
+  user_id: string;
+  business_name: string;
+  business_type: string;
+  name: string;
+  type: string;
+  currency: string;
+}
+
 export interface Product extends BaseEntity {
   name: string;
   sku?: string;

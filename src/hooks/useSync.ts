@@ -3,19 +3,22 @@
 import { useEffect, useRef } from 'react';
 import { syncService } from '@/services/sync.service';
 import { onlineStatusService } from '@/services/onlineStatusService';
-import { useStore } from '@/store/use-store';
+import { useAuthStore } from '@/stores/authStore';
 
 const SYNC_INTERVAL = 30000; // 30 seconds
 
 export function useSync() {
-  const { business } = useStore();
+  const business = useAuthStore((state) => state.business);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const wasOfflineRef = useRef(false);
 
   const triggerSync = async () => {
+    if (!business?.id) return;
+
     try {
-      await syncService.processQueue();
-      if (business) {
-        await syncService.pullFromCloud(business.id);
+      const success = await syncService.runFullSync(business.id);
+      if (success && wasOfflineRef.current && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Changes synced successfully' } }));
       }
     } catch (error) {
       console.error('[useSync] Sync error:', error);
@@ -23,7 +26,7 @@ export function useSync() {
   };
 
   useEffect(() => {
-    if (!business) return;
+    if (!business?.id) return;
 
     // Initial sync
     triggerSync();
@@ -36,6 +39,8 @@ export function useSync() {
       if (isOnline) {
         console.log('[useSync] Connection restored, triggering sync...');
         triggerSync();
+      } else {
+        wasOfflineRef.current = true;
       }
     });
 
@@ -43,7 +48,7 @@ export function useSync() {
       if (timerRef.current) clearInterval(timerRef.current);
       unsubscribe();
     };
-  }, [business]);
+  }, [business?.id]);
 
   return {
     triggerSync,

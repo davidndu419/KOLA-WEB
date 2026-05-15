@@ -17,10 +17,12 @@ import {
   Sale,
   SaleItem,
   Service,
-  Expense
+  Expense,
+  Business
 } from './schema';
 
 export class KolaDatabase extends Dexie {
+  businesses!: Table<Business>;
   products!: Table<Product>;
   categories!: Table<Category>;
   transactions!: Table<Transaction>;
@@ -40,6 +42,82 @@ export class KolaDatabase extends Dexie {
 
   constructor() {
     super('KolaDB');
+
+    this.version(12).stores({
+      businesses: '++id, local_id, business_id, user_id, sync_status, updated_at',
+      products: '++id, local_id, business_id, category_id, sync_status, is_archived, updated_at',
+      categories: '++id, local_id, business_id, name',
+      transactions: '++id, local_id, business_id, type, payment_method, status, sync_status, created_at, updated_at, reference_id, customer_id, category_id',
+      sales: '++id, local_id, business_id, transaction_id, customer_id, sync_status, created_at, updated_at',
+      sale_items: '++id, local_id, business_id, sale_id, product_id, sync_status, created_at, updated_at',
+      services: '++id, local_id, business_id, transaction_id, customer_id, status, sync_status, created_at, updated_at',
+      expenses: '++id, local_id, business_id, transaction_id, category_id, status, sync_status, created_at, updated_at',
+      ledger_entries: '++id, local_id, business_id, transaction_id, source_type, source_id, debit_account, credit_account, amount, created_at, updated_at, sync_status',
+      sync_queue: '++id, business_id, entity, entity_id, status, created_at',
+      inventory_movements: '++id, local_id, business_id, product_id, type, created_at, updated_at, sync_status',
+      customers: '++id, local_id, business_id, sync_status, updated_at',
+      suppliers: '++id, local_id, business_id, sync_status, updated_at',
+      receivables: '++id, local_id, business_id, transaction_id, customer_id, status, sync_status, created_at, updated_at',
+      app_settings: '++id, business_id, key, [business_id+key], updated_at',
+      receipts: '++id, local_id, business_id, transaction_id, sync_status, updated_at',
+      audit_logs: '++id, local_id, business_id, user_id, action, entity_id, created_at, sync_status'
+    }).upgrade(async tx => {
+      await tx.table('app_settings').toCollection().modify((setting: any) => {
+        if (!setting.updated_at) {
+          setting.updated_at = new Date();
+        }
+      });
+    });
+
+    this.version(11).stores({
+      businesses: '++id, local_id, business_id, user_id, sync_status, updated_at',
+      products: '++id, local_id, business_id, category_id, sync_status, is_archived, updated_at',
+      categories: '++id, local_id, business_id, name',
+      transactions: '++id, local_id, business_id, type, payment_method, status, sync_status, created_at, updated_at, reference_id, customer_id, category_id',
+      sales: '++id, local_id, business_id, transaction_id, customer_id, sync_status, created_at, updated_at',
+      sale_items: '++id, local_id, business_id, sale_id, product_id, sync_status, created_at, updated_at',
+      services: '++id, local_id, business_id, transaction_id, customer_id, status, sync_status, created_at, updated_at',
+      expenses: '++id, local_id, business_id, transaction_id, category_id, status, sync_status, created_at, updated_at',
+      ledger_entries: '++id, local_id, business_id, transaction_id, source_type, source_id, debit_account, credit_account, amount, created_at, updated_at, sync_status',
+      sync_queue: '++id, business_id, entity, entity_id, status, created_at',
+      inventory_movements: '++id, local_id, business_id, product_id, type, created_at, updated_at, sync_status',
+      customers: '++id, local_id, business_id, sync_status, updated_at',
+      suppliers: '++id, local_id, business_id, sync_status, updated_at',
+      receivables: '++id, local_id, business_id, transaction_id, customer_id, status, sync_status, created_at, updated_at',
+      app_settings: '++id, business_id, key',
+      receipts: '++id, local_id, business_id, transaction_id, sync_status, updated_at',
+      audit_logs: '++id, local_id, business_id, user_id, action, entity_id, created_at, sync_status'
+    }).upgrade(async tx => {
+      const profiles = (await tx.table('app_settings').toArray()).filter(
+        (setting: any) => setting.key === 'business_profile' && setting.value
+      );
+
+      for (const setting of profiles) {
+        const value = setting.value || {};
+        const business_id = value.business_id || value.local_id || setting.business_id;
+        if (!business_id) continue;
+
+        const existing = await tx.table('businesses').where('business_id').equals(business_id).first();
+        if (existing) continue;
+
+        await tx.table('businesses').add({
+          ...value,
+          local_id: value.local_id || business_id,
+          business_id,
+          user_id: value.user_id || '',
+          business_name: value.business_name || value.name || 'Kola Business',
+          business_type: value.business_type || value.type || 'retail',
+          name: value.name || value.business_name || 'Kola Business',
+          type: value.type || value.business_type || 'retail',
+          currency: value.currency || 'NGN',
+          created_at: value.created_at ? new Date(value.created_at) : new Date(),
+          updated_at: value.updated_at ? new Date(value.updated_at) : new Date(),
+          sync_status: value.sync_status || 'pending',
+          version: value.version || 1,
+          device_id: value.device_id || 'web-pwa',
+        });
+      }
+    });
     
     // Version 10: Indexing business_id and created_at for robust multi-tenant queries and range reporting
     this.version(10).stores({

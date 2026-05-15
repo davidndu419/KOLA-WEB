@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 import { springs } from '@/lib/animation-config';
 
 const navItems = [
-  { href: '/', icon: Home, label: 'Home' },
+  { href: '/dashboard', icon: Home, label: 'Home' },
   { href: '/inventory', icon: Package, label: 'Stock' },
   { href: '/sales', icon: ShoppingCart, label: 'Sales' },
   { href: '/service', icon: Briefcase, label: 'Service' },

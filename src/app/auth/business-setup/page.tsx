@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthCard } from '@/components/auth/AuthCard';
 import { AuthInput } from '@/components/auth/AuthInput';
@@ -22,6 +22,7 @@ const BUSINESS_TYPES = [
 export default function BusinessSetupPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const business = useAuthStore((state) => state.business);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -30,10 +31,12 @@ export default function BusinessSetupPage() {
     currency: 'NGN',
   });
 
-  if (!user) {
-    if (typeof window !== 'undefined') router.push('/auth/login');
-    return null;
-  }
+  useEffect(() => {
+    if (business) router.replace('/dashboard');
+    if (!user) router.replace('/auth/login');
+  }, [business, router, user]);
+
+  if (!user || business) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

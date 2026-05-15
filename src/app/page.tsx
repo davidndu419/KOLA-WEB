@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
   Zap, 
@@ -18,9 +19,18 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { Touchable } from '@/components/touchable';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function LandingPage() {
   const [logoError, setLogoError] = React.useState(false);
+  const router = useRouter();
+  const { isAuthenticated, isInitialized, business } = useAuth();
+
+  React.useEffect(() => {
+    if (isInitialized && isAuthenticated && business) {
+      router.replace('/dashboard');
+    }
+  }, [business, isAuthenticated, isInitialized, router]);
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">

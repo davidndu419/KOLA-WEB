@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-export type PWAInstallStatus = 'installed' | 'can-install' | 'manual-install' | 'loading';
+export type PWAInstallStatus = 'installed' | 'can-install' | 'manual-install' | 'browser' | 'loading';
+export type PWADisplayMode = 'standalone' | 'browser';
 
 export function usePWAInstall() {
   const [status, setStatus] = useState<PWAInstallStatus>('loading');
+  const [mode, setMode] = useState<PWADisplayMode>('browser');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const checkStatus = useCallback(() => {
@@ -16,12 +18,15 @@ export function usePWAInstall() {
       (window.navigator as any).standalone === true ||
       window.matchMedia('(display-mode: fullscreen)').matches;
 
+    setMode(isStandalone ? 'standalone' : 'browser');
+
     if (isStandalone) {
       setStatus('installed');
     } else if (deferredPrompt) {
       setStatus('can-install');
     } else {
-      setStatus('manual-install');
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
+      setStatus(isMobile ? 'manual-install' : 'browser');
     }
   }, [deferredPrompt]);
 
@@ -36,11 +41,15 @@ export function usePWAInstall() {
 
     const handleAppInstalled = () => {
       setDeferredPrompt(null);
-      setStatus('installed');
+      checkStatus();
     };
+
+    const handleDisplayModeChange = () => checkStatus();
+    const standaloneQuery = window.matchMedia('(display-mode: standalone)');
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+    standaloneQuery.addEventListener?.('change', handleDisplayModeChange);
 
     // Periodic check for display mode changes (e.g. user manually installs)
     checkStatus();
@@ -49,6 +58,7 @@ export function usePWAInstall() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      standaloneQuery.removeEventListener?.('change', handleDisplayModeChange);
       clearInterval(interval);
     };
   }, [checkStatus]);
@@ -61,7 +71,7 @@ export function usePWAInstall() {
     
     if (outcome === 'accepted') {
       setDeferredPrompt(null);
-      setStatus('installed');
+      checkStatus();
       return true;
     }
     
@@ -70,7 +80,9 @@ export function usePWAInstall() {
 
   return {
     status,
+    mode,
     isInstalled: status === 'installed',
+    isBrowserMode: mode === 'browser',
     canInstall: status === 'can-install',
     installApp,
     deferredPrompt

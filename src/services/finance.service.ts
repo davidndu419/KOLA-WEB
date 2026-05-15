@@ -33,7 +33,8 @@ export const financeService = {
       db.ledger_entries, 
       db.sync_queue
     ], async () => {
-      await db.transactions.add(transaction);
+      const transactionDbId = await db.transactions.add(transaction);
+      transaction.id = transactionDbId as number;
       
       // 2. Create Expense
       const expense: Expense = {
@@ -46,7 +47,8 @@ export const financeService = {
         note: data.note,
         status: 'completed',
       };
-      await db.expenses.add(expense);
+      const expenseDbId = await db.expenses.add(expense);
+      expense.id = expenseDbId as number;
       
       // Update transaction reference
       transaction.reference_id = expense.local_id;
@@ -94,7 +96,8 @@ export const financeService = {
       db.receivables, 
       db.customers
     ], async () => {
-      await db.transactions.add(transaction);
+      const transactionDbId = await db.transactions.add(transaction);
+      transaction.id = transactionDbId as number;
       
       // 2. Create Service
       const service: Service = {
@@ -107,7 +110,8 @@ export const financeService = {
         status: 'completed',
         note: data.note,
       };
-      await db.services.add(service);
+      const serviceDbId = await db.services.add(service);
+      service.id = serviceDbId as number;
       
       // Update transaction reference
       transaction.reference_id = service.local_id;

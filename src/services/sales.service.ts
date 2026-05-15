@@ -46,7 +46,8 @@ export const salesService = {
       db.inventory_movements
     ], async () => {
       // Add Transaction
-      await db.transactions.add(transaction);
+      const transactionDbId = await db.transactions.add(transaction);
+      transaction.id = transactionDbId as number;
       
       // Add Sale
       const sale: Sale = {
@@ -61,7 +62,8 @@ export const salesService = {
         status: 'completed',
         note: data.note,
       };
-      await db.sales.add(sale);
+      const saleDbId = await db.sales.add(sale);
+      sale.id = saleDbId as number;
       
       // Update transaction reference
       transaction.reference_id = sale.local_id;

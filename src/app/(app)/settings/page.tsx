@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   User, 
   Store, 
@@ -19,6 +19,7 @@ import {
 import { Touchable } from '@/components/touchable';
 import { db } from '@/db/dexie';
 import { useStore } from '@/store/use-store';
+import { useAuthStore } from '@/stores/authStore';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { cn } from '@/lib/utils';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
@@ -26,19 +27,42 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { syncService } from '@/services/sync.service';
 import { onlineStatusService } from '@/services/onlineStatusService';
 import { formatDistanceToNow } from 'date-fns';
+import { authService } from '@/services/authService';
+
+function useOnlineStatus() {
+  const [isOnline, setIsOnline] = useState(onlineStatusService.getOnlineStatus());
+
+  useEffect(() => {
+    const unsubscribe = onlineStatusService.subscribe(setIsOnline);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  return isOnline;
+}
 
 
 export default function SettingsPage() {
   const { 
-    business, 
     setBusiness, 
     theme, 
     setTheme, 
     notificationsEnabled, 
-    setNotificationsEnabled,
-    logout,
-    lastSyncTime
+    setNotificationsEnabled
   } = useStore();
+  const authBusiness = useAuthStore((state) => state.business);
+  const authUser = useAuthStore((state) => state.user);
+  const business = authBusiness
+    ? {
+        id: authBusiness.id,
+        name: authBusiness.business_name || authBusiness.name,
+        type: authBusiness.business_type || authBusiness.type,
+        currency: authBusiness.currency,
+        ownerName: authUser?.full_name || authUser?.email || 'Owner',
+        address: '',
+      }
+    : null;
 
   const [activeSheet, setActiveSheet] = useState<'profile' | 'notifications' | 'sync' | null>(null);
   const [profileForm, setProfileForm] = useState({ name: business?.name || '', address: business?.address || '' });
@@ -51,9 +75,9 @@ export default function SettingsPage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (confirm('Logout from this device?')) {
-      logout();
+      await authService.signOut();
       window.location.href = '/';
     }
   };
@@ -86,6 +110,7 @@ export default function SettingsPage() {
         </div>
         <div>
           <h3 className="font-bold text-lg">{business?.name || 'Kola Business'}</h3>
+          <p className="text-xs text-muted-foreground font-medium capitalize">{business?.type || 'Business'}</p>
           <p className="text-xs text-muted-foreground font-medium">{business?.ownerName || 'Owner'} • Basic Plan</p>
         </div>
         <Touchable 
@@ -208,25 +233,38 @@ export default function SettingsPage() {
 }
 
 function SyncSettingItem({ onOpenSheet }: { onOpenSheet: () => void }) {
-  const { business } = useStore();
-  const isOnline = onlineStatusService.getOnlineStatus();
+  const business = useAuthStore((state) => state.business);
+  const isOnline = useOnlineStatus();
+  const businessId = business?.id;
   
   const metadata = useLiveQuery(async () => {
-    if (!business) return null;
-    const settings = await db.app_settings.where('business_id').equals(business.id).toArray();
+    if (!businessId) return null;
+    const settings = await db.app_settings.where('business_id').equals(businessId).toArray();
     return {
       lastSuccess: settings.find(s => s.key === 'last_successful_sync_at')?.value,
       status: settings.find(s => s.key === 'last_sync_status')?.value,
       error: settings.find(s => s.key === 'last_sync_error')?.value,
     };
-  }, [business]);
+  }, [businessId]);
 
-  const pendingCount = useLiveQuery(() => db.sync_queue.count()) || 0;
+  const pendingCount = useLiveQuery(
+    () => businessId
+      ? db.sync_queue.where('business_id').equals(businessId).filter((item) => item.status === 'pending' || item.status === 'syncing').count()
+      : Promise.resolve(0),
+    [businessId]
+  ) || 0;
+  const failedCount = useLiveQuery(
+    () => businessId
+      ? db.sync_queue.where('business_id').equals(businessId).filter((item) => item.status === 'failed').count()
+      : Promise.resolve(0),
+    [businessId]
+  ) || 0;
 
   const getSubtitle = () => {
     if (!isOnline) return "Offline — saved locally";
     if (metadata?.status === 'syncing') return "Syncing...";
     if (pendingCount > 0) return `${pendingCount} changes pending`;
+    if (failedCount > 0) return `${failedCount} changes failed`;
     if (metadata?.lastSuccess) {
       try {
         return `Synced ${formatDistanceToNow(new Date(metadata.lastSuccess), { addSuffix: true })}`;
@@ -241,15 +279,16 @@ function SyncSettingItem({ onOpenSheet }: { onOpenSheet: () => void }) {
     if (!isOnline) return "Offline";
     if (metadata?.status === 'syncing') return "Syncing";
     if (pendingCount > 0) return "Pending";
-    if (metadata?.status === 'failed') return "Failed";
-    return "Synced";
+    if (failedCount > 0 || metadata?.status === 'failed') return "Failed";
+    if (metadata?.lastSuccess) return "Synced";
+    return "Not Synced";
   };
 
   const getBadgeColor = () => {
     if (!isOnline) return "bg-slate-500/10 text-slate-600";
     if (metadata?.status === 'syncing') return "bg-primary/10 text-primary animate-pulse";
     if (pendingCount > 0) return "bg-amber-500/10 text-amber-600";
-    if (metadata?.status === 'failed') return "bg-red-500/10 text-red-600";
+    if (failedCount > 0 || metadata?.status === 'failed') return "bg-red-500/10 text-red-600";
     return "bg-emerald-500/10 text-emerald-600";
   };
 
@@ -266,31 +305,44 @@ function SyncSettingItem({ onOpenSheet }: { onOpenSheet: () => void }) {
 }
 
 function SyncBottomSheetContent({ onClose }: { onClose: () => void }) {
-  const { business } = useStore();
-  const isOnline = onlineStatusService.getOnlineStatus();
+  const business = useAuthStore((state) => state.business);
+  const isOnline = useOnlineStatus();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const businessId = business?.id;
 
   const metadata = useLiveQuery(async () => {
-    if (!business) return null;
-    const settings = await db.app_settings.where('business_id').equals(business.id).toArray();
+    if (!businessId) return null;
+    const settings = await db.app_settings.where('business_id').equals(businessId).toArray();
     return {
       lastSuccess: settings.find(s => s.key === 'last_successful_sync_at')?.value,
       lastAttempt: settings.find(s => s.key === 'last_sync_attempt_at')?.value,
       status: settings.find(s => s.key === 'last_sync_status')?.value,
       error: settings.find(s => s.key === 'last_sync_error')?.value,
     };
-  }, [business]);
+  }, [businessId]);
 
-  const pendingCount = useLiveQuery(() => db.sync_queue.count()) || 0;
+  const pendingCount = useLiveQuery(
+    () => businessId
+      ? db.sync_queue.where('business_id').equals(businessId).filter((item) => item.status === 'pending' || item.status === 'syncing').count()
+      : Promise.resolve(0),
+    [businessId]
+  ) || 0;
+  const failedCount = useLiveQuery(
+    () => businessId
+      ? db.sync_queue.where('business_id').equals(businessId).filter((item) => item.status === 'failed').count()
+      : Promise.resolve(0),
+    [businessId]
+  ) || 0;
 
   const handleForceSync = async () => {
-    if (!isOnline || !business) return;
+    if (!isOnline || !businessId) return;
     setIsManualSyncing(true);
     try {
-      await syncService.processQueue();
-      await syncService.pullFromCloud(business.id);
-    } catch (err) {
+      const success = await syncService.runFullSync(businessId);
+      alert(success ? 'Changes synced successfully' : 'Sync finished with pending or failed changes');
+    } catch (err: any) {
       console.error(err);
+      alert(err?.message || 'Sync failed');
     } finally {
       setIsManualSyncing(false);
     }
@@ -338,19 +390,26 @@ function SyncBottomSheetContent({ onClose }: { onClose: () => void }) {
           </span>
         </div>
         <div className="flex justify-between items-center">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Failed Changes</p>
+          <span className={cn("text-xs font-bold", failedCount > 0 ? "text-red-500" : "text-muted-foreground")}>
+            {failedCount === 0 ? '0 failed' : `${failedCount} need attention`}
+          </span>
+        </div>
+        <div className="flex justify-between items-center">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Status</p>
           <span className={cn("text-xs font-bold capitalize", 
             metadata?.status === 'syncing' || isManualSyncing ? "text-primary animate-pulse" : 
             !isOnline ? "text-slate-500" :
-            metadata?.status === 'failed' ? "text-red-500" : "text-emerald-500")}>
-            {isManualSyncing ? 'Syncing...' : (metadata?.status || (isOnline ? 'Synced' : 'Offline'))}
+            failedCount > 0 || metadata?.status === 'failed' ? "text-red-500" :
+            pendingCount > 0 ? "text-amber-500" : "text-emerald-500")}>
+            {isManualSyncing ? 'Syncing...' : !isOnline ? 'Offline' : pendingCount > 0 ? 'Pending' : failedCount > 0 ? 'Failed' : metadata?.lastSuccess ? 'Synced' : 'Not synced yet'}
           </span>
         </div>
       </div>
 
       <Touchable 
         onPress={handleForceSync}
-        disabled={!isOnline || isManualSyncing}
+        disabled={!isOnline || isManualSyncing || !businessId}
         className={cn(
           "w-full p-5 rounded-[24px] font-bold text-center transition-all",
           isOnline && !isManualSyncing ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-secondary text-muted-foreground"
@@ -399,6 +458,18 @@ function PWASettingItem() {
             <Download size={18} />
           </Touchable>
         }
+      />
+    );
+  }
+
+  if (status === 'browser') {
+    return (
+      <SettingItem
+        icon={<Smartphone size={18} />}
+        label="PWA Installation"
+        sub="Running in browser tab"
+        badge="Browser"
+        badgeColor="bg-slate-500/10 text-slate-600"
       />
     );
   }

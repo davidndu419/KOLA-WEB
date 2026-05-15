@@ -25,8 +25,7 @@ interface AppState {
   lastSyncTime: string | null;
   theme: 'light' | 'dark';
   notificationsEnabled: boolean;
-  
-  // Actions
+
   setBusiness: (business: Business) => void;
   setUser: (user: User) => void;
   setOfflineStatus: (status: boolean) => void;
@@ -40,18 +39,8 @@ interface AppState {
 export const useStore = create<AppState>()(
   persist(
     (set) => ({
-      business: {
-        id: '550e8400-e29b-41d4-a716-446655440000',
-        name: 'Kola General Store',
-        currency: '₦',
-        ownerName: 'John Kola',
-        address: '123 Lagos Way, Nigeria',
-      },
-      user: {
-        id: 'user-001',
-        name: 'John',
-        role: 'owner',
-      },
+      business: null,
+      user: null,
       isOffline: false,
       isSyncing: false,
       lastSyncTime: null,

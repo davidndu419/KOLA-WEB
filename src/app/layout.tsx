@@ -48,6 +48,7 @@ export const viewport: Viewport = {
 import { DBInitializer } from "@/components/db-initializer";
 import { PWARegistration } from "@/components/pwa-registration";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
+import { SyncToast } from "@/components/sync-toast";
 
 export default function RootLayout({
   children,
@@ -60,6 +61,7 @@ export default function RootLayout({
         <DBInitializer />
         <PWARegistration />
         <PWAInstallPrompt />
+        <SyncToast />
 
         {children}
       </body>
@@ -67,4 +69,3 @@ export default function RootLayout({
     </html>
   );
 }
-
