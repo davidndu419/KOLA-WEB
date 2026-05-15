@@ -19,12 +19,29 @@ export function PWARegistration() {
 
       navigator.serviceWorker
         .register('/sw.js', { scope: '/' })
-        .then((registration) => {
-          console.log('SW registered: ', registration);
-          registration.update();
+        .then(async (registration) => {
+          console.log('[PWA] SW registered', registration);
+          console.log('[PWA] SW controlling page', !!navigator.serviceWorker.controller);
+          await registration.update();
+
+          const readyRegistration = await navigator.serviceWorker.ready;
+          console.log('[PWA] SW ready with scope', readyRegistration.scope);
+
+          let dashboardCached = await caches.match('/dashboard');
+          let offlineFallbackCached = await caches.match('/_offline');
+
+          if (navigator.onLine && (!dashboardCached || !offlineFallbackCached)) {
+            const appShellCache = await caches.open('kola-app-shell');
+            await appShellCache.addAll(['/dashboard', '/_offline', '/manifest.json']);
+            dashboardCached = await caches.match('/dashboard');
+            offlineFallbackCached = await caches.match('/_offline');
+          }
+
+          console.log('[PWA] dashboard cached', !!dashboardCached);
+          console.log('[PWA] offline fallback registered', !!offlineFallbackCached);
         })
         .catch((registrationError) => {
-          console.log('SW registration failed: ', registrationError);
+          console.log('[PWA] SW registration failed', registrationError);
         });
 
       return () => {

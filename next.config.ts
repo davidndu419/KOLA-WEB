@@ -54,6 +54,44 @@ const withPWA = withPWAInit({
       },
     },
     {
+      urlPattern: ({ request, url }: { request: Request; url: URL }) => {
+        const pathname = url.pathname;
+
+        return (
+          request.mode === 'navigate' &&
+          url.origin === self.location.origin &&
+          (pathname === '/' ||
+            pathname === '/dashboard' ||
+            pathname === '/inventory' ||
+            pathname === '/sales' ||
+            pathname === '/service' ||
+            pathname === '/expenses' ||
+            pathname === '/reports' ||
+            pathname === '/reports/transactions' ||
+            pathname === '/settings' ||
+            pathname === '/auth/login' ||
+            pathname === '/auth/register' ||
+            pathname === '/auth/business-setup' ||
+            pathname === '/auth/forgot-password' ||
+            pathname === '/_offline')
+        );
+      },
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'kola-app-shell',
+        expiration: {
+          maxEntries: 32,
+          maxAgeSeconds: 30 * 24 * 60 * 60,
+        },
+        cacheableResponse: {
+          statuses: [0, 200],
+        },
+        precacheFallback: {
+          fallbackURL: '/_offline',
+        },
+      },
+    },
+    {
       urlPattern: ({ request, url }: { request: Request; url: URL }) =>
         request.mode === 'navigate' && url.origin === self.location.origin,
       handler: 'NetworkFirst',

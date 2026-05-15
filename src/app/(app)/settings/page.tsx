@@ -42,6 +42,16 @@ function useOnlineStatus() {
   return isOnline;
 }
 
+function latestSettingValue(settings: { key: string; value: any; updated_at: Date }[], key: string) {
+  return settings
+    .filter((setting) => setting.key === key)
+    .sort((a, b) => {
+      const left = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const right = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return right - left;
+    })[0]?.value;
+}
+
 
 export default function SettingsPage() {
   const { 
@@ -241,9 +251,9 @@ function SyncSettingItem({ onOpenSheet }: { onOpenSheet: () => void }) {
     if (!businessId) return null;
     const settings = await db.app_settings.where('business_id').equals(businessId).toArray();
     return {
-      lastSuccess: settings.find(s => s.key === 'last_successful_sync_at')?.value,
-      status: settings.find(s => s.key === 'last_sync_status')?.value,
-      error: settings.find(s => s.key === 'last_sync_error')?.value,
+      lastSuccess: latestSettingValue(settings, 'last_successful_sync_at'),
+      status: latestSettingValue(settings, 'last_sync_status'),
+      error: latestSettingValue(settings, 'last_sync_error'),
     };
   }, [businessId]);
 
@@ -262,9 +272,9 @@ function SyncSettingItem({ onOpenSheet }: { onOpenSheet: () => void }) {
 
   const getSubtitle = () => {
     if (!isOnline) return "Offline — saved locally";
-    if (metadata?.status === 'syncing') return "Syncing...";
     if (pendingCount > 0) return `${pendingCount} changes pending`;
     if (failedCount > 0) return `${failedCount} changes failed`;
+    if (metadata?.status === 'syncing') return "Syncing...";
     if (metadata?.lastSuccess) {
       try {
         return `Synced ${formatDistanceToNow(new Date(metadata.lastSuccess), { addSuffix: true })}`;
@@ -277,18 +287,18 @@ function SyncSettingItem({ onOpenSheet }: { onOpenSheet: () => void }) {
 
   const getBadge = () => {
     if (!isOnline) return "Offline";
-    if (metadata?.status === 'syncing') return "Syncing";
     if (pendingCount > 0) return "Pending";
     if (failedCount > 0 || metadata?.status === 'failed') return "Failed";
+    if (metadata?.status === 'syncing') return "Syncing";
     if (metadata?.lastSuccess) return "Synced";
     return "Not Synced";
   };
 
   const getBadgeColor = () => {
     if (!isOnline) return "bg-slate-500/10 text-slate-600";
-    if (metadata?.status === 'syncing') return "bg-primary/10 text-primary animate-pulse";
     if (pendingCount > 0) return "bg-amber-500/10 text-amber-600";
     if (failedCount > 0 || metadata?.status === 'failed') return "bg-red-500/10 text-red-600";
+    if (metadata?.status === 'syncing') return "bg-primary/10 text-primary animate-pulse";
     return "bg-emerald-500/10 text-emerald-600";
   };
 
@@ -308,44 +318,72 @@ function SyncBottomSheetContent({ onClose }: { onClose: () => void }) {
   const business = useAuthStore((state) => state.business);
   const isOnline = useOnlineStatus();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncTick, setSyncTick] = useState(0);
   const businessId = business?.id;
 
   const metadata = useLiveQuery(async () => {
     if (!businessId) return null;
     const settings = await db.app_settings.where('business_id').equals(businessId).toArray();
     return {
-      lastSuccess: settings.find(s => s.key === 'last_successful_sync_at')?.value,
-      lastAttempt: settings.find(s => s.key === 'last_sync_attempt_at')?.value,
-      status: settings.find(s => s.key === 'last_sync_status')?.value,
-      error: settings.find(s => s.key === 'last_sync_error')?.value,
+      lastSuccess: latestSettingValue(settings, 'last_successful_sync_at'),
+      lastAttempt: latestSettingValue(settings, 'last_sync_attempt_at'),
+      status: latestSettingValue(settings, 'last_sync_status'),
+      error: latestSettingValue(settings, 'last_sync_error'),
     };
   }, [businessId]);
 
-  const pendingCount = useLiveQuery(
-    () => businessId
-      ? db.sync_queue.where('business_id').equals(businessId).filter((item) => item.status === 'pending' || item.status === 'syncing').count()
-      : Promise.resolve(0),
-    [businessId]
-  ) || 0;
-  const failedCount = useLiveQuery(
-    () => businessId
-      ? db.sync_queue.where('business_id').equals(businessId).filter((item) => item.status === 'failed').count()
-      : Promise.resolve(0),
-    [businessId]
-  ) || 0;
+  const diagnostics = useLiveQuery(
+    () => businessId ? syncService.getQueueDiagnostics(businessId) : Promise.resolve(null),
+    [businessId, syncTick]
+  );
+  const pendingCount = diagnostics?.pendingCount || 0;
+  const failedCount = diagnostics?.failedCount || 0;
+  const firstProblem = diagnostics?.firstProblem;
 
   const handleForceSync = async () => {
     if (!isOnline || !businessId) return;
     setIsManualSyncing(true);
+    setSyncMessage(null);
     try {
       const success = await syncService.runFullSync(businessId);
-      alert(success ? 'Changes synced successfully' : 'Sync finished with pending or failed changes');
+      const latestDiagnostics = await syncService.getQueueDiagnostics(businessId);
+      setSyncTick((value) => value + 1);
+
+      if (success) {
+        window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Changes synced successfully' } }));
+        setSyncMessage('Changes synced successfully');
+      } else {
+        const item = latestDiagnostics.firstProblem;
+        const detail = item
+          ? `${item.entity} ${item.action} is ${item.status}${item.error ? `: ${item.error}` : ''}`
+          : 'Pending or failed changes remain in the local queue';
+        setSyncMessage(detail);
+        window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Sync needs attention' } }));
+      }
     } catch (err: any) {
       console.error(err);
-      alert(err?.message || 'Sync failed');
+      const message = err?.message || 'Sync failed';
+      setSyncMessage(message);
+      window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message } }));
     } finally {
       setIsManualSyncing(false);
     }
+  };
+
+  const handleRetryFailed = async () => {
+    if (!businessId) return;
+    await syncService.retryFailed(businessId);
+    setSyncMessage('Failed sync items moved back to pending');
+    setSyncTick((value) => value + 1);
+  };
+
+  const handleClearFailedItem = async (id?: number) => {
+    if (!id) return;
+    if (!confirm('Clear this failed sync item? Local data will stay on this device, but this queued cloud sync attempt will be removed.')) return;
+    await syncService.clearFailedItem(id);
+    setSyncMessage('Failed sync item cleared');
+    setSyncTick((value) => value + 1);
   };
 
   const formatTime = (timeStr?: string) => {
@@ -397,14 +435,33 @@ function SyncBottomSheetContent({ onClose }: { onClose: () => void }) {
         </div>
         <div className="flex justify-between items-center">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Status</p>
-          <span className={cn("text-xs font-bold capitalize", 
-            metadata?.status === 'syncing' || isManualSyncing ? "text-primary animate-pulse" : 
+          <span className={cn("text-xs font-bold capitalize",
+            isManualSyncing ? "text-primary animate-pulse" :
             !isOnline ? "text-slate-500" :
             failedCount > 0 || metadata?.status === 'failed' ? "text-red-500" :
-            pendingCount > 0 ? "text-amber-500" : "text-emerald-500")}>
-            {isManualSyncing ? 'Syncing...' : !isOnline ? 'Offline' : pendingCount > 0 ? 'Pending' : failedCount > 0 ? 'Failed' : metadata?.lastSuccess ? 'Synced' : 'Not synced yet'}
+            pendingCount > 0 ? "text-amber-500" :
+            metadata?.status === 'syncing' ? "text-primary animate-pulse" : "text-emerald-500")}>
+            {isManualSyncing ? 'Syncing...' : !isOnline ? 'Offline' : pendingCount > 0 ? 'Pending' : failedCount > 0 ? 'Failed' : metadata?.status === 'syncing' ? 'Syncing' : metadata?.lastSuccess ? 'Synced' : 'Not synced yet'}
           </span>
         </div>
+        {metadata?.error && (
+          <div className="rounded-2xl bg-red-500/10 p-3 text-xs font-bold text-red-600">
+            Last sync error: {metadata.error}
+          </div>
+        )}
+        {firstProblem && (
+          <div className="rounded-2xl bg-amber-500/10 p-3 space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">First Queue Problem</p>
+            <p className="text-xs font-bold text-foreground">{firstProblem.entity} • {firstProblem.action} • {firstProblem.status}</p>
+            <p className="text-[11px] font-bold text-muted-foreground">Retry count: {firstProblem.retry_count}</p>
+            <p className="text-[11px] font-medium text-muted-foreground break-words">{firstProblem.error || 'No error captured yet. Retry to capture the exact Supabase/network response.'}</p>
+          </div>
+        )}
+        {syncMessage && (
+          <div className="rounded-2xl bg-secondary p-3 text-xs font-bold text-muted-foreground break-words">
+            {syncMessage}
+          </div>
+        )}
       </div>
 
       <Touchable 
@@ -417,6 +474,46 @@ function SyncBottomSheetContent({ onClose }: { onClose: () => void }) {
       >
         {isManualSyncing ? 'Processing...' : 'Force Manual Sync'}
       </Touchable>
+
+      {failedCount > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          <Touchable
+            onPress={handleRetryFailed}
+            className="p-4 rounded-2xl bg-secondary text-primary text-center text-xs font-bold"
+          >
+            Retry Failed Sync
+          </Touchable>
+          <Touchable
+            onPress={() => handleClearFailedItem(firstProblem?.status === 'failed' ? firstProblem.id : undefined)}
+            className="p-4 rounded-2xl bg-red-500/10 text-red-600 text-center text-xs font-bold"
+          >
+            Clear Failed Item
+          </Touchable>
+        </div>
+      )}
+
+      <div className="p-4 glass-card rounded-[24px] space-y-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Developer Sync Queue Debug</p>
+          <p className="text-[10px] font-bold text-muted-foreground">Visible in development and test builds for stuck offline sync inspection.</p>
+        </div>
+        {diagnostics?.items.length ? (
+          <div className="space-y-2">
+            {diagnostics.items.map((item) => (
+              <div key={item.id || item.entity_id} className="rounded-2xl bg-secondary/70 p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-black truncate">{item.entity}</p>
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground">{item.status}</span>
+                </div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">{item.action} • retries {item.retry_count}</p>
+                {item.error && <p className="text-[10px] font-medium text-red-500 break-words">{item.error}</p>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs font-bold text-muted-foreground">Queue is empty.</p>
+        )}
+      </div>
       
       {!isOnline && (
         <p className="text-[10px] text-center text-red-400 font-bold uppercase tracking-widest animate-pulse">

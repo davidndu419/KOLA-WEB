@@ -220,16 +220,63 @@ export const syncService = {
   isFullSyncing: false,
 
   async updateMetadata(business_id: string, key: string, value: any) {
-    const existing = await db.app_settings
-      .where('business_id')
-      .equals(business_id)
-      .filter((setting) => setting.key === key)
-      .first();
+    const matches = await db.app_settings
+      .where('[business_id+key]')
+      .equals([business_id, key])
+      .toArray();
+    const [existing, ...duplicates] = matches.sort((a, b) => {
+      const left = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const right = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return right - left;
+    });
+
     if (existing) {
       await db.app_settings.update(existing.id!, { value, updated_at: new Date() });
     } else {
       await db.app_settings.add({ business_id, key, value, updated_at: new Date() });
     }
+
+    if (duplicates.length > 0) {
+      await db.app_settings.bulkDelete(duplicates.map((setting) => setting.id!).filter(Boolean));
+    }
+  },
+
+  async getQueueDiagnostics(business_id: string) {
+    const queue = await db.sync_queue
+      .where('business_id')
+      .equals(business_id)
+      .toArray();
+
+    const pendingItems = queue.filter((item) => item.status === 'pending' || item.status === 'syncing');
+    const failedItems = queue.filter((item) => item.status === 'failed');
+    const firstProblem = failedItems[0] || pendingItems[0] || null;
+
+    return {
+      pendingCount: pendingItems.length,
+      failedCount: failedItems.length,
+      firstProblem,
+      items: queue.sort((a, b) => {
+        const left = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const right = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return left - right;
+      }),
+    };
+  },
+
+  async retryFailed(business_id: string) {
+    await db.sync_queue
+      .where('business_id')
+      .equals(business_id)
+      .filter((item) => item.status === 'failed')
+      .modify({ status: 'pending', error: undefined });
+  },
+
+  async clearFailedItem(id: number) {
+    const item = await db.sync_queue.get(id);
+    if (!item || item.status !== 'failed') {
+      throw new Error('Only failed sync items can be cleared');
+    }
+    await db.sync_queue.delete(id);
   },
 
   async processQueue(business_id?: string) {
@@ -243,6 +290,14 @@ export const syncService = {
     const activeBusinessId = business_id || firstItem?.business_id;
 
     if (activeBusinessId) {
+      await db.sync_queue
+        .where('business_id')
+        .equals(activeBusinessId)
+        .filter((item) => item.status === 'syncing')
+        .modify({
+          status: 'pending',
+          error: 'Recovered stale syncing item from an interrupted sync run',
+        });
       await this.updateMetadata(activeBusinessId, 'last_sync_attempt_at', new Date().toISOString());
       await this.updateMetadata(activeBusinessId, 'last_sync_status', 'syncing');
     }
@@ -296,7 +351,9 @@ export const syncService = {
         .count();
 
       if (remainingPending > 0) {
-        setTimeout(() => this.processQueue(activeBusinessId), 500);
+        if (activeBusinessId) {
+          await this.updateMetadata(activeBusinessId, 'last_sync_status', 'pending');
+        }
       } else if (activeBusinessId) {
         await this.updateMetadata(activeBusinessId, 'last_sync_status', failedCount > 0 ? 'failed' : 'synced');
         if (failedCount === 0) {
@@ -342,7 +399,15 @@ export const syncService = {
           break;
       }
 
-      if (result?.error) throw result.error;
+      if (result?.error) {
+        const details = [
+          result.error.message,
+          result.error.details,
+          result.error.hint,
+          result.error.code,
+        ].filter(Boolean).join(' | ');
+        throw new Error(details || 'Supabase sync failed');
+      }
 
       // Success: Remove from queue and mark local as synced
       await db.sync_queue.delete(id!);
@@ -359,7 +424,7 @@ export const syncService = {
       await db.sync_queue.update(id!, { 
         status,
         retry_count: newRetryCount,
-        error: error.message || 'Unknown error'
+        error: error.message || error.details || 'Unknown error'
       });
     }
   },

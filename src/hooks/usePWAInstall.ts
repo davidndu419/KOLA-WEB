@@ -13,20 +13,23 @@ export function usePWAInstall() {
   const checkStatus = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    const isStandalone = 
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone === true ||
-      window.matchMedia('(display-mode: fullscreen)').matches;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    const isFullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
+    const isAndroidTrustedWebActivity = document.referrer.startsWith('android-app://');
+    const isIOSStandalone = (window.navigator as any).standalone === true;
+    const isPwaSource = new URLSearchParams(window.location.search).get('source') === 'pwa';
+    const isInstalledContext = isStandalone || isFullscreen || isAndroidTrustedWebActivity || isIOSStandalone || isPwaSource;
+    const wasInstalled = localStorage.getItem('kola-pwa-installed') === 'true';
 
-    setMode(isStandalone ? 'standalone' : 'browser');
+    setMode(isInstalledContext ? 'standalone' : 'browser');
 
-    if (isStandalone) {
+    if (isInstalledContext) {
       setStatus('installed');
     } else if (deferredPrompt) {
       setStatus('can-install');
     } else {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
-      setStatus(isMobile ? 'manual-install' : 'browser');
+      setStatus(isMobile && !wasInstalled ? 'manual-install' : 'browser');
     }
   }, [deferredPrompt]);
 
@@ -41,25 +44,35 @@ export function usePWAInstall() {
 
     const handleAppInstalled = () => {
       setDeferredPrompt(null);
+      localStorage.setItem('kola-pwa-installed', 'true');
       checkStatus();
     };
 
     const handleDisplayModeChange = () => checkStatus();
     const standaloneQuery = window.matchMedia('(display-mode: standalone)');
+    const fullscreenQuery = window.matchMedia('(display-mode: fullscreen)');
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') checkStatus();
+    };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener('focus', checkStatus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     standaloneQuery.addEventListener?.('change', handleDisplayModeChange);
+    fullscreenQuery.addEventListener?.('change', handleDisplayModeChange);
 
-    // Periodic check for display mode changes (e.g. user manually installs)
     checkStatus();
-    const interval = setInterval(checkStatus, 2000);
+    const delayedCheck = setTimeout(checkStatus, 500);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('focus', checkStatus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       standaloneQuery.removeEventListener?.('change', handleDisplayModeChange);
-      clearInterval(interval);
+      fullscreenQuery.removeEventListener?.('change', handleDisplayModeChange);
+      clearTimeout(delayedCheck);
     };
   }, [checkStatus]);
 
