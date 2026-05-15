@@ -11,7 +11,8 @@ import {
   ShoppingCart, 
   Briefcase,
   BarChart3,
-  Settings
+  Settings,
+  Receipt
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { springs } from '@/lib/animation-config';
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/inventory', icon: Package, label: 'Stock' },
   { href: '/sales', icon: ShoppingCart, label: 'Sales' },
   { href: '/service', icon: Briefcase, label: 'Service' },
+  { href: '/expenses', icon: Receipt, label: 'Expense' },
   { href: '/reports', icon: BarChart3, label: 'Reports' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ];

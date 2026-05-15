@@ -3,6 +3,7 @@
   "short_name": "Kola",
   "description": "Smart offline-first business manager for African entrepreneurs.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait",
@@ -34,7 +35,7 @@
     },
     {
       "src": "/icons/maskable-icon.png",
-      "sizes": "192x192",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     }

@@ -193,10 +193,28 @@ const serializeForSync = (entity: string, payload: any) => {
 export const syncService = {
   isProcessing: false,
 
+  async updateMetadata(business_id: string, key: string, value: any) {
+    const existing = await db.app_settings.where({ business_id, key }).first();
+    if (existing) {
+      await db.app_settings.update(existing.id!, { value, updated_at: new Date() });
+    } else {
+      await db.app_settings.add({ business_id, key, value, updated_at: new Date() });
+    }
+  },
+
   async processQueue() {
     if (this.isProcessing || !onlineStatusService.getOnlineStatus()) return;
     
     this.isProcessing = true;
+    
+    // Get business_id from queue or store (assuming all items in queue have business_id)
+    const firstItem = await db.sync_queue.limit(1).first();
+    const business_id = firstItem?.business_id;
+
+    if (business_id) {
+      await this.updateMetadata(business_id, 'last_sync_attempt_at', new Date().toISOString());
+      await this.updateMetadata(business_id, 'last_sync_status', 'syncing');
+    }
 
     try {
       // Fetch more than BATCH_SIZE so we can sort them and still have a good batch
@@ -208,6 +226,10 @@ export const syncService = {
 
       if (items.length === 0) {
         this.isProcessing = false;
+        if (business_id) {
+          await this.updateMetadata(business_id, 'last_sync_status', 'synced');
+          await this.updateMetadata(business_id, 'last_successful_sync_at', new Date().toISOString());
+        }
         return;
       }
 
@@ -233,9 +255,16 @@ export const syncService = {
       const remaining = await db.sync_queue.where('status').anyOf(['pending', 'failed']).count();
       if (remaining > 0) {
         setTimeout(() => this.processQueue(), 500);
+      } else if (business_id) {
+        await this.updateMetadata(business_id, 'last_sync_status', 'synced');
+        await this.updateMetadata(business_id, 'last_successful_sync_at', new Date().toISOString());
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[SyncService] Error processing queue:', error);
+      if (business_id) {
+        await this.updateMetadata(business_id, 'last_sync_status', 'failed');
+        await this.updateMetadata(business_id, 'last_sync_error', error.message || 'Unknown error');
+      }
     } finally {
       this.isProcessing = false;
     }

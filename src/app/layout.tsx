@@ -46,8 +46,8 @@ export const viewport: Viewport = {
 };
 
 import { DBInitializer } from "@/components/db-initializer";
-
-
+import { PWARegistration } from "@/components/pwa-registration";
+import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 
 export default function RootLayout({
   children,
@@ -58,6 +58,8 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased bg-background text-foreground">
         <DBInitializer />
+        <PWARegistration />
+        <PWAInstallPrompt />
 
         {children}
       </body>
