@@ -66,8 +66,7 @@ export function AddProductSheet({
       isOpen={isOpen} 
       onClose={onClose} 
       title="Add New Product"
-      bottomOffset={64}
-      snapPoints={[0.95]}
+      dismissible={false}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 py-4">
         <div className="space-y-4">

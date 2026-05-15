@@ -40,8 +40,13 @@ export function ReversalSheet({
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Reverse Transaction" bottomOffset={64}>
-      <div className="space-y-6 py-4 pb-10">
+    <BottomSheet 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title="Reverse Transaction" 
+      dismissible={false}
+    >
+      <div className="space-y-6 py-4 pb-2">
         <div className="bg-red-500/10 border border-red-500/20 rounded-[24px] p-5 flex gap-4">
           <div className="w-12 h-12 rounded-2xl bg-red-500/20 flex items-center justify-center text-red-500 flex-shrink-0">
             <AlertTriangle size={24} />

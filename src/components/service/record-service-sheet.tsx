@@ -49,8 +49,13 @@ export function RecordServiceSheet({
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Record Service" bottomOffset={64}>
-      <div className="space-y-6 py-4 pb-10">
+    <BottomSheet 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title="Record Service" 
+      dismissible={false}
+    >
+      <div className="space-y-6 py-4 pb-2">
         <div className="space-y-4">
           <div className="relative">
             <Zap size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />

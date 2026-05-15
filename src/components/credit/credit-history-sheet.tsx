@@ -80,9 +80,9 @@ export function CreditHistorySheet({
         isOpen={isOpen}
         onClose={onClose}
         title={`${sourceType === 'sale' ? 'Sales' : 'Service'} Credit`}
-        bottomOffset={64}
+        dismissible={false}
       >
-        <div className="space-y-5 py-4 pb-10">
+        <div className="space-y-5 py-4 pb-2">
           <div className="grid grid-cols-4 gap-2">
             <CreditStat label="Pending" value={money(data?.summary.totalPending || 0)} wide />
             <CreditStat label="Open" value={String(data?.summary.pendingCount || 0)} />
@@ -283,9 +283,14 @@ function CreditPaymentSheet({
   };
 
   return (
-    <BottomSheet isOpen={Boolean(item)} onClose={close} title={isConfirmMode ? 'Confirm Payment' : 'Partial Payment'} bottomOffset={64}>
+    <BottomSheet 
+      isOpen={Boolean(item)} 
+      onClose={close} 
+      title={isConfirmMode ? 'Confirm Payment' : 'Partial Payment'} 
+      dismissible={false}
+    >
       {item && (
-        <div className="space-y-5 py-4 pb-10">
+        <div className="space-y-5 py-4 pb-2">
           <div className="bg-secondary/60 rounded-[24px] p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Outstanding Balance</p>
             <p className="text-2xl font-black">{money(item.balance)}</p>

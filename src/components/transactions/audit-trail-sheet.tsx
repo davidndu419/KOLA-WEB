@@ -25,8 +25,8 @@ export function AuditTrailSheet({
   }, [transaction_id]);
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Transaction Audit Trail" bottomOffset={64}>
-      <div className="space-y-6 py-4 pb-10">
+    <BottomSheet isOpen={isOpen} onClose={onClose} title="Transaction Audit Trail">
+      <div className="space-y-6 py-4 pb-2">
         <div className="relative space-y-8 before:absolute before:left-6 before:top-2 before:bottom-2 before:w-0.5 before:bg-border/50">
           {auditLogs?.map((log, index) => (
             <div key={log.local_id} className="relative flex gap-4 items-start pl-2">

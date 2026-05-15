@@ -196,8 +196,13 @@ export default function SettingsPage() {
       </div>
 
       {/* Sheets */}
-      <BottomSheet isOpen={activeSheet === 'profile'} onClose={() => setActiveSheet(null)} title="Business Profile">
-        <div className="space-y-6 py-6 pb-12">
+      <BottomSheet 
+        isOpen={activeSheet === 'profile'} 
+        onClose={() => setActiveSheet(null)} 
+        title="Business Profile"
+        dismissible={false}
+      >
+        <div className="space-y-6 py-6 pb-2">
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2">Store Name</label>
@@ -222,8 +227,13 @@ export default function SettingsPage() {
         </div>
       </BottomSheet>
 
-      <BottomSheet isOpen={activeSheet === 'notifications'} onClose={() => setActiveSheet(null)} title="Notifications">
-        <div className="space-y-6 py-6 pb-12">
+      <BottomSheet 
+        isOpen={activeSheet === 'notifications'} 
+        onClose={() => setActiveSheet(null)} 
+        title="Notifications"
+        dismissible={false}
+      >
+        <div className="space-y-6 py-6 pb-2">
           <div className="flex items-center justify-between p-4 glass-card rounded-2xl">
             <div>
               <p className="font-bold text-sm">Push Notifications</p>

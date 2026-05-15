@@ -382,10 +382,10 @@ function CreditPaymentSheet({
       isOpen={Boolean(item)}
       onClose={close}
       title={isConfirmMode ? 'Confirm Payment' : 'Partial Payment'}
-      bottomOffset={64}
+      dismissible={false}
     >
       {item && (
-        <div className="space-y-5 py-4 pb-10">
+        <div className="space-y-5 py-4 pb-2">
           <div className="bg-secondary/60 rounded-[24px] p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Outstanding Balance</p>
             <p className="text-2xl font-black">{money(item.balance)}</p>

@@ -85,7 +85,7 @@ export function DateRangePickerSheet({
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Choose Period">
-      <div className="space-y-6 py-4 pb-12">
+      <div className="space-y-6 py-4 pb-2">
         {/* Presets Chips */}
         <div className="flex flex-wrap gap-2 px-1">
           {presets.map((preset) => (

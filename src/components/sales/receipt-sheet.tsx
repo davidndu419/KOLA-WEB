@@ -21,8 +21,8 @@ export function ReceiptSheet({
   if (!transaction) return null;
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Transaction Receipt" bottomOffset={0}>
-      <div className="space-y-8 py-6 pb-12 px-2">
+    <BottomSheet isOpen={isOpen} onClose={onClose} title="Transaction Receipt">
+      <div className="space-y-8 py-6 pb-2 px-2">
         <div className="flex flex-col items-center text-center space-y-2">
           <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-2">
             <CheckCircle2 size={32} />

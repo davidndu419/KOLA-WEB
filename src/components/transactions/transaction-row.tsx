@@ -1,5 +1,6 @@
 'use client';
 
+import React, { memo } from 'react';
 import { ShoppingBag, Receipt, Zap } from 'lucide-react';
 import { Touchable } from '@/components/touchable';
 import { TransactionAmount } from '@/components/typography';
@@ -15,7 +16,7 @@ export function formatTransactionListStamp(date: Date) {
   })}`;
 }
 
-export function TransactionRow({
+function TransactionRowComponent({
   transaction,
   onPress,
 }: {
@@ -72,3 +73,12 @@ export function TransactionRow({
     </Touchable>
   );
 }
+
+export const TransactionRow = memo(TransactionRowComponent, (prev, next) => {
+  return (
+    prev.transaction.local_id === next.transaction.local_id &&
+    prev.transaction.status === next.transaction.status &&
+    prev.transaction.amount === next.transaction.amount &&
+    prev.transaction.updated_at?.getTime() === next.transaction.updated_at?.getTime()
+  );
+});

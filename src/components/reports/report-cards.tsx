@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useMemo, useRef, useState } from 'react';
+import { ReactNode, useMemo, useRef, useState, memo } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -168,7 +168,7 @@ export function ReportsHeroCard({
   );
 }
 
-export function MetricGrid({ snapshot }: { snapshot: ReportsSnapshot }) {
+export const MetricGrid = memo(({ snapshot }: { snapshot: ReportsSnapshot }) => {
   const metrics = [
     { label: 'Sales', value: snapshot.summary.totalSales, icon: ShoppingBag, tone: 'emerald' },
     { label: 'Services', value: snapshot.summary.totalServiceIncome, icon: Zap, tone: 'indigo' },
@@ -193,11 +193,11 @@ export function MetricGrid({ snapshot }: { snapshot: ReportsSnapshot }) {
       })}
     </section>
   );
-}
+});
 
 type MetricTone = 'emerald' | 'indigo' | 'red' | 'amber' | 'blue' | 'slate';
 
-export function CompactMetricCard({
+export const CompactMetricCard = memo(({
   label,
   value,
   icon: Icon,
@@ -207,7 +207,7 @@ export function CompactMetricCard({
   value: number;
   icon: LucideIcon;
   tone: MetricTone;
-}) {
+}) => {
   return (
     <div className="bg-card border border-border/60 shadow-md shadow-black/5 p-3 rounded-[24px] min-h-[92px]">
       <div className="flex items-center gap-2 mb-3">
@@ -229,7 +229,7 @@ export function CompactMetricCard({
       <p className="text-base font-black tabular-nums truncate">{money(value)}</p>
     </div>
   );
-}
+});
 
 export function SmartInsightsPanel({
   children,

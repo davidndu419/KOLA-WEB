@@ -110,9 +110,9 @@ export function TransactionDetailSheet({
 
 
   return (
-    <BottomSheet isOpen={Boolean(transaction)} onClose={onClose} title="Transaction Info" bottomOffset={64}>
+    <BottomSheet isOpen={Boolean(transaction)} onClose={onClose} title="Transaction Info">
       {transaction && (
-        <div className="space-y-5 py-4 pb-10">
+        <div className="space-y-5 py-4 pb-2">
           {transaction.is_reversed && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
               <p className="text-red-500 text-xs font-bold uppercase tracking-widest">Reversed Transaction</p>

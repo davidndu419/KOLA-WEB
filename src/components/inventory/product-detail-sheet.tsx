@@ -50,8 +50,8 @@ export function ProductDetailSheet({
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Product Details" bottomOffset={64}>
-      <div className="space-y-8 py-4 pb-10">
+    <BottomSheet isOpen={isOpen} onClose={onClose} title="Product Details">
+      <div className="space-y-8 py-4 pb-2">
         {/* Product Header */}
         <div className="flex items-start gap-4">
           <div className="w-20 h-20 bg-secondary rounded-[32px] flex items-center justify-center text-muted-foreground border-2 border-border/50">

@@ -50,36 +50,33 @@ export default function DashboardPage() {
   );
 
   const stats = useLiveQuery(async () => {
-    const { startDate, endDate } = resolveReportDateRange(selectedRange, customDate);
-
     // 1. Total Balance calculation (Net of all Cash/Receivables entries)
+    // Optimized: only query relevant accounts
+    const accounts = ['Cash', 'Bank', 'Receivables'];
+    const relevantEntries = await db.ledger_entries
+      .where('debit_account').anyOf(accounts)
+      .or('credit_account').anyOf(accounts)
+      .toArray();
+
     let totalBalance = 0;
-    await db.ledger_entries.each((entry: LedgerEntry) => {
-      const accounts = ['Cash', 'Bank', 'Receivables'];
-      
-      if (accounts.includes(entry.debit_account)) {
-        totalBalance += entry.amount;
-      }
-      
-      if (accounts.includes(entry.credit_account)) {
-        totalBalance -= entry.amount;
-      }
-    });
+    for (const entry of relevantEntries) {
+      if (entry.deleted_at) continue;
+      if (accounts.includes(entry.debit_account)) totalBalance += entry.amount;
+      if (accounts.includes(entry.credit_account)) totalBalance -= entry.amount;
+    }
 
+    // 2. Range Profit calculation from snapshot
+    const rangeProfit = reportsSnapshot?.summary.netProfit || 0;
 
-
-    // 2. Range Profit calculation
-    const pnL = await reportService.getProfitLoss(selectedRange, customDate);
-    
-    // 3. Monthly Profit calculation
+    // 3. Monthly Profit calculation (Lighter query)
     const monthlyPnL = await reportService.getProfitLoss('thisMonth');
 
     return { 
       totalBalance, 
-      rangeProfit: pnL.netProfit, 
+      rangeProfit, 
       monthlyProfit: monthlyPnL.netProfit 
     };
-  }, [selectedRange, customDate]);
+  }, [reportsSnapshot, selectedRange, customDate]);
 
 
   return (

@@ -105,8 +105,13 @@ export function CorrectionSheet({
     : amount;
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title={`Correct ${transaction?.type || 'Transaction'}`} bottomOffset={64}>
-      <div className="space-y-6 py-4 pb-10">
+    <BottomSheet 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title={`Correct ${transaction?.type || 'Transaction'}`} 
+      dismissible={false}
+    >
+      <div className="space-y-6 py-4 pb-2">
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-[24px] p-4 flex gap-3">
           <AlertCircle size={18} className="text-amber-600 flex-shrink-0" />
           <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider leading-relaxed">
