@@ -46,12 +46,12 @@ export function SalesHeroCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={springs.default}
-      className="relative p-6 rounded-[32px] bg-gradient-to-br from-zinc-900 to-zinc-800 text-white shadow-2xl overflow-hidden border border-white/5 mb-6"
+      className="relative p-5 rounded-[28px] bg-gradient-to-br from-zinc-900 to-zinc-800 text-white shadow-xl overflow-hidden border border-white/5 mb-4"
     >
       <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl -mr-20 -mt-20" />
       
       <div className="relative z-10">
-        <div className="flex justify-between items-start mb-6">
+        <div className="flex justify-between items-start gap-3 mb-5">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Total Sales</p>
             <div className="flex items-center gap-2">
@@ -76,8 +76,8 @@ export function SalesHeroCard({
           </Touchable>
         </div>
 
-        <div className="mb-8">
-          <p className="text-4xl font-bold tracking-tight tabular-nums">
+        <div className="mb-5">
+          <p className="text-3xl font-bold tracking-tight tabular-nums">
             ₦{totalSales.toLocaleString()}
           </p>
           <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">
@@ -85,14 +85,14 @@ export function SalesHeroCard({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white/5 rounded-2xl p-3 border border-white/5">
             <p className="text-[10px] font-bold uppercase text-white/40 mb-1">Average Sale</p>
-            <p className="text-xl font-bold">
+            <p className="text-lg font-bold">
               ₦{transactionCount > 0 ? Math.round(totalSales / transactionCount).toLocaleString() : 0}
             </p>
           </div>
-          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+          <div className="bg-white/5 rounded-2xl p-3 border border-white/5">
             <p className="text-[10px] font-bold uppercase text-white/40 mb-1">Cash Mix</p>
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-bold text-emerald-400">{cashPercentage}% Cash flow</span>

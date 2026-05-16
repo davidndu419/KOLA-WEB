@@ -108,7 +108,7 @@ export const inventoryService = {
       });
 
       // The expense transaction carries the inventory accounting impact:
-      // Debit Inventory, Credit Cash. Cash solvency is checked there.
+      // Debit Inventory, Credit Cash.
       await financeService.recordExpense({
         amount: quantity * addedUnitCost,
         category_id: 'restock-category',

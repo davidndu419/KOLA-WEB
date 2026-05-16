@@ -48,6 +48,7 @@ export const financeService = {
         ...createBaseEntity(business_id),
         transaction_id: transaction.local_id,
         category_id: data.category_id,
+        category_name: data.category_name,
         amount: data.amount,
         payment_method: data.payment_method,
         recipient: data.recipient,

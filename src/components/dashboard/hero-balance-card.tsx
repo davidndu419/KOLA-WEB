@@ -12,7 +12,6 @@ import { DateRange } from './date-range-picker-sheet';
 interface HeroBalanceCardProps {
   balance: number;
   todayProfit: number;
-  monthlyGoal?: number;
   netProfit?: number;
   isSynced?: boolean;
   selectedRange: DateRange;
@@ -23,7 +22,6 @@ interface HeroBalanceCardProps {
 export function HeroBalanceCard({ 
   balance, 
   todayProfit,
-  monthlyGoal = 0,
   netProfit = 0,
   isSynced = true,
   selectedRange,
@@ -51,14 +49,14 @@ export function HeroBalanceCard({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={springs.default}
-      className="relative mx-4 mt-2 p-6 rounded-[32px] bg-gradient-to-br from-emerald-600 to-emerald-800 text-white shadow-2xl shadow-emerald-900/20 overflow-hidden"
+      className="relative mx-4 mt-2 p-5 rounded-[28px] bg-gradient-to-br from-emerald-600 to-emerald-800 text-white shadow-xl shadow-emerald-900/20 overflow-hidden"
     >
       {/* Background patterns */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full blur-2xl -ml-10 -mb-10" />
 
       <div className="relative z-10">
-        <div className="flex justify-between items-start mb-2">
+        <div className="flex justify-between items-start gap-3 mb-2">
           <div className="flex items-center gap-2">
             <p className="text-white/80 text-xs font-bold uppercase tracking-widest">
                {selectedRange === 'allTime' ? 'Total Business Balance' : `Balance (${rangeLabels[selectedRange]})`}
@@ -114,32 +112,15 @@ export function HeroBalanceCard({
           )}
         </AnimatePresence>
 
-        <div className="flex items-center gap-2 mt-4">
-          <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/30 rounded-lg">
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/30 rounded-lg">
             <TrendingUp size={12} />
-            <span className="text-xs font-bold">+₦{todayProfit.toLocaleString()} today</span>
+            <span className="text-xs font-bold">+₦{todayProfit.toLocaleString()} {rangeLabels[selectedRange]}</span>
           </div>
-          <span className="text-white/60 text-[10px] font-medium italic">
-             Data-driven insights active
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 mt-6">
-          <Touchable className="bg-white/10 hover:bg-white/15 backdrop-blur-md rounded-2xl p-3 text-left transition-colors">
-            <p className="text-white/60 text-[9px] uppercase font-bold tracking-widest mb-1">Monthly Goal</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold">{monthlyGoal}%</span>
-              <span className="text-[10px] text-emerald-300 font-bold">{monthlyGoal >= 100 ? 'Done' : 'Progress'}</span>
-            </div>
-          </Touchable>
-          
-          <Touchable className="bg-white/10 hover:bg-white/15 backdrop-blur-md rounded-2xl p-3 text-left transition-colors">
-            <p className="text-white/60 text-[9px] uppercase font-bold tracking-widest mb-1">Net Profit</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold">₦{netProfit >= 1000000 ? `${(netProfit / 1000000).toFixed(1)}M` : netProfit.toLocaleString()}</span>
-              <span className="text-[10px] text-white/60 font-medium">Month</span>
-            </div>
-          </Touchable>
+          <div className="flex items-center gap-1 px-2 py-1 bg-white/10 rounded-lg">
+            <span className="text-[10px] text-white/60 font-bold uppercase">Net</span>
+            <span className="text-xs font-bold">₦{netProfit >= 1000000 ? `${(netProfit / 1000000).toFixed(1)}M` : netProfit.toLocaleString()}</span>
+          </div>
         </div>
       </div>
     </motion.div>

@@ -125,6 +125,13 @@ function TransactionRowComponent({
   };
 
   const Icon = tx.status === 'reversed' ? RotateCcw : config.icon;
+  const title = tx.type === 'sale'
+    ? (tx.note || 'Walk-in Sale')
+    : isRestock
+      ? 'Restock'
+      : tx.type === 'expense'
+        ? (tx.category_name || config.label)
+        : config.label;
 
   return (
     <Touchable onPress={onPress} className="w-full text-left group">
@@ -142,7 +149,7 @@ function TransactionRowComponent({
           <div className="min-w-0 space-y-0.5">
             <div className="flex items-center gap-2 min-w-0">
               <p className="font-black text-[15px] tracking-tight truncate">
-                {tx.type === 'sale' ? (tx.note || 'Walk-in Sale') : isRestock ? 'Restock' : config.label}
+                {title}
               </p>
               {tx.sync_status === 'synced' && (
                 <CheckCircle2 size={12} className="text-emerald-500 flex-shrink-0" />
@@ -197,6 +204,7 @@ export const TransactionRow = memo(TransactionRowComponent, (prev, next) => {
     prev.transaction.local_id === next.transaction.local_id &&
     prev.transaction.status === next.transaction.status &&
     prev.transaction.amount === next.transaction.amount &&
+    prev.transaction.category_name === next.transaction.category_name &&
     prev.transaction.updated_at?.getTime() === next.transaction.updated_at?.getTime() &&
     prev.transaction.sync_status === next.transaction.sync_status
   );

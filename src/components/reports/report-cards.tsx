@@ -93,16 +93,16 @@ export function ReportsHeroCard({
       initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 280, damping: 28 }}
-      className="relative p-6 rounded-[32px] bg-indigo-950 text-white shadow-2xl overflow-hidden mb-6"
+      className="relative p-5 rounded-[28px] bg-indigo-950 text-white shadow-xl overflow-hidden mb-4"
     >
-      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-400/10 rounded-full -mr-10 -mt-10" />
-      <div className="absolute bottom-0 left-0 w-28 h-28 bg-blue-400/10 rounded-full -ml-12 -mb-12" />
+      <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-400/10 rounded-full -mr-8 -mt-8" />
+      <div className="absolute bottom-0 left-0 w-20 h-20 bg-blue-400/10 rounded-full -ml-10 -mb-10" />
 
       <div className="relative z-10">
-        <div className="flex justify-between items-start mb-6">
+        <div className="flex justify-between items-start gap-3 mb-4">
           <div>
             <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest mb-1">Business Analytics</p>
-            <h2 className="text-2xl font-bold tracking-tight">Growth Report</h2>
+            <h2 className="text-xl font-bold tracking-tight">Growth Report</h2>
           </div>
           <Touchable
             onPress={onOpenDatePicker}
@@ -116,7 +116,7 @@ export function ReportsHeroCard({
           </Touchable>
         </div>
 
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Revenue</p>
             <motion.p
@@ -143,7 +143,7 @@ export function ReportsHeroCard({
           </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-3">
+        <div className="mt-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white/70">
             {growthRate >= 0 ? <TrendingUp size={14} className="text-emerald-300" /> : <TrendingDown size={14} className="text-red-300" />}
             {growthRate === 0 ? 'No movement yet' : `${Math.abs(growthRate)}% ${growthRate > 0 ? 'above' : 'below'} previous period`}
@@ -151,7 +151,7 @@ export function ReportsHeroCard({
           {onToggleTrend && (
             <Touchable
               onPress={onToggleTrend}
-              className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15 flex items-center gap-2 text-[10px] font-black text-emerald-200"
+              className="px-3 py-2 rounded-xl bg-white/10 border border-white/15 flex items-center gap-2 text-[10px] font-black text-emerald-200"
             >
               View trend
               <motion.span

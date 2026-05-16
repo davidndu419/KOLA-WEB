@@ -16,7 +16,8 @@ import {
   Moon,
   Sun,
   Info,
-  Zap
+  Zap,
+  Receipt
 } from 'lucide-react';
 import { Touchable } from '@/components/touchable';
 import { db } from '@/db/dexie';
@@ -165,6 +166,12 @@ export default function SettingsPage() {
             label="Service Categories" 
             sub="Manage professional services" 
             onPress={() => router.push('/settings/service-categories')}
+          />
+          <SettingItem
+            icon={<Receipt size={18} />}
+            label="Expense Categories"
+            sub="Manage spending categories"
+            onPress={() => router.push('/settings/expense-categories')}
           />
           <SettingItem 
             icon={<Bell size={18} />} 

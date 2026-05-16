@@ -76,7 +76,6 @@ export default function DashboardPage() {
           balance={stats.totalBalance}
           todayProfit={stats.rangeProfit}
           netProfit={stats.monthlyProfit}
-          monthlyGoal={0}
           selectedRange={selectedRange}
           onOpenDatePicker={() => setIsDatePickerOpen(true)}
           customDate={customDate}

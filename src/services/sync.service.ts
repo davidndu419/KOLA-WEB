@@ -12,6 +12,7 @@ const ENTITY_PRIORITY: Record<string, number> = {
   'businesses': 0,
   'categories': 1,
   'service_categories': 1,
+  'expense_categories': 1,
   'customers': 2,
   'suppliers': 3,
   'products': 4,
@@ -42,6 +43,7 @@ const syncTables = {
   suppliers: db.suppliers,
   categories: db.categories,
   service_categories: db.service_categories,
+  expense_categories: db.expense_categories,
   audit_logs: db.audit_logs,
   receipts: db.receipts,
 } as const;
@@ -142,6 +144,7 @@ const serializeExpenseForSync = (payload: any) => ({
   ...serializeBase(payload),
   transaction_id: payload.transaction_id,
   category_id: payload.category_id,
+  category_name: payload.category_name,
   amount: payload.amount,
   payment_method: payload.payment_method,
   recipient: payload.recipient,
@@ -200,6 +203,14 @@ const serializeServiceCategoryForSync = (payload: any) => ({
   status: payload.status,
 });
 
+const serializeExpenseCategoryForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  name: payload.name,
+  description: payload.description,
+  default_amount: payload.default_amount,
+  status: payload.status,
+});
+
 /**
  * Main Dispatcher: Strips all local-only or legacy fields.
  */
@@ -215,6 +226,7 @@ const serializeForSync = (entity: string, payload: any) => {
     case 'inventory_movements': return serializeInventoryMovementForSync(payload);
     case 'products': return serializeProductForSync(payload);
     case 'service_categories': return serializeServiceCategoryForSync(payload);
+    case 'expense_categories': return serializeExpenseCategoryForSync(payload);
     default:
       return stripDexieId(payload);
   }
@@ -393,7 +405,7 @@ export const syncService = {
         throw new Error('Invalid sync queue item');
       }
 
-      const localTable = syncTables[entity as keyof typeof syncTables];
+      const localTable = syncTables[entity as keyof typeof syncTables] as any;
       if (!localTable) {
         throw new Error(`Unsupported sync entity: ${entity}`);
       }
@@ -474,7 +486,7 @@ export const syncService = {
 
       if (data && data.length > 0) {
         for (const remoteItem of data) {
-          const localTable = syncTables[table as keyof typeof syncTables];
+          const localTable = syncTables[table as keyof typeof syncTables] as any;
           if (!localTable) continue;
           const { id: _remoteId, ...remoteWithoutId } = remoteItem as any;
 

@@ -62,6 +62,13 @@ export interface ServiceCategory extends BaseEntity {
   status: 'active' | 'inactive';
 }
 
+export interface ExpenseCategory extends BaseEntity {
+  name: string;
+  description?: string;
+  default_amount?: number;
+  status: 'active' | 'inactive';
+}
+
 export interface InventoryMovement extends BaseEntity {
   product_id: string;
   type: 'stock-in' | 'stock-out' | 'adjustment' | 'damage' | 'return';
@@ -110,6 +117,7 @@ export interface Service extends BaseEntity {
 export interface Expense extends BaseEntity {
   transaction_id: string;
   category_id: string;
+  category_name?: string;
   amount: number;
   payment_method: 'cash' | 'transfer';
   recipient?: string;
@@ -225,5 +233,4 @@ export interface SyncQueue {
   error?: string;
   created_at: Date;
 }
-
 

@@ -60,7 +60,7 @@ export function HeroSummaryCard({
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       className={cn(
-        "relative overflow-hidden rounded-[28px] p-6 text-white shadow-2xl transition-all",
+        "relative overflow-hidden rounded-[24px] p-5 text-white shadow-xl transition-all",
         variantStyles[variant],
         className
       )}
@@ -77,7 +77,7 @@ export function HeroSummaryCard({
         />
       )}
 
-      <div className="relative z-10 space-y-6">
+      <div className="relative z-10 space-y-4">
         <div className="flex justify-between items-start">
           <div className="space-y-1">
             <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">{title}</p>
@@ -116,12 +116,12 @@ export function HeroSummaryCard({
         </div>
 
         <div>
-          <p className="text-3xl font-black tracking-tighter">
+          <p className="text-2xl font-black tracking-tighter">
             {typeof mainValue === 'number' ? money(mainValue) : mainValue}
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-y-4 gap-x-6 pt-5 border-t border-white/10">
+        <div className="grid grid-cols-2 gap-y-3 gap-x-4 pt-3 border-t border-white/10">
           {stats.map((stat, index) => {
             const isMoney = typeof stat.value === 'number' && 
               (stat.label.toLowerCase().includes('total') || 
