@@ -33,10 +33,20 @@ export default function PWACachePage() {
     loading?: boolean;
   }>>({
     '/dashboard': { exists: false },
+    '/inventory': { exists: false },
+    '/inventory/add': { exists: false },
+    '/sales': { exists: false },
+    '/sales/credit': { exists: false },
+    '/service': { exists: false },
+    '/service/credit': { exists: false },
+    '/expenses': { exists: false },
+    '/reports': { exists: false },
+    '/reports/transactions': { exists: false },
     '/settings': { exists: false },
     '/settings/sync': { exists: false },
     '/settings/pwa-cache': { exists: false },
-    '/reports/transactions': { exists: false },
+    '/settings/service-categories': { exists: false },
+    '/settings/expense-categories': { exists: false },
     '/offline': { exists: false },
     '/manifest.json': { exists: false }
   });

@@ -28,13 +28,19 @@ const appShellRoutes = [
   "/",
   "/dashboard",
   "/inventory",
+  "/inventory/add",
   "/sales",
+  "/sales/credit",
   "/service",
+  "/service/credit",
   "/expenses",
   "/reports",
   "/reports/transactions",
   "/settings",
   "/settings/sync",
+  "/settings/pwa-cache",
+  "/settings/service-categories",
+  "/settings/expense-categories",
   "/auth/login",
   "/auth/register",
   "/auth/business-setup",
@@ -52,7 +58,7 @@ registerRoute(
     cacheName: "kola-app-shell",
     plugins: [
       new ExpirationPlugin({
-        maxEntries: 32,
+        maxEntries: 48,
         maxAgeSeconds: 30 * 24 * 60 * 60,
       }),
     ],
@@ -66,7 +72,7 @@ registerRoute(
     networkTimeoutSeconds: 3,
     plugins: [
       new ExpirationPlugin({
-        maxEntries: 32,
+        maxEntries: 48,
         maxAgeSeconds: 30 * 24 * 60 * 60,
       }),
     ],

@@ -7,14 +7,19 @@ const appShellRoutes = [
   '/',
   '/dashboard',
   '/inventory',
+  '/inventory/add',
   '/sales',
+  '/sales/credit',
   '/service',
+  '/service/credit',
   '/expenses',
   '/reports',
   '/reports/transactions',
   '/settings',
   '/settings/sync',
   '/settings/pwa-cache',
+  '/settings/service-categories',
+  '/settings/expense-categories',
   '/auth/login',
   '/auth/register',
   '/auth/business-setup',
@@ -57,31 +62,41 @@ const withPWA = withPWAInit({
     {
       urlPattern: ({ request, url }: { request: Request; url: URL }) => {
         const pathname = url.pathname;
+        const cacheFirstRoutes = [
+          '/',
+          '/dashboard',
+          '/inventory',
+          '/inventory/add',
+          '/sales',
+          '/sales/credit',
+          '/service',
+          '/service/credit',
+          '/expenses',
+          '/reports',
+          '/reports/transactions',
+          '/settings',
+          '/settings/sync',
+          '/settings/pwa-cache',
+          '/settings/service-categories',
+          '/settings/expense-categories',
+          '/auth/login',
+          '/auth/register',
+          '/auth/business-setup',
+          '/auth/forgot-password',
+          '/offline',
+        ];
 
         return (
           request.mode === 'navigate' &&
           url.origin === self.location.origin &&
-          (pathname === '/' ||
-            pathname === '/dashboard' ||
-            pathname === '/inventory' ||
-            pathname === '/sales' ||
-            pathname === '/service' ||
-            pathname === '/expenses' ||
-            pathname === '/reports' ||
-            pathname === '/reports/transactions' ||
-            pathname === '/settings' ||
-            pathname === '/auth/login' ||
-            pathname === '/auth/register' ||
-            pathname === '/auth/business-setup' ||
-            pathname === '/auth/forgot-password' ||
-            pathname === '/offline')
+          cacheFirstRoutes.includes(pathname)
         );
       },
       handler: 'CacheFirst',
       options: {
         cacheName: 'kola-app-shell',
         expiration: {
-          maxEntries: 32,
+          maxEntries: 48,
           maxAgeSeconds: 30 * 24 * 60 * 60,
         },
         cacheableResponse: {
@@ -100,7 +115,7 @@ const withPWA = withPWAInit({
         cacheName: 'kola-app-shell',
         networkTimeoutSeconds: 3,
         expiration: {
-          maxEntries: 32,
+          maxEntries: 48,
           maxAgeSeconds: 30 * 24 * 60 * 60,
         },
         cacheableResponse: {
