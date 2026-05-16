@@ -80,6 +80,7 @@ export const financeService = {
       name: string;
       category_id?: string;
       category_name?: string;
+      customer_name?: string;
       amount: number;
       payment_method: 'cash' | 'transfer' | 'credit';
       customer_id?: string;
@@ -99,6 +100,9 @@ export const financeService = {
       reference_id: '', // Will be set to service local_id
       category_id: data.category_id,
       category_name: data.category_name,
+      service_name: data.name,
+      display_title: data.category_name || data.name,
+      customer_name: data.customer_name,
       note: data.note,
     };
 

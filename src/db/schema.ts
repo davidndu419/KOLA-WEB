@@ -107,6 +107,7 @@ export interface Service extends BaseEntity {
   transaction_id: string;
   name: string;
   category_id?: string;
+  category_name?: string;
   customer_id?: string;
   amount: number;
   payment_method: 'cash' | 'transfer' | 'credit';
@@ -135,6 +136,9 @@ export interface Transaction extends BaseEntity {
   customer_name?: string;
   category_id?: string;
   category_name?: string;
+  display_title?: string;
+  item_names?: string[];
+  service_name?: string;
   note?: string;
   is_reversed?: boolean;
   is_edited?: boolean;
@@ -233,4 +237,3 @@ export interface SyncQueue {
   error?: string;
   created_at: Date;
 }
-

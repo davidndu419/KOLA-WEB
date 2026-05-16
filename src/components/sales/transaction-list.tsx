@@ -1,19 +1,19 @@
 // src/components/sales/transaction-list.tsx
 'use client';
 
-import { useState } from 'react';
-import { ShoppingBag, Receipt, Zap, History, Filter } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ShoppingBag, Receipt, Zap, History } from 'lucide-react';
 import { db } from '@/db/dexie';
 import { TransactionDetailSheet } from '@/components/transactions/transaction-detail-sheet';
 import { TransactionRow } from '@/components/transactions/transaction-row';
 import type { Transaction } from '@/db/schema';
-import { cn } from '@/lib/utils';
 
 import { ReversalSheet } from '@/components/transactions/reversal-sheet';
 import { CorrectionSheet } from '@/components/transactions/correction-sheet';
 import { AuditTrailSheet } from '@/components/transactions/audit-trail-sheet';
 import { useAuthStore } from '@/stores/authStore';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
+import { enrichTransactionsForDisplay, filterTransactionsForSearch, type DisplayTransaction } from '@/services/transactionDisplay';
 
 interface TransactionListProps {
   startDate?: Date;
@@ -21,6 +21,8 @@ interface TransactionListProps {
   type?: Transaction['type'] | 'all';
   limit?: number;
   transactions?: Transaction[];
+  searchQuery?: string;
+  onCountChange?: (count: number) => void;
 }
 
 function getEmptyState(type: TransactionListProps['type']) {
@@ -50,39 +52,53 @@ function getEmptyState(type: TransactionListProps['type']) {
   return (states as any)[type || 'all'] || states.all;
 }
 
-export function TransactionList({ startDate, endDate, type = 'all', limit, transactions }: TransactionListProps) {
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+export function TransactionList({ startDate, endDate, type = 'all', limit, transactions, searchQuery, onCountChange }: TransactionListProps) {
+  const [selectedTransaction, setSelectedTransaction] = useState<DisplayTransaction | null>(null);
   const [isReversalOpen, setIsReversalOpen] = useState(false);
   const [isCorrectionOpen, setIsCorrectionOpen] = useState(false);
   const [isAuditTrailOpen, setIsAuditTrailOpen] = useState(false);
   const businessId = useAuthStore((state) => state.activeBusinessId);
 
   const transactionsQuery = useStableLiveQuery(async () => {
-    if (transactions) return transactions;
-    if (!businessId) return undefined;
+    if (!businessId && !transactions) return undefined;
 
     const applyTypeFilter = (items: Transaction[]) => (
       type === 'all' ? items : items.filter((tx) => tx.type === type)
     );
 
-    let query: any;
-    
-    if (startDate && endDate) {
-      query = db.transactions
-        .where('created_at')
-        .between(startDate, endDate)
-        .reverse();
+    let source: Transaction[];
+    if (transactions) {
+      source = transactions;
     } else {
-      query = db.transactions.orderBy('created_at').reverse();
+      let query: any;
+
+      if (startDate && endDate) {
+        query = db.transactions
+          .where('created_at')
+          .between(startDate, endDate)
+          .reverse();
+      } else {
+        query = db.transactions.orderBy('created_at').reverse();
+      }
+
+      source = await query.toArray();
     }
 
-    const items = await query.toArray();
-    const filtered = applyTypeFilter(items.filter((tx: Transaction) => tx.business_id === businessId && !tx.deleted_at));
+    const filtered = applyTypeFilter(source.filter((tx: Transaction) => (!businessId || tx.business_id === businessId) && !tx.deleted_at));
+    const enriched = await enrichTransactionsForDisplay(filtered);
+    const searched = filterTransactionsForSearch(enriched, searchQuery);
     
-    return limit ? filtered.slice(0, limit) : filtered;
-  }, [businessId, startDate, endDate, type, limit, transactions]);
+    return limit ? searched.slice(0, limit) : searched;
+  }, [businessId, startDate, endDate, type, limit, transactions, searchQuery]);
 
-  const displayTransactions = transactions || transactionsQuery;
+  const displayTransactions = transactionsQuery;
+  const isSearching = Boolean(searchQuery?.trim());
+
+  useEffect(() => {
+    if (displayTransactions) {
+      onCountChange?.(displayTransactions.length);
+    }
+  }, [displayTransactions, onCountChange]);
 
   if (!displayTransactions) {
     return (
@@ -102,7 +118,11 @@ export function TransactionList({ startDate, endDate, type = 'all', limit, trans
   }
 
   if (displayTransactions.length === 0) {
-    const empty = getEmptyState(type);
+    const empty = isSearching ? {
+      icon: History,
+      title: 'No results found',
+      message: 'Try another product, amount, customer, category, or payment method.'
+    } : getEmptyState(type);
     const EmptyIcon = empty.icon;
     
     return (

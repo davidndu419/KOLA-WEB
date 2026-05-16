@@ -15,6 +15,7 @@ export const salesService = {
       payment_method: 'cash' | 'transfer' | 'credit';
       items: { product_id: string; quantity: number; unit_price: number; cost: number }[];
       customer_id?: string;
+      customer_name?: string;
       note?: string;
     },
     business_id: string
@@ -30,6 +31,7 @@ export const salesService = {
       payment_method: data.payment_method,
       status: 'completed',
       reference_id: '', // Will be updated with sale.local_id
+      customer_name: data.customer_name,
       note: data.note,
     };
 
@@ -46,6 +48,21 @@ export const salesService = {
       db.inventory_movements
     ], async () => {
       await validateTransaction({ type: 'sale' }, data.items);
+
+      const productIds = Array.from(new Set(data.items.map((item) => item.product_id)));
+      const products = productIds.length > 0
+        ? await db.products.where('local_id').anyOf(productIds).toArray()
+        : [];
+      const productMap = new Map(products.map((product) => [product.local_id, product]));
+      const itemNames = data.items.map((item) => productMap.get(item.product_id)?.name || 'Archived product');
+      const displayTitle = itemNames.length === 1
+        ? itemNames[0]
+        : itemNames.length > 1
+          ? `${itemNames[0]} + ${itemNames.length - 1} more`
+          : 'Product sale';
+
+      transaction.display_title = displayTitle;
+      transaction.item_names = itemNames;
 
       // Add Transaction
       const transactionDbId = await db.transactions.add(transaction);

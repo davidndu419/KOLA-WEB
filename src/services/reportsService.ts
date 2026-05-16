@@ -15,6 +15,7 @@ import {
   roundCurrency,
   transactionMatchesFilters,
 } from './reportSelectors';
+import { getTransactionCustomerLabel, getTransactionTitle, type DisplayTransaction } from './transactionDisplay';
 
 export interface TransactionHistoryItem {
   transaction: Transaction;
@@ -84,14 +85,6 @@ function applyFilters(transactions: Transaction[], filters?: ReportFilters) {
   return transactions.filter((transaction) => transactionMatchesFilters(transaction, filters));
 }
 
-function formatTransactionTitle(transaction: Transaction) {
-  if (transaction.type === 'sale') return 'Product sale';
-  if (transaction.type === 'service') return transaction.note || 'Service income';
-  if (transaction.source_type === 'restock') return 'Restock';
-  return transaction.category_name || 'Expense';
-}
-
-
 function buildHistory(
   transactions: Transaction[],
   products: Product[],
@@ -122,20 +115,26 @@ function buildHistory(
     .map((transaction) => {
       const entries = ledgerMap.get(transaction.local_id) || [];
       const joinedTransaction = transaction as Transaction & { items: any[] };
+      const items = (joinedTransaction.items || []).map((item) => ({
+        ...item,
+        name: productMap.get(item.product_id)?.name || 'Archived product',
+      }));
+      const displayTransaction: DisplayTransaction = {
+        ...transaction,
+        items,
+        item_names: items.map((item) => item.name),
+      };
       return {
         transaction,
-        title: formatTransactionTitle(transaction),
-        subtitle: [transaction.customer_name, transaction.payment_method, transaction.status].filter(Boolean).join(' | '),
+        title: getTransactionTitle(displayTransaction),
+        subtitle: [getTransactionCustomerLabel(displayTransaction), transaction.payment_method, transaction.status].filter(Boolean).join(' | '),
         ledgerImpact: {
           debits: roundCurrency(entries.reduce((total, entry) => total + (entry.debit_account ? entry.amount : 0), 0)),
           credits: roundCurrency(entries.reduce((total, entry) => total + (entry.credit_account ? entry.amount : 0), 0)),
           entries,
         },
         auditTrail: auditMap.get(transaction.local_id) || [],
-        items: (joinedTransaction.items || []).map((item) => ({
-          ...item,
-          name: productMap.get(item.product_id)?.name || 'Archived product',
-        })),
+        items,
       };
     });
 }

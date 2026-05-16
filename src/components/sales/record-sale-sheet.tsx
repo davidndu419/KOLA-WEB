@@ -280,7 +280,8 @@ export function RecordSaleSheet({
           cost: item.cost
         })),
         customer_id: payment_method === 'credit' ? 'walk-in-customer' : undefined,
-        note: customerName ? `Customer: ${customerName}` : undefined
+        customer_name: customerName || undefined,
+        note: undefined
       }, business.id);
 
       // Attach items for receipt

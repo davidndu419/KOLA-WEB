@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowLeft, Calendar, Download, Receipt, FileText, Printer } from 'lucide-react';
+import { ArrowLeft, Receipt, FileText, Printer } from 'lucide-react';
 import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
 import { TransactionList } from '@/components/sales/transaction-list';
 import { HeroSummaryCard } from '@/components/dashboard/hero-summary-card';
@@ -11,12 +11,16 @@ import { exportService } from '@/services/exportService';
 import { reportsService } from '@/services/reportsService';
 import { useAuthStore } from '@/stores/authStore';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { TransactionSearchBar } from '@/components/transactions/transaction-search-bar';
 
 export default function ReportTransactionsPage() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange>('last30days');
   const [customDate, setCustomDate] = useState<Date>(new Date());
   const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebouncedValue(searchQuery);
   const businessId = useAuthStore((state) => state.activeBusinessId);
   const business = useAuthStore((state) => state.business);
 
@@ -85,12 +89,19 @@ export default function ReportTransactionsPage() {
         <div className="h-40 rounded-[32px] bg-secondary animate-pulse" />
       )}
 
+      <TransactionSearchBar
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search transactions, items, categories..."
+      />
+
       {!reportsData ? (
         <div className="p-8 text-center animate-pulse text-muted-foreground font-bold">Loading transactions...</div>
       ) : (
         <TransactionList 
           startDate={reportsData.range.startDate} 
           endDate={reportsData.range.endDate} 
+          searchQuery={debouncedSearchQuery}
         />
       )}
 

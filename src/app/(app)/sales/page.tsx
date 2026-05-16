@@ -13,6 +13,8 @@ import { resolveReportDateRange } from '@/services/reportSelectors';
 import { CreditButton } from '@/components/credit/credit-button';
 import { useAuthStore } from '@/stores/authStore';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { TransactionSearchBar } from '@/components/transactions/transaction-search-bar';
 
 export default function SalesPage() {
   const router = useRouter();
@@ -20,6 +22,9 @@ export default function SalesPage() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange>('today');
   const [customDate, setCustomDate] = useState<Date>(new Date());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [historyCount, setHistoryCount] = useState<number | null>(null);
+  const debouncedSearchQuery = useDebouncedValue(searchQuery);
   const businessId = useAuthStore((state) => state.activeBusinessId);
   
   const stats = useStableLiveQuery(async () => {
@@ -88,11 +93,17 @@ export default function SalesPage() {
         <div className="h-40 rounded-[32px] bg-secondary animate-pulse" />
       )}
 
+      <TransactionSearchBar
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search sales, products, amounts..."
+      />
+
       <div className="flex items-center justify-between px-2 mb-4">
-        <h3 className="text-lg font-bold tracking-tight">
-          {selectedRange === 'today' ? 'Today\'s History' : 
-           selectedRange === 'custom' ? `History (${customDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : 'History'}
-        </h3>
+        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">History</h3>
+        <span className="text-[10px] font-black text-muted-foreground/50 bg-secondary px-2 py-1 rounded-md">
+          {historyCount ?? stats?.transactionCount ?? 0} TOTAL
+        </span>
       </div>
 
       {stats ? (
@@ -100,6 +111,8 @@ export default function SalesPage() {
           startDate={stats.startDate}
           endDate={stats.endDate}
           type="sale"
+          searchQuery={debouncedSearchQuery}
+          onCountChange={setHistoryCount}
         />
       ) : (
         <div className="p-8 text-center animate-pulse text-muted-foreground font-bold">Loading sales...</div>

@@ -72,6 +72,7 @@ export function RecordServiceSheet({
         name: serviceName,
         category_id: selectedCategoryId || undefined,
         category_name: selectedCategoryName || undefined,
+        customer_name: customerName || undefined,
         amount: amount,
         payment_method: payment_method,
         customer_id: payment_method === 'credit' ? 'walk-in-customer' : undefined,
