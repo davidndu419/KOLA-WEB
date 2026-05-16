@@ -156,7 +156,7 @@ export function RecordSaleSheet({
         quantity: 1, 
         price: product.selling_price, 
         original_price: product.selling_price,
-        cost: product.buying_price,
+        cost: product.wac_price ?? product.buying_price ?? 0,
         stock: product.stock,
         unit_type: product.unit_type
       }];

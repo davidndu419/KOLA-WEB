@@ -37,7 +37,9 @@ export async function processAccounting(
     for (const item of items) {
       const product = await db.products.where('local_id').equals(item.product_id).first();
       if (product) {
-        const costValue = (item.cost || product.buying_price) * item.quantity;
+        // WAC Foundation: Use wac_price if available, otherwise fallback to item.cost or latest buying_price
+        const costBasis = product.wac_price ?? item.cost ?? product.buying_price ?? 0;
+        const costValue = costBasis * item.quantity;
         
         entries.push({
           ...base,

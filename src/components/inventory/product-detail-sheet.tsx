@@ -91,7 +91,8 @@ export function ProductDetailSheet({
   
   // Use the reactive product if available, fallback to initial
   const displayProduct = product || initialProduct;
-  const totalValue = displayProduct.stock * displayProduct.buying_price;
+  const currentWac = displayProduct.wac_price ?? displayProduct.buying_price ?? 0;
+  const totalValue = displayProduct.stock * currentWac;
 
   const handleArchive = async () => {
     if (confirm(`Are you sure you want to archive ${displayProduct.name}?`)) {
@@ -149,14 +150,20 @@ export function ProductDetailSheet({
             {activeTab === 'info' ? (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {/* Stats Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-secondary/40 p-4 rounded-[28px] border border-border/50">
-                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Selling Price</p>
-                    <p className="text-xl font-black tracking-tighter">₦{displayProduct.selling_price.toLocaleString()}</p>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-secondary/40 p-4 rounded-[28px] border border-border/50">
+                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Selling Price</p>
+                      <p className="text-xl font-black tracking-tighter">₦{displayProduct.selling_price.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-secondary/40 p-4 rounded-[28px] border border-border/50">
+                      <p className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">WAC Cost Price</p>
+                      <p className="text-xl font-black tracking-tighter text-primary">₦{currentWac.toLocaleString()}</p>
+                    </div>
                   </div>
-                  <div className="bg-secondary/40 p-4 rounded-[28px] border border-border/50">
-                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Cost Price</p>
-                    <p className="text-xl font-black tracking-tighter text-muted-foreground/60">₦{displayProduct.buying_price.toLocaleString()}</p>
+                  <div className="bg-secondary/20 p-3 px-5 rounded-2xl border border-dashed border-border/60 flex justify-between items-center">
+                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Latest Purchase Cost</p>
+                    <p className="text-sm font-black tracking-tight text-muted-foreground">₦{displayProduct.buying_price.toLocaleString()}</p>
                   </div>
                 </div>
 

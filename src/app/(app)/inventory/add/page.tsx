@@ -69,7 +69,7 @@ export default function AddProductPage() {
             name: product.name,
             category_id: product.category_id,
             unit_type: product.unit_type,
-            buying_price: product.buying_price,
+            buying_price: product.wac_price ?? product.buying_price,
             selling_price: product.selling_price,
             stock: product.stock,
             min_stock: product.min_stock,
@@ -192,7 +192,10 @@ export default function AddProductPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Cost Price</label>
+                <div className="flex justify-between items-center ml-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cost Price</label>
+                  <span className="text-[8px] font-bold text-primary uppercase tracking-tighter bg-primary/10 px-1 rounded">WAC Basis</span>
+                </div>
                 <div className="relative group">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-muted-foreground group-focus-within:text-primary">₦</span>
                   <input 

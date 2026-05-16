@@ -45,6 +45,45 @@ export class KolaDatabase extends Dexie {
   constructor() {
     super('KolaDB');
 
+    this.version(14).stores({
+      businesses: '++id, local_id, business_id, user_id, sync_status, updated_at',
+      products: '++id, local_id, business_id, category_id, sync_status, is_archived, updated_at',
+      categories: '++id, local_id, business_id, name',
+      service_categories: '++id, local_id, business_id, name, status',
+      transactions: '++id, local_id, business_id, type, payment_method, status, sync_status, created_at, updated_at, reference_id, customer_id, category_id',
+      sales: '++id, local_id, business_id, transaction_id, customer_id, sync_status, created_at, updated_at',
+      sale_items: '++id, local_id, business_id, sale_id, product_id, sync_status, created_at, updated_at',
+      services: '++id, local_id, business_id, transaction_id, category_id, customer_id, status, sync_status, created_at, updated_at',
+      expenses: '++id, local_id, business_id, transaction_id, category_id, status, sync_status, created_at, updated_at',
+      ledger_entries: '++id, local_id, business_id, transaction_id, source_type, source_id, debit_account, credit_account, amount, created_at, updated_at, sync_status',
+      sync_queue: '++id, business_id, entity, entity_id, status, created_at',
+      inventory_movements: '++id, local_id, business_id, product_id, type, created_at, updated_at, sync_status',
+      customers: '++id, local_id, business_id, sync_status, updated_at',
+      suppliers: '++id, local_id, business_id, sync_status, updated_at',
+      receivables: '++id, local_id, business_id, transaction_id, customer_id, status, sync_status, created_at, updated_at',
+      app_settings: '++id, business_id, key, [business_id+key], updated_at',
+      receipts: '++id, local_id, business_id, transaction_id, sync_status, updated_at',
+      audit_logs: '++id, local_id, business_id, user_id, action, entity_id, created_at, sync_status'
+    }).upgrade(async tx => {
+      const products = await tx.table('products').toArray();
+      for (const product of products) {
+        if (product.wac_price === undefined) {
+          await tx.table('products').update(product.id, { wac_price: product.buying_price || 0 });
+        }
+        
+        // Backfill movements for this product
+        await tx.table('inventory_movements')
+          .where('product_id').equals(product.local_id)
+          .modify((m: any) => {
+            if (m.unit_cost === undefined) {
+              // For existing movements, we use the product's current buying price as a best-effort proxy
+              m.unit_cost = product.buying_price || 0;
+              m.total_cost = (m.unit_cost || 0) * (m.quantity || 0);
+            }
+          });
+      }
+    });
+
     this.version(13).stores({
       businesses: '++id, local_id, business_id, user_id, sync_status, updated_at',
       products: '++id, local_id, business_id, category_id, sync_status, is_archived, updated_at',

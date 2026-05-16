@@ -7,7 +7,8 @@ export async function adjustStock(
   quantity: number, 
   type: InventoryMovement['type'],
   note?: string,
-  reason?: string
+  reason?: string,
+  unitCost?: number
 ) {
   return await db.transaction('rw', [db.products, db.inventory_movements, db.ledger_entries, db.sync_queue], async () => {
     const product = await db.products.where('local_id').equals(product_id).first();
@@ -26,6 +27,9 @@ export async function adjustStock(
 
     if (new_stock < 0) throw new Error('Stock cannot be negative');
 
+    const movementUnitCost = unitCost ?? product.buying_price ?? 0;
+    const movementQuantity = Math.abs(new_stock - previous_stock);
+
     // 1. Update Product
     const updatedProduct = {
       ...product,
@@ -42,19 +46,21 @@ export async function adjustStock(
       ...movementBase,
       product_id: product_id,
       type,
-      quantity: Math.abs(new_stock - previous_stock),
+      quantity: movementQuantity,
       previous_stock,
       new_stock,
       note,
       reason,
-      status: 'active'
+      status: 'active',
+      unit_cost: movementUnitCost,
+      total_cost: movementQuantity * movementUnitCost
     };
     await db.inventory_movements.add(movement);
     await syncQueueService.enqueue('inventory_movements', 'create', movement, product.business_id);
 
     // 3. Accounting Impact
     if (type === 'stock-in' || type === 'damage' || type === 'adjustment') {
-      const valueChange = (new_stock - previous_stock) * product.buying_price;
+      const valueChange = (new_stock - previous_stock) * movementUnitCost;
       if (valueChange === 0) return movement;
 
       const entry: Omit<LedgerEntry, 'id'> = {

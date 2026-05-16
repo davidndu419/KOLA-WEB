@@ -55,7 +55,8 @@ export const inventoryReportService = {
         };
         current.quantitySold += item.quantity;
         current.revenue += item.quantity * item.price;
-        current.grossProfit += item.quantity * (item.price - (item.cost || product.buying_price));
+        const costBasis = product.wac_price ?? product.buying_price ?? 0;
+        current.grossProfit += item.quantity * (item.price - (item.cost || costBasis));
         productMetrics.set(item.product_id, current);
       }
     }
@@ -94,10 +95,10 @@ export const inventoryReportService = {
     });
 
     return {
-      inventoryValue: roundCurrency(activeProducts.reduce((total, product) => total + product.stock * product.buying_price, 0)),
+      inventoryValue: roundCurrency(activeProducts.reduce((total, product) => total + product.stock * (product.wac_price ?? product.buying_price ?? 0), 0)),
       retailValue: roundCurrency(activeProducts.reduce((total, product) => total + product.stock * product.selling_price, 0)),
       estimatedProfitPotential: roundCurrency(
-        activeProducts.reduce((total, product) => total + product.stock * (product.selling_price - product.buying_price), 0)
+        activeProducts.reduce((total, product) => total + product.stock * (product.selling_price - (product.wac_price ?? product.buying_price ?? 0)), 0)
       ),
       lowStockProducts: activeProducts.filter((product) => product.stock > 0 && product.stock <= product.min_stock),
       deadStockProducts: activeProducts.filter((product) => product.stock > 0 && !recentlySoldIds.has(product.local_id) && !soldProductIds.has(product.local_id)),

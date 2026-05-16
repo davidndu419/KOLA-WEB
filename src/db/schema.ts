@@ -40,6 +40,7 @@ export interface Product extends BaseEntity {
   notes?: string;
   tags?: string[];
   is_archived: boolean;
+  wac_price?: number;
 }
 
 export interface ProductWithCategory extends Product {
@@ -70,6 +71,8 @@ export interface InventoryMovement extends BaseEntity {
   note?: string;
   reason?: string;
   status?: 'active' | 'reversed' | 'corrected';
+  unit_cost?: number;
+  total_cost?: number;
 }
 
 export interface Sale extends BaseEntity {
