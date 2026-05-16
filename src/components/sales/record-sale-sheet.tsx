@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
 import { salesService } from '@/services/sales.service';
 import { useStore } from '@/store/use-store';
@@ -29,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { Transaction, Product, TransactionWithItems } from '@/db/schema';
 import { AnimatePresence, motion } from 'framer-motion';
 import { notificationService } from '@/services/notificationService';
+import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 
 type CartItem = {
   product_id: string;
@@ -56,6 +56,8 @@ export function RecordSaleSheet({
   const [customerName, setCustomerName] = useState('');
   const [lastTransaction, setLastTransaction] = useState<TransactionWithItems | null>(null);
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [saleError, setSaleError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset state when sheet closes
   useEffect(() => {
@@ -67,14 +69,18 @@ export function RecordSaleSheet({
         setPaymentMethod('cash');
         setCustomerName('');
         setEditingPriceId(null);
+        setSaleError(null);
+        setIsSubmitting(false);
       }, 300);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
   // Smart Sorting Data
-  const sortingData = useLiveQuery(async () => {
-    const items = await db.sale_items.toArray();
+  const sortingData = useStableLiveQuery(async () => {
+    if (!business?.id) return undefined;
+
+    const items = await db.sale_items.where('business_id').equals(business.id).toArray();
     const counts: Record<string, number> = {};
     
     items.forEach(item => {
@@ -86,17 +92,30 @@ export function RecordSaleSheet({
       .slice(0, 10)
       .map(([id]) => id);
 
-    const recentSales = await db.sales.orderBy('created_at').reverse().limit(10).toArray();
+    const recentSales = (await db.sales
+      .where('business_id')
+      .equals(business.id)
+      .toArray())
+      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+      .slice(0, 10);
     const recentSaleIds = recentSales.map(s => s.local_id);
-    const recentItems = await db.sale_items.where('sale_id').anyOf(recentSaleIds).toArray();
+    const recentItems = recentSaleIds.length > 0
+      ? await db.sale_items.where('sale_id').anyOf(recentSaleIds).toArray()
+      : [];
     const recentIds = Array.from(new Set(recentItems.map(i => i.product_id))).slice(0, 10);
 
     return { topIds, recentIds };
-  }, []);
+  }, [business?.id]);
 
   // Products List with Smart Sorting & Search
-  const products = useLiveQuery(async () => {
-    const allProducts = await db.products.filter(p => !p.is_archived && !p.deleted_at).toArray();
+  const products = useStableLiveQuery(async () => {
+    if (!business?.id) return undefined;
+
+    const allProducts = await db.products
+      .where('business_id')
+      .equals(business.id)
+      .filter(p => !p.is_archived && !p.deleted_at)
+      .toArray();
     
     let filtered = allProducts;
     if (searchQuery) {
@@ -137,9 +156,57 @@ export function RecordSaleSheet({
       // 5. Fallback: Alphabetical
       return a.name.localeCompare(b.name);
     });
-  }, [searchQuery, sortingData]);
+  }, [business?.id, searchQuery, sortingData]);
+
+  useEffect(() => {
+    if (!products) return;
+
+    const productMap = new Map(products.map((product) => [product.local_id, product]));
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.flatMap((item) => {
+        const product = productMap.get(item.product_id);
+        if (!product || product.is_archived || product.deleted_at || product.stock <= 0) {
+          changed = true;
+          return [];
+        }
+
+        const quantity = Math.min(item.quantity, product.stock);
+        if (quantity !== item.quantity || item.stock !== product.stock) {
+          changed = true;
+          return [{
+            ...item,
+            quantity,
+            stock: product.stock,
+            cost: product.wac_price ?? product.buying_price ?? item.cost,
+          }];
+        }
+
+        return [item];
+      });
+
+      return changed ? next : prev;
+    });
+  }, [products]);
 
   const addToCart = (product: Product) => {
+    if (product.is_archived || product.deleted_at) {
+      setSaleError('This product is archived and cannot be sold.');
+      return;
+    }
+
+    if (product.stock <= 0) {
+      setSaleError(`${product.name} is out of stock.`);
+      return;
+    }
+
+    setSaleError(null);
+    const existingCartItem = cart.find(item => item.product_id === product.local_id);
+    if (existingCartItem && existingCartItem.quantity >= product.stock) {
+      setSaleError(`Only ${product.stock} ${product.unit_type}${product.stock === 1 ? '' : 's'} available for ${product.name}.`);
+      return;
+    }
+
     setCart(prev => {
       const existing = prev.find(item => item.product_id === product.local_id);
       if (existing) {
@@ -185,9 +252,21 @@ export function RecordSaleSheet({
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   const handleConfirm = async () => {
-    if (cart.length === 0 || !business) return;
+    if (cart.length === 0 || !business || isSubmitting) return;
+
+    const invalidItem = cart.find((item) => item.quantity > item.stock || item.stock <= 0);
+    if (invalidItem) {
+      setSaleError(
+        invalidItem.stock <= 0
+          ? `${invalidItem.name} is out of stock.`
+          : `Only ${invalidItem.stock} available for ${invalidItem.name}.`
+      );
+      return;
+    }
     
     try {
+      setIsSubmitting(true);
+      setSaleError(null);
       const result = await salesService.recordSale({
         total_amount: totalAmount,
         discount_amount: 0,
@@ -215,10 +294,14 @@ export function RecordSaleSheet({
       };
 
       setLastTransaction(transactionWithItems);
-      notificationService.notifyTransaction('sale', `₦${totalAmount.toLocaleString()}`);
       onClose();
+      window.setTimeout(() => {
+        notificationService.notifyTransaction('sale', `₦${totalAmount.toLocaleString()}`);
+      }, 0);
     } catch (err: any) {
-      alert(err.message || 'Failed to record sale');
+      setSaleError(err.message || 'Failed to record sale');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -257,6 +340,11 @@ export function RecordSaleSheet({
                     const cartItem = cart.find(i => i.product_id === product.local_id);
                     const isTop = sortingData?.topIds.includes(product.local_id);
                     const isRecent = sortingData?.recentIds.includes(product.local_id);
+                    const stockLabel = product.stock <= 0
+                      ? 'Out of stock'
+                      : cartItem && cartItem.quantity >= product.stock
+                        ? `Only ${product.stock} available`
+                        : `${product.stock} in stock`;
                     
                     return (
                       <div 
@@ -279,7 +367,7 @@ export function RecordSaleSheet({
                               "text-[10px] font-bold uppercase",
                               product.stock <= product.min_stock ? "text-red-500" : "text-muted-foreground/60"
                             )}>
-                              {product.stock} in stock
+                              {stockLabel}
                             </p>
                           </div>
                         </div>
@@ -340,6 +428,9 @@ export function RecordSaleSheet({
                       </div>
                     </Touchable>
                   </motion.div>
+                )}
+                {saleError && (
+                  <p className="text-xs font-bold text-red-600 px-2">{saleError}</p>
                 )}
               </motion.div>
             ) : (
@@ -443,13 +534,17 @@ export function RecordSaleSheet({
 
                 {/* Complete Sale Button */}
                 <div className="pt-2">
+                  {saleError && (
+                    <p className="text-xs font-bold text-red-600 px-2 pb-3">{saleError}</p>
+                  )}
                   <Touchable 
                     onPress={handleConfirm}
-                    className="w-full bg-primary text-white p-5 rounded-[28px] shadow-2xl shadow-primary/30 flex items-center justify-between"
+                    disabled={isSubmitting || cart.some((item) => item.quantity > item.stock || item.stock <= 0)}
+                    className="w-full bg-primary text-white p-5 rounded-[28px] shadow-2xl shadow-primary/30 flex items-center justify-between disabled:opacity-50"
                   >
                     <div className="flex items-center gap-3">
                       <Check size={24} strokeWidth={3} />
-                      <span className="font-bold text-lg">Complete Sale</span>
+                      <span className="font-bold text-lg">{isSubmitting ? 'Recording...' : 'Complete Sale'}</span>
                     </div>
                     <span className="font-black text-2xl tracking-tighter">₦{totalAmount.toLocaleString()}</span>
                   </Touchable>

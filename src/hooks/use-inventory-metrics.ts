@@ -1,11 +1,16 @@
 // src/hooks/use-inventory-metrics.ts
-import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
+import { useAuthStore } from '@/stores/authStore';
+import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 
 export function useInventoryMetrics() {
-  return useLiveQuery(async () => {
+  const businessId = useAuthStore((state) => state.activeBusinessId);
+
+  return useStableLiveQuery(async () => {
+    if (!businessId) return undefined;
+
     const products = await db.products
-      .filter((product) => !product.is_archived && !product.deleted_at)
+      .filter((product) => product.business_id === businessId && !product.is_archived && !product.deleted_at)
       .toArray();
     
     let totalValue = 0;
@@ -43,5 +48,5 @@ export function useInventoryMetrics() {
       totalProducts: products.length,
       fastMoving
     };
-  }, []);
+  }, [businessId]);
 }

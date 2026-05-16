@@ -2,7 +2,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { ShoppingBag, Receipt, Zap, History, Filter } from 'lucide-react';
 import { db } from '@/db/dexie';
 import { TransactionDetailSheet } from '@/components/transactions/transaction-detail-sheet';
@@ -13,6 +12,8 @@ import { cn } from '@/lib/utils';
 import { ReversalSheet } from '@/components/transactions/reversal-sheet';
 import { CorrectionSheet } from '@/components/transactions/correction-sheet';
 import { AuditTrailSheet } from '@/components/transactions/audit-trail-sheet';
+import { useAuthStore } from '@/stores/authStore';
+import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 
 interface TransactionListProps {
   startDate?: Date;
@@ -54,9 +55,11 @@ export function TransactionList({ startDate, endDate, type = 'all', limit, trans
   const [isReversalOpen, setIsReversalOpen] = useState(false);
   const [isCorrectionOpen, setIsCorrectionOpen] = useState(false);
   const [isAuditTrailOpen, setIsAuditTrailOpen] = useState(false);
+  const businessId = useAuthStore((state) => state.activeBusinessId);
 
-  const transactionsQuery = useLiveQuery(async () => {
+  const transactionsQuery = useStableLiveQuery(async () => {
     if (transactions) return transactions;
+    if (!businessId) return undefined;
 
     const applyTypeFilter = (items: Transaction[]) => (
       type === 'all' ? items : items.filter((tx) => tx.type === type)
@@ -74,10 +77,10 @@ export function TransactionList({ startDate, endDate, type = 'all', limit, trans
     }
 
     const items = await query.toArray();
-    const filtered = applyTypeFilter(items);
+    const filtered = applyTypeFilter(items.filter((tx: Transaction) => tx.business_id === businessId && !tx.deleted_at));
     
     return limit ? filtered.slice(0, limit) : filtered;
-  }, [startDate, endDate, type, limit, transactions]);
+  }, [businessId, startDate, endDate, type, limit, transactions]);
 
   const displayTransactions = transactions || transactionsQuery;
 

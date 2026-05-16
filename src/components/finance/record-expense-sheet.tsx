@@ -43,8 +43,10 @@ export function RecordExpenseSheet({
       setAmount(0);
       setCategory('Others');
       setNote('');
-      notificationService.notifyTransaction('expense', `₦${amount.toLocaleString()}`);
       onClose();
+      window.setTimeout(() => {
+        notificationService.notifyTransaction('expense', `₦${amount.toLocaleString()}`);
+      }, 0);
     } catch (err: any) {
       alert(err.message || 'Failed to record expense');
     } finally {

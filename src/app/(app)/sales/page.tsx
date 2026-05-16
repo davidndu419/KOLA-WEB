@@ -6,12 +6,13 @@ import { useRouter } from 'next/navigation';
 import { SalesHeroCard } from '@/components/sales/sales-hero-card';
 import { TransactionList } from '@/components/sales/transaction-list';
 import { Touchable } from '@/components/touchable';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
 import { RecordSaleSheet } from '@/components/sales/record-sale-sheet';
 import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
 import { resolveReportDateRange } from '@/services/reportSelectors';
 import { CreditButton } from '@/components/credit/credit-button';
+import { useAuthStore } from '@/stores/authStore';
+import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 
 export default function SalesPage() {
   const router = useRouter();
@@ -19,23 +20,28 @@ export default function SalesPage() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange>('today');
   const [customDate, setCustomDate] = useState<Date>(new Date());
+  const businessId = useAuthStore((state) => state.activeBusinessId);
   
-  const stats = useLiveQuery(async () => {
+  const stats = useStableLiveQuery(async () => {
+    if (!businessId) return undefined;
+
     const { startDate, endDate } = resolveReportDateRange(selectedRange, customDate);
     
     const transactions = await db.transactions
       .where('created_at')
       .between(startDate, endDate)
       .toArray();
+
+    const businessTransactions = transactions.filter((tx) => tx.business_id === businessId && !tx.deleted_at);
       
-    const totalSales = transactions
+    const totalSales = businessTransactions
       .filter(tx => tx.type === 'sale')
       .reduce((acc, tx) => acc + tx.amount, 0);
       
-    const transactionCount = transactions.filter(tx => tx.type === 'sale').length;
+    const transactionCount = businessTransactions.filter(tx => tx.type === 'sale').length;
 
     // Receivables usually remain lifetime unless filtered
-    const allLedger = await db.ledger_entries.toArray();
+    const allLedger = await db.ledger_entries.where('business_id').equals(businessId).toArray();
     const receivables = allLedger
      .reduce((acc, entry: any) => {
   let balance = 0;
@@ -47,14 +53,14 @@ export default function SalesPage() {
 }, 0);
 
 
-    const cashSales = transactions
+    const cashSales = businessTransactions
       .filter(tx => tx.type === 'sale' && tx.payment_method === 'cash')
       .reduce((acc, tx) => acc + tx.amount, 0);
       
     const cashPercentage = totalSales > 0 ? Math.round((cashSales / totalSales) * 100) : 100;
     
     return { totalSales, transactionCount, receivables, cashPercentage, startDate, endDate };
-  }, [selectedRange, customDate]);
+  }, [businessId, selectedRange, customDate]);
 
   return (
     <div className="px-6 space-y-2">
@@ -68,15 +74,19 @@ export default function SalesPage() {
         </div>
       </header>
 
-      <SalesHeroCard 
-        totalSales={stats?.totalSales || 0}
-        transactionCount={stats?.transactionCount || 0}
-        receivables={stats?.receivables || 0}
-        cashPercentage={stats?.cashPercentage || 0}
-        selectedRange={selectedRange}
-        onOpenDatePicker={() => setIsDatePickerOpen(true)}
-        customDate={customDate}
-      />
+      {stats ? (
+        <SalesHeroCard
+          totalSales={stats.totalSales}
+          transactionCount={stats.transactionCount}
+          receivables={stats.receivables}
+          cashPercentage={stats.cashPercentage}
+          selectedRange={selectedRange}
+          onOpenDatePicker={() => setIsDatePickerOpen(true)}
+          customDate={customDate}
+        />
+      ) : (
+        <div className="h-40 rounded-[32px] bg-secondary animate-pulse" />
+      )}
 
       <div className="flex items-center justify-between px-2 mb-4">
         <h3 className="text-lg font-bold tracking-tight">
@@ -85,11 +95,15 @@ export default function SalesPage() {
         </h3>
       </div>
 
-      <TransactionList 
-        startDate={stats?.startDate} 
-        endDate={stats?.endDate} 
-        type="sale"
-      />
+      {stats ? (
+        <TransactionList
+          startDate={stats.startDate}
+          endDate={stats.endDate}
+          type="sale"
+        />
+      ) : (
+        <div className="p-8 text-center animate-pulse text-muted-foreground font-bold">Loading sales...</div>
+      )}
 
       {/* Floating Action Button */}
       <div className="fixed bottom-24 right-6 z-30">

@@ -7,11 +7,12 @@ import { ServiceHeroCard } from '@/components/service/service-hero-card';
 import { RecordServiceSheet } from '@/components/service/record-service-sheet';
 import { TransactionList } from '@/components/sales/transaction-list';
 import { Touchable } from '@/components/touchable';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
 import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
 import { resolveReportDateRange } from '@/services/reportSelectors';
 import { CreditButton } from '@/components/credit/credit-button';
+import { useAuthStore } from '@/stores/authStore';
+import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 
 export default function ServicePage() {
   const router = useRouter();
@@ -19,21 +20,24 @@ export default function ServicePage() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange>('today');
   const [customDate, setCustomDate] = useState<Date>(new Date());
+  const businessId = useAuthStore((state) => state.activeBusinessId);
   
-  const stats = useLiveQuery(async () => {
+  const stats = useStableLiveQuery(async () => {
+    if (!businessId) return undefined;
+
     const { startDate, endDate } = resolveReportDateRange(selectedRange, customDate);
     
     const transactions = await db.transactions
       .where('created_at')
       .between(startDate, endDate)
-      .filter(tx => tx.type === 'service')
+      .filter(tx => tx.business_id === businessId && tx.type === 'service' && !tx.deleted_at)
       .toArray();
       
     const totalServiceRevenue = transactions.reduce((acc, tx) => acc + tx.amount, 0);
     const serviceCount = transactions.length;
     
     return { totalServiceRevenue, serviceCount, startDate, endDate };
-  }, [selectedRange, customDate]);
+  }, [businessId, selectedRange, customDate]);
 
   return (
     <div className="px-6 space-y-2">
@@ -47,13 +51,17 @@ export default function ServicePage() {
         </div>
       </header>
 
-      <ServiceHeroCard 
-        totalServiceRevenue={stats?.totalServiceRevenue || 0}
-        serviceCount={stats?.serviceCount || 0}
-        selectedRange={selectedRange}
-        onOpenDatePicker={() => setIsDatePickerOpen(true)}
-        customDate={customDate}
-      />
+      {stats ? (
+        <ServiceHeroCard
+          totalServiceRevenue={stats.totalServiceRevenue}
+          serviceCount={stats.serviceCount}
+          selectedRange={selectedRange}
+          onOpenDatePicker={() => setIsDatePickerOpen(true)}
+          customDate={customDate}
+        />
+      ) : (
+        <div className="h-40 rounded-[32px] bg-secondary animate-pulse" />
+      )}
 
       <div className="flex items-center justify-between px-2 mb-4">
         <h3 className="text-lg font-bold tracking-tight">
@@ -62,11 +70,15 @@ export default function ServicePage() {
         </h3>
       </div>
 
-      <TransactionList 
-        startDate={stats?.startDate} 
-        endDate={stats?.endDate} 
-        type="service"
-      />
+      {stats ? (
+        <TransactionList
+          startDate={stats.startDate}
+          endDate={stats.endDate}
+          type="service"
+        />
+      ) : (
+        <div className="p-8 text-center animate-pulse text-muted-foreground font-bold">Loading services...</div>
+      )}
 
       {/* Floating Action Button */}
       <div className="fixed bottom-24 right-6 z-30">

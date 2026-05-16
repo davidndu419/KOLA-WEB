@@ -2,7 +2,6 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
 import { Touchable } from '@/components/touchable';
 import { Package } from 'lucide-react';
@@ -10,6 +9,8 @@ import { cn } from '@/lib/utils';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Product } from '@/db/schema';
 import { useSearchParams } from 'next/navigation';
+import { useAuthStore } from '@/stores/authStore';
+import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 
 export function ProductList({ 
   searchQuery, 
@@ -21,12 +22,15 @@ export function ProductList({
   const parentRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
   const productId = searchParams.get('productId');
+  const businessId = useAuthStore((state) => state.activeBusinessId);
 
-  const products = useLiveQuery(async () => {
+  const products = useStableLiveQuery(async () => {
+    if (!businessId) return undefined;
+
     const results = await db.products
       .orderBy('updated_at')
       .reverse()
-      .filter((product) => product.is_archived === isArchived && !product.deleted_at)
+      .filter((product) => product.business_id === businessId && product.is_archived === isArchived && !product.deleted_at)
       .toArray();
     
     if (!searchQuery) return results;
@@ -36,7 +40,7 @@ export function ProductList({
       p.name.toLowerCase().includes(lowerSearch) || 
       p.sku?.toLowerCase().includes(lowerSearch)
     );
-  }, [searchQuery, isArchived]);
+  }, [businessId, searchQuery, isArchived]);
 
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);

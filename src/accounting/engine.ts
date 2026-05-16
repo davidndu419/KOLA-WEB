@@ -1,7 +1,14 @@
 import { db } from '@/db/dexie';
-import { Transaction, LedgerEntry, InventoryMovement, SaleItem } from '@/db/schema';
+import { Transaction, LedgerEntry, InventoryMovement, SaleItem, Product } from '@/db/schema';
 import { createBaseEntity } from '@/db/dexie';
 import { syncQueueService } from '@/services/syncQueueService';
+
+export class StockGuardError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StockGuardError';
+  }
+}
 
 /**
  * Accounting Engine: Implements the double-entry system.
@@ -17,6 +24,38 @@ export async function processAccounting(
 
   // 1. Handle Sales
   if (transaction.type === 'sale' && items) {
+    const requestedByProduct = new Map<string, number>();
+    for (const item of items) {
+      requestedByProduct.set(
+        item.product_id,
+        (requestedByProduct.get(item.product_id) || 0) + item.quantity
+      );
+    }
+
+    const products = new Map<string, Product>();
+    for (const [productId, requestedQuantity] of requestedByProduct) {
+      const product = await db.products.where('local_id').equals(productId).first();
+
+      if (!product || product.deleted_at || product.is_archived) {
+        throw new StockGuardError('This product is not available for sale.');
+      }
+
+      const currentStock = product.stock || 0;
+      if (requestedQuantity <= 0) {
+        throw new StockGuardError(`Invalid quantity for ${product.name}.`);
+      }
+
+      if (currentStock <= 0) {
+        throw new StockGuardError(`${product.name} is out of stock.`);
+      }
+
+      if (requestedQuantity > currentStock) {
+        throw new StockGuardError(`Only ${currentStock} ${product.unit_type}${currentStock === 1 ? '' : 's'} available for ${product.name}.`);
+      }
+
+      products.set(productId, product);
+    }
+
     // Principal Entry: Debit Cash/Receivables, Credit Revenue
     entries.push({
       ...base,
@@ -34,12 +73,19 @@ export async function processAccounting(
 
 
     // COGS & Inventory Entry
-    for (const item of items) {
-      const product = await db.products.where('local_id').equals(item.product_id).first();
+    for (const [productId, requestedQuantity] of requestedByProduct) {
+      const product = products.get(productId);
       if (product) {
+        const item = items.find((saleItem) => saleItem.product_id === productId)!;
         // WAC Foundation: Use wac_price if available, otherwise fallback to item.cost or latest buying_price
         const costBasis = product.wac_price ?? item.cost ?? product.buying_price ?? 0;
-        const costValue = costBasis * item.quantity;
+        const costValue = costBasis * requestedQuantity;
+        const newStock = (product.stock || 0) - requestedQuantity;
+
+        if (newStock < 0) {
+          const currentStock = product.stock || 0;
+          throw new StockGuardError(`Only ${currentStock} ${product.unit_type}${currentStock === 1 ? '' : 's'} available for ${product.name}.`);
+        }
         
         entries.push({
           ...base,
@@ -56,11 +102,18 @@ export async function processAccounting(
         });
 
         // Update stock
-        await db.products.update(product.id!, {
-          stock: product.stock - item.quantity,
+        const updatedProduct = {
+          ...product,
+          stock: newStock,
           updated_at: new Date(),
-          sync_status: 'pending'
+          sync_status: 'pending' as const
+        };
+        await db.products.update(product.id!, {
+          stock: updatedProduct.stock,
+          updated_at: updatedProduct.updated_at,
+          sync_status: updatedProduct.sync_status
         });
+        await syncQueueService.enqueue('products', 'update', updatedProduct, transaction.business_id);
 
         // Log movement
         movements.push({
@@ -68,9 +121,9 @@ export async function processAccounting(
           local_id: crypto.randomUUID(),
           product_id: product.local_id,
           type: 'stock-out',
-          quantity: item.quantity,
-          previous_stock: product.stock,
-          new_stock: product.stock - item.quantity,
+          quantity: requestedQuantity,
+          previous_stock: product.stock || 0,
+          new_stock: newStock,
           note: `Sale: ${transaction.local_id}`,
           status: 'active'
         });
@@ -156,11 +209,28 @@ export async function processAccounting(
  */
 export async function validateTransaction(transaction: Partial<Transaction>, items?: any[]) {
   if (transaction.type === 'sale' && items) {
+    const requestedByProduct = new Map<string, number>();
     for (const item of items) {
-      const product = await db.products.where('local_id').equals(item.product_id).first();
-      if (!product) throw new Error(`Product not found: ${item.product_id}`);
-      if (product.stock < item.quantity) {
-        throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
+      requestedByProduct.set(
+        item.product_id,
+        (requestedByProduct.get(item.product_id) || 0) + item.quantity
+      );
+    }
+
+    for (const [productId, requestedQuantity] of requestedByProduct) {
+      const product = await db.products.where('local_id').equals(productId).first();
+      if (!product || product.deleted_at || product.is_archived) {
+        throw new StockGuardError('This product is not available for sale.');
+      }
+      const currentStock = product.stock || 0;
+      if (requestedQuantity <= 0) {
+        throw new StockGuardError(`Invalid quantity for ${product.name}.`);
+      }
+      if (currentStock <= 0) {
+        throw new StockGuardError(`${product.name} is out of stock.`);
+      }
+      if (currentStock < requestedQuantity) {
+        throw new StockGuardError(`Only ${currentStock} ${product.unit_type}${currentStock === 1 ? '' : 's'} available for ${product.name}.`);
       }
     }
   }

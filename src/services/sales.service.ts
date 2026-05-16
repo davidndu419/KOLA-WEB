@@ -1,6 +1,6 @@
 import { db, createBaseEntity } from '@/db/dexie';
 import { Sale, SaleItem, Transaction, Receivable } from '@/db/schema';
-import { processAccounting } from '@/accounting/engine';
+import { processAccounting, validateTransaction } from '@/accounting/engine';
 import { syncQueueService } from '@/services/syncQueueService';
 import { saleRepository } from '@/db/repositories/sale.repository';
 import { transactionRepository } from '@/db/repositories/transaction.repository';
@@ -45,6 +45,8 @@ export const salesService = {
       db.sync_queue,
       db.inventory_movements
     ], async () => {
+      await validateTransaction({ type: 'sale' }, data.items);
+
       // Add Transaction
       const transactionDbId = await db.transactions.add(transaction);
       transaction.id = transactionDbId as number;

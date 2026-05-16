@@ -7,11 +7,11 @@ import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import { Briefcase, User, Zap, Coins, Plus, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { db, createBaseEntity } from '@/db/dexie';
 import { ServiceCategory } from '@/db/schema';
 import { syncQueueService } from '@/services/syncQueueService';
 import { notificationService } from '@/services/notificationService';
+import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 
 export function RecordServiceSheet({ 
   isOpen, 
@@ -37,14 +37,14 @@ export function RecordServiceSheet({
   const [newCatName, setNewCatName] = useState('');
   const [newCatPrice, setNewCatPrice] = useState('');
 
-  const categories = useLiveQuery(
+  const categories = useStableLiveQuery<ServiceCategory[]>(
     () => businessId 
       ? db.service_categories
           .where('business_id')
           .equals(businessId)
           .filter(c => c.status === 'active')
           .toArray()
-      : Promise.resolve([] as ServiceCategory[]),
+      : undefined,
     [businessId]
   ) || [];
 
@@ -80,6 +80,9 @@ export function RecordServiceSheet({
 
       resetForm();
       onClose();
+      window.setTimeout(() => {
+        notificationService.notifyTransaction('service', `₦${amount.toLocaleString()}`);
+      }, 0);
     } catch (err: any) {
       alert(err.message || 'Failed to record service');
     } finally {
