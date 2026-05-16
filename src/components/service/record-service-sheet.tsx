@@ -82,7 +82,7 @@ export function RecordServiceSheet({
       resetForm();
       onClose();
       window.setTimeout(() => {
-        notificationService.notifyTransaction('service', `₦${amount.toLocaleString()}`);
+        notificationService.notifyTransaction('service', amount);
       }, 0);
     } catch (err: any) {
       alert(err.message || 'Failed to record service');

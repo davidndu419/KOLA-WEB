@@ -80,7 +80,7 @@ export function RecordExpenseSheet({
       resetForm();
       onClose();
       window.setTimeout(() => {
-        notificationService.notifyTransaction('expense', `NGN ${recordedAmount.toLocaleString()}`);
+        notificationService.notifyTransaction('expense', recordedAmount);
       }, 0);
     } catch (err: any) {
       alert(err.message || 'Failed to record expense');

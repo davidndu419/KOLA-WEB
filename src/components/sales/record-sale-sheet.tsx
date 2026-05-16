@@ -297,7 +297,18 @@ export function RecordSaleSheet({
       setLastTransaction(transactionWithItems);
       onClose();
       window.setTimeout(() => {
-        notificationService.notifyTransaction('sale', `₦${totalAmount.toLocaleString()}`);
+        notificationService.notifyTransaction('sale', totalAmount);
+        void (async () => {
+          for (const item of result.saleItems) {
+            const product = await db.products.where('local_id').equals(item.product_id).first();
+            if (!product || product.deleted_at || product.is_archived) continue;
+            if (product.stock === 0) {
+              notificationService.notifyOutOfStock(product);
+            } else if (product.stock <= product.min_stock) {
+              notificationService.notifyLowStock(product);
+            }
+          }
+        })();
       }, 0);
     } catch (err: any) {
       setSaleError(err.message || 'Failed to record sale');

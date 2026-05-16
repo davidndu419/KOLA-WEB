@@ -1,7 +1,19 @@
 // src/services/notificationService.ts
 
+import type { Product } from '@/db/schema';
+
+type TransactionType = 'sale' | 'expense' | 'service';
+type LocalNotificationOptions = NotificationOptions & {
+  badge?: string;
+  vibrate?: number[];
+};
+
+const DEFAULT_ICON = '/icons/icon-192x192.png';
+const DEFAULT_BADGE = '/icons/badge.png';
+
 export class NotificationService {
   private static instance: NotificationService;
+  private stockAlertCache = new Set<string>();
 
   private constructor() {}
 
@@ -12,97 +24,163 @@ export class NotificationService {
     return NotificationService.instance;
   }
 
-  /**
-   * Request permission for browser notifications
-   */
+  private debug(message: string, details?: unknown) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.info(`[Kola Notifications] ${message}`, details ?? '');
+    }
+  }
+
+  private getNotificationsEnabled() {
+    if (typeof window === 'undefined') return false;
+
+    try {
+      const raw = window.localStorage.getItem('kola-app-storage');
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return parsed?.state?.notificationsEnabled === true;
+    } catch (error) {
+      this.debug('Failed to read notification preference', error);
+      return false;
+    }
+  }
+
+  public isSupported(): boolean {
+    const supported = typeof window !== 'undefined' && 'Notification' in window;
+    this.debug('Notifications supported', supported);
+    return supported;
+  }
+
+  public isPermissionGranted(): boolean {
+    const granted = this.isSupported() && Notification.permission === 'granted';
+    this.debug('Permission state', this.isSupported() ? Notification.permission : 'unsupported');
+    return granted;
+  }
+
   public async requestPermission(): Promise<NotificationPermission> {
-    if (!('Notification' in window)) {
-      console.warn('This browser does not support desktop notifications');
+    if (!this.isSupported()) {
       return 'denied';
     }
 
-    const permission = await Notification.requestPermission();
-    return permission;
-  }
-
-  /**
-   * Check if notifications are supported and permitted
-   */
-  public isPermitted(): boolean {
-    return 'Notification' in window && Notification.permission === 'granted';
-  }
-
-  /**
-   * Send a local notification
-   */
-  public async notify(title: string, body: string, icon: string = '/icons/icon-192x192.png') {
-    // Check if notifications are enabled in settings and browser
-    const notificationsEnabled = localStorage.getItem('kola-app-storage') 
-      ? JSON.parse(localStorage.getItem('kola-app-storage')!).state.notificationsEnabled 
-      : true;
-
-    if (!notificationsEnabled || !this.isPermitted()) {
-      return;
+    try {
+      const permission = await Notification.requestPermission();
+      this.debug('Permission requested', permission);
+      return permission;
+    } catch (error) {
+      this.debug('Permission request failed', error);
+      return 'denied';
     }
+  }
+
+  public async showLocalNotification(title: string, options: NotificationOptions = {}) {
+    if (!this.isSupported()) {
+      this.debug('Notification skipped: unsupported');
+      return false;
+    }
+
+    if (!this.getNotificationsEnabled()) {
+      this.debug('Notification skipped: disabled in settings');
+      return false;
+    }
+
+    if (!this.isPermissionGranted()) {
+      this.debug('Notification skipped: permission not granted');
+      return false;
+    }
+
+    const notificationOptions: LocalNotificationOptions = {
+      icon: DEFAULT_ICON,
+      badge: DEFAULT_BADGE,
+      vibrate: [100, 50, 100],
+      ...options,
+      data: {
+        url: '/dashboard',
+        dateOfArrival: Date.now(),
+        ...(options.data || {}),
+      },
+    };
 
     try {
-      // Use Service Worker if available for better PWA support
-      const registration = await navigator.serviceWorker.ready;
-      if (registration && 'showNotification' in registration) {
-        await registration.showNotification(title, {
-          body,
-          icon,
-          badge: '/icons/badge.png',
-          vibrate: [100, 50, 100],
-          data: {
-            dateOfArrival: Date.now(),
-            primaryKey: 1
-          }
-        } as any);
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        this.debug('Service worker ready', Boolean(registration));
+        await registration.showNotification(title, notificationOptions);
       } else {
-        // Fallback to basic Notification API
-        new Notification(title, { body, icon });
+        new Notification(title, notificationOptions);
       }
+
+      this.debug('Notification fired', { title, options: notificationOptions });
+      return true;
     } catch (error) {
-      console.error('Failed to send notification:', error);
-      // Fallback
-      new Notification(title, { body, icon });
+      this.debug('Service worker notification failed, trying window Notification', error);
+      try {
+        new Notification(title, notificationOptions);
+        this.debug('Fallback notification fired', title);
+        return true;
+      } catch (fallbackError) {
+        this.debug('Notification failed', fallbackError);
+        return false;
+      }
     }
   }
 
-  /**
-   * Specific notify for successful transactions
-   */
-  public notifyTransaction(type: 'sale' | 'expense' | 'service', amount: string) {
-    const titles = {
-      sale: 'New Sale Recorded',
-      expense: 'Expense Recorded',
-      service: 'Service Recorded'
+  public notifyTransaction(type: TransactionType, amount: string | number, metadata?: { url?: string }) {
+    const formattedAmount = typeof amount === 'number' ? `₦${amount.toLocaleString()}` : amount;
+    const titles: Record<TransactionType, string> = {
+      sale: 'Sale recorded',
+      expense: 'Expense recorded',
+      service: 'Service recorded',
     };
-    
-    this.notify(titles[type], `Amount: ${amount}`);
+    const bodies: Record<TransactionType, string> = {
+      sale: `${formattedAmount} sale completed`,
+      expense: `${formattedAmount} expense saved`,
+      service: `${formattedAmount} service completed`,
+    };
+
+    void this.showLocalNotification(titles[type], {
+      body: bodies[type],
+      data: { url: metadata?.url || '/dashboard' },
+    });
   }
 
-  /**
-   * Specific notify for stock alerts
-   */
+  public notifyLowStock(product: Pick<Product, 'local_id' | 'name' | 'stock'>) {
+    const cacheKey = `low:${product.local_id}:${product.stock}`;
+    if (this.stockAlertCache.has(cacheKey)) return;
+    this.stockAlertCache.add(cacheKey);
+
+    void this.showLocalNotification('Low stock alert', {
+      body: `${product.name} has only ${product.stock} left`,
+      data: { url: '/inventory' },
+    });
+  }
+
+  public notifyOutOfStock(product: Pick<Product, 'local_id' | 'name'>) {
+    const cacheKey = `out:${product.local_id}`;
+    if (this.stockAlertCache.has(cacheKey)) return;
+    this.stockAlertCache.add(cacheKey);
+
+    void this.showLocalNotification('Out of stock', {
+      body: `${product.name} is now out of stock`,
+      data: { url: '/inventory' },
+    });
+  }
+
   public notifyStockAlert(productName: string, type: 'low' | 'out') {
-    const title = type === 'out' ? '⚠️ Product Out of Stock' : '📉 Low Stock Warning';
-    const body = type === 'out' 
-      ? `${productName} is completely out of stock.` 
-      : `${productName} is running low on stock.`;
-    
-    this.notify(title, body);
+    const local_id = productName;
+    if (type === 'out') {
+      this.notifyOutOfStock({ local_id, name: productName });
+      return;
+    }
+    this.notifyLowStock({ local_id, name: productName, stock: 0 });
   }
 
-  /**
-   * Notify sync status
-   */
   public notifySync(status: 'completed' | 'failed', message?: string) {
-    const title = status === 'completed' ? '✅ Sync Completed' : '❌ Sync Failed';
+    const title = status === 'completed' ? 'Sync completed' : 'Sync failed';
     const body = message || (status === 'completed' ? 'Your data is now safe in the cloud.' : 'There was an error syncing your data.');
-    
-    this.notify(title, body);
+
+    void this.showLocalNotification(title, {
+      body,
+      data: { url: '/settings/sync' },
+    });
   }
 }
 

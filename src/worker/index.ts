@@ -110,3 +110,29 @@ self.addEventListener("activate", (event) => {
   console.log("[Kola SW] Activated");
   event.waitUntil(self.clients.claim());
 });
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = event.notification.data?.url || "/dashboard";
+  const url = new URL(targetUrl, self.location.origin).href;
+
+  event.waitUntil((async () => {
+    const clientList = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    });
+
+    for (const client of clientList) {
+      if ("focus" in client) {
+        await client.focus();
+        if ("navigate" in client && client.url !== url) {
+          await client.navigate(url);
+        }
+        return;
+      }
+    }
+
+    await self.clients.openWindow(url);
+  })());
+});

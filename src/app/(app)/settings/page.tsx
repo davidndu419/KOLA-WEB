@@ -82,6 +82,13 @@ export default function SettingsPage() {
 
   const [activeSheet, setActiveSheet] = useState<'profile' | 'notifications' | null>(null);
   const [profileForm, setProfileForm] = useState({ name: business?.name || '', address: business?.address || '' });
+  const [notificationMessage, setNotificationMessage] = useState('');
+
+  useEffect(() => {
+    if (notificationsEnabled && !notificationService.isPermissionGranted()) {
+      setNotificationsEnabled(false);
+    }
+  }, [notificationsEnabled, setNotificationsEnabled]);
 
   const handleClearData = async () => {
     if (confirm('Are you sure? This will delete all local data!')) {
@@ -107,14 +114,29 @@ export default function SettingsPage() {
   const toggleNotifications = async () => {
     const nextState = !notificationsEnabled;
     if (nextState) {
+      if (!notificationService.isSupported()) {
+        setNotificationsEnabled(false);
+        setNotificationMessage('Notifications are not supported in this browser.');
+        return;
+      }
+
       const permission = await notificationService.requestPermission();
       if (permission === 'granted') {
         setNotificationsEnabled(true);
+        setNotificationMessage('Notifications are enabled on this device.');
+        window.setTimeout(() => {
+          void notificationService.showLocalNotification('Kola notifications enabled', {
+            body: 'Local transaction and stock alerts will appear on this device.',
+            data: { url: '/dashboard' },
+          });
+        }, 0);
       } else {
-        alert('Please enable notifications in your browser settings to receive alerts.');
+        setNotificationsEnabled(false);
+        setNotificationMessage('Notification permission is blocked. Enable it in your browser or app settings to receive local alerts.');
       }
     } else {
       setNotificationsEnabled(false);
+      setNotificationMessage('Notifications are disabled on this device.');
     }
   };
 
@@ -281,6 +303,11 @@ export default function SettingsPage() {
               )} />
             </button>
           </div>
+          {notificationMessage && (
+            <p className="px-2 text-xs font-bold text-muted-foreground leading-relaxed">
+              {notificationMessage}
+            </p>
+          )}
         </div>
       </BottomSheet>
     </div>

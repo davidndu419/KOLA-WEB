@@ -45,7 +45,7 @@ export const useStore = create<AppState>()(
       isSyncing: false,
       lastSyncTime: null,
       theme: 'light',
-      notificationsEnabled: true,
+      notificationsEnabled: false,
 
       setBusiness: (business) => set({ business }),
       setUser: (user) => set({ user }),
