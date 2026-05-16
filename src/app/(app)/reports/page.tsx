@@ -45,7 +45,7 @@ export default function ReportsPage() {
   }, [reportsData]);
 
   return (
-    <div className="px-6 space-y-4 pb-24">
+    <div className="px-6 space-y-4">
       <header className="py-4 flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Reports</h1>

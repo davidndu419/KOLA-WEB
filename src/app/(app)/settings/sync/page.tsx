@@ -148,7 +148,7 @@ export default function SyncSettingsPage() {
         <h1 className="text-xl font-bold tracking-tight">Sync Settings</h1>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32">
+      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8">
         {/* Connection Status Card */}
         <section className="space-y-4">
           <div className="flex items-center gap-3 px-2">

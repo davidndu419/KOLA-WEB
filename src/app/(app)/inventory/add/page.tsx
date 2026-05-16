@@ -143,7 +143,7 @@ export default function AddProductPage() {
       <div className="flex-1 overflow-y-auto scrollbar-none">
         <form 
           onSubmit={handleSubmit(onSubmit)} 
-          className="px-6 pt-6 pb-40 space-y-8"
+          className="px-6 pt-6 pb-24 space-y-8"
         >
         {/* Section: Basic Info */}
         <section className="space-y-4">

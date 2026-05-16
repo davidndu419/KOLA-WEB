@@ -53,7 +53,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         
         {/* Main content */}
         <main className="flex-1 overflow-y-auto overscroll-y-none relative scrollbar-none">
-          <div className="pb-40 pt-4">
+          <div className="pb-24 pt-4">
             {children}
           </div>
         </main>
@@ -66,4 +66,3 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     </AuthGuard>
   );
 }
-

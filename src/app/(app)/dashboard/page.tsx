@@ -31,7 +31,7 @@ export default function DashboardPage() {
   const [customDate, setCustomDate] = useState<Date>(new Date());
 
   const transactions = useLiveQuery(() =>
-    db.transactions.orderBy('created_at').reverse().limit(5).toArray()
+    db.transactions.orderBy('created_at').reverse().limit(10).toArray()
   );
 
   const reportsSnapshot = useLiveQuery(
@@ -40,8 +40,7 @@ export default function DashboardPage() {
   );
 
   const stats = useLiveQuery(async () => {
-    // 1. Total Balance calculation (Net of all Cash/Receivables entries)
-    // Optimized: only query relevant accounts
+    // ... (rest of the stats logic remains the same)
     const accounts = ['Cash', 'Bank', 'Receivables'];
     const relevantEntries = await db.ledger_entries
       .where('debit_account').anyOf(accounts)
@@ -53,18 +52,12 @@ export default function DashboardPage() {
       if (entry.deleted_at) continue;
       if (accounts.includes(entry.debit_account)) totalBalance += entry.amount;
       
-      // We exclude inventory purchases (restocks) from the balance reduction.
-      // In Option B accounting, restock is an asset conversion (Cash -> Inventory)
-      // and should not reduce the operating capital balance.
       if (accounts.includes(entry.credit_account) && entry.debit_account !== 'Inventory') {
         totalBalance -= entry.amount;
       }
     }
 
-    // 2. Range Profit calculation from snapshot
     const rangeProfit = reportsSnapshot?.summary.netProfit || 0;
-
-    // 3. Monthly Profit calculation (Lighter query)
     const monthlyPnL = await reportService.getProfitLoss('thisMonth');
 
     return { 
@@ -95,11 +88,11 @@ export default function DashboardPage() {
         if (label === 'Report') router.push('/reports');
       }} />
 
-      <section className="px-4 mb-8 space-y-2.5">
+      <section className="px-4 mb-4 space-y-2.5">
         {reportsSnapshot && <MetricGrid snapshot={reportsSnapshot} />}
       </section>
-
-      <section className="px-4 mt-8 pb-10">
+      
+      <section className="px-4 mt-4">
         <div className="flex items-center justify-between px-2 mb-4">
           <h3 className="text-lg font-bold tracking-tight">Recent Activity</h3>
           <Link href="/reports/transactions" className="text-primary text-xs font-bold uppercase tracking-wider flex items-center gap-1">
@@ -107,7 +100,7 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        <TransactionList limit={5} />
+        <TransactionList limit={10} />
       </section>
 
 

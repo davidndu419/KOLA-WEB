@@ -60,7 +60,7 @@ export default function ExpensesPage() {
   }, [searchQuery, reportsData]);
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6">
       {/* Header & Stats */}
       <section className="px-4 space-y-5">
         <div className="flex items-center justify-between">

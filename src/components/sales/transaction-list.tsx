@@ -127,7 +127,6 @@ export function TransactionList({ startDate, endDate, type = 'all', limit, trans
         ))}
       </div>
 
-      <div className="h-32 w-full" />
 
       <TransactionDetailSheet
         transaction={selectedTransaction}

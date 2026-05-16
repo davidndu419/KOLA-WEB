@@ -126,7 +126,7 @@ export default function PWACachePage() {
         <h1 className="text-xl font-bold tracking-tight text-emerald-500">PWA Diagnostics</h1>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32">
+      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8">
         {/* Connection Section */}
         <section className="space-y-4">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2">Network Status</h3>

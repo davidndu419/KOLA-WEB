@@ -125,7 +125,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="px-6 space-y-8 pb-32">
+    <div className="px-6 space-y-8">
       <header className="py-4">
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground font-medium">Account & Preferences</p>

@@ -101,7 +101,7 @@ export function CreditHistoryPage({ sourceType }: { sourceType: CreditSourceType
   const themeIcon = sourceType === 'sale' ? ReceiptText : Zap;
 
   return (
-    <div className="px-5 space-y-6 pb-20">
+    <div className="px-5 space-y-6">
       <header className="py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
             <Touchable

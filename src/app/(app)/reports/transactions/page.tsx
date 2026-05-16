@@ -23,7 +23,7 @@ export default function ReportTransactionsPage() {
   );
 
   return (
-    <div className="px-6 space-y-4 pb-24">
+    <div className="px-6 space-y-4">
       <header className="py-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/reports" className="w-11 h-11 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground flex-shrink-0">

@@ -75,7 +75,7 @@ export function ProductList({ searchQuery }: { searchQuery: string }) {
     <>
       <div 
         ref={parentRef}
-        className="h-[600px] overflow-y-auto scrollbar-none pb-40"
+        className="w-full"
       >
         <div
           style={{

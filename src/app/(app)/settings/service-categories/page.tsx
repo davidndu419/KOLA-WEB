@@ -118,7 +118,7 @@ export default function ServiceCategoriesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-32 max-w-7xl mx-auto w-full">
+    <div className="min-h-screen bg-background max-w-7xl mx-auto w-full">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-border/40 px-6 py-6 md:px-10">
         <div className="flex items-center gap-6">
