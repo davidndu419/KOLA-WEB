@@ -3,7 +3,7 @@
 import { clientsClaim } from "workbox-core";
 import { precacheAndRoute } from "workbox-precaching";
 import { registerRoute, NavigationRoute } from "workbox-routing";
-import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from "workbox-strategies";
+import { CacheFirst, NetworkFirst, StaleWhileRevalidate, NetworkOnly } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 
 declare let self: ServiceWorkerGlobalScope & {
@@ -17,6 +17,12 @@ self.skipWaiting();
 clientsClaim();
 
 precacheAndRoute(self.__WB_MANIFEST || []);
+
+// Force all Supabase requests to go directly to network
+registerRoute(
+  ({ url }) => url.href.includes('supabase.co'),
+  new NetworkOnly()
+);
 
 const appShellRoutes = [
   "/",
@@ -40,7 +46,8 @@ registerRoute(
   ({ request, url }) =>
     request.mode === "navigate" &&
     url.origin === self.location.origin &&
-    appShellRoutes.includes(url.pathname),
+    appShellRoutes.includes(url.pathname) &&
+    !url.href.includes('supabase.co'),
   new CacheFirst({
     cacheName: "kola-app-shell",
     plugins: [

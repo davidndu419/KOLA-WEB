@@ -156,41 +156,70 @@ async function pullBusinessFromCloud(userId: string): Promise<BusinessProfile | 
 
 export const authService = {
   async signUp(email: string, password: string, fullName: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
-    
-    if (error) throw error;
-    return data;
+    try {
+      const { data, error } = await Promise.race([
+        supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+            },
+          },
+        }),
+        new Promise<any>((_, reject) => 
+          setTimeout(() => reject(new Error('Sign up timeout. Please try again.')), 15000)
+        )
+      ]);
+      
+      if (error) throw error;
+      return data;
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        throw new Error('Network error: Unable to reach authentication server.');
+      }
+      throw err;
+    }
   },
 
   async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-
-    if (data.user) {
-      const userProfile = {
-        id: data.user.id,
-        email: data.user.email!,
-        full_name: data.user.user_metadata?.full_name,
-      };
-
-      const business = (await loadLocalBusiness(data.user.id)) || (await pullBusinessFromCloud(data.user.id));
-      hydrateStores(userProfile, business);
-
-      if (business && isBrowserOnline()) {
-        await syncService.pullFromCloud(business.business_id);
-        await syncService.updateMetadata(business.business_id, 'last_successful_sync_at', new Date().toISOString());
-      }
+    if (!isBrowserOnline()) {
+      throw new Error('You are offline. Please connect to the internet to sign in.');
     }
 
-    return data;
+    try {
+      const { data, error } = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        new Promise<any>((_, reject) => 
+          setTimeout(() => reject(new Error('Login timeout. Please check your connection.')), 12000)
+        )
+      ]);
+
+      if (error) throw error;
+
+      if (data.user) {
+        const userProfile = {
+          id: data.user.id,
+          email: data.user.email!,
+          full_name: data.user.user_metadata?.full_name,
+        };
+
+        const business = (await loadLocalBusiness(data.user.id)) || (await pullBusinessFromCloud(data.user.id));
+        hydrateStores(userProfile, business);
+
+        if (business && isBrowserOnline()) {
+          // Attempt sync but don't block login if it fails
+          syncService.pullFromCloud(business.business_id).catch(e => console.warn('[Auth] Initial sync failed:', e));
+        }
+      }
+
+      return data;
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        throw new Error('Connection failed. Please check your internet and try again.');
+      }
+      throw err;
+    }
   },
 
   async signOut() {

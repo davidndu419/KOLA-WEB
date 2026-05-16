@@ -23,7 +23,11 @@ export default function LoginPage() {
     e.preventDefault();
     if (isLoading) return;
     setError(null);
-    setIsLoading(true);
+    if (!navigator.onLine) {
+      setError('You are offline. Please connect to the internet to sign in.');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       await authService.signIn(formData.email, formData.password);
