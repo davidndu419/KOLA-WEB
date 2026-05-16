@@ -18,7 +18,8 @@ import {
   ArrowDownLeft,
   Clock,
   ChevronRight,
-  Activity
+  Activity,
+  X
 } from 'lucide-react';
 import { Product, ProductWithCategory, InventoryMovement } from '@/db/schema';
 import { inventoryService } from '@/services/inventory.service';
@@ -95,10 +96,15 @@ export function ProductDetailSheet({
   const totalValue = displayProduct.stock * currentWac;
 
   const handleArchive = async () => {
-    if (confirm(`Are you sure you want to archive ${displayProduct.name}?`)) {
+    if (confirm(`Archived products will be hidden from sales and inventory but preserved in history. Archive ${displayProduct.name}?`)) {
       await inventoryService.deleteProduct(displayProduct.local_id);
       onClose();
     }
+  };
+
+  const handleUnarchive = async () => {
+    await inventoryService.updateProduct(displayProduct.local_id, { is_archived: false });
+    onClose();
   };
 
   return (
@@ -107,11 +113,25 @@ export function ProductDetailSheet({
         <div className="flex flex-col min-h-[500px] max-h-[85vh]">
           {/* Hero Header */}
           <div className="flex items-center gap-5 pb-6">
-            <div className="w-20 h-20 bg-secondary rounded-[32px] flex items-center justify-center text-muted-foreground border-2 border-border/50 shadow-inner">
-              <Package size={32} />
+            <div className="relative">
+              <div className="w-20 h-20 bg-secondary rounded-[32px] flex items-center justify-center text-muted-foreground border-2 border-border/50 shadow-inner">
+                <Package size={32} />
+              </div>
+              {displayProduct.is_archived && (
+                <div className="absolute -top-1 -right-1 bg-amber-500 text-white p-1.5 rounded-xl shadow-lg border-2 border-background">
+                  <X size={12} strokeWidth={3} />
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0 space-y-1">
-              <h2 className="text-xl font-black tracking-tight truncate">{displayProduct.name}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-black tracking-tight truncate">{displayProduct.name}</h2>
+                {displayProduct.is_archived && (
+                  <span className="px-2 py-0.5 bg-amber-500/10 text-amber-600 text-[9px] font-black uppercase rounded-md tracking-widest border border-amber-500/20">
+                    Archived
+                  </span>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 <span className="text-[10px] font-black px-2.5 py-1 bg-primary/10 text-primary rounded-lg uppercase tracking-widest">
                   {(displayProduct as any).category || 'Uncategorized'}
@@ -189,7 +209,7 @@ export function ProductDetailSheet({
                       </div>
                     </div>
 
-                    {displayProduct.stock <= displayProduct.min_stock && (
+                    {displayProduct.stock <= displayProduct.min_stock && !displayProduct.is_archived && (
                       <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl flex items-center gap-3">
                         <TrendingUp size={16} className="text-amber-600" />
                         <p className="text-[10px] font-black text-amber-700 uppercase tracking-wide">
@@ -215,27 +235,41 @@ export function ProductDetailSheet({
                 </div>
 
                 {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-3 pt-4">
-                  <Touchable 
-                    onPress={() => setIsRestockOpen(true)}
-                    className="w-full bg-primary text-white p-5 rounded-[24px] shadow-xl shadow-primary/20 flex items-center justify-center gap-3 font-bold active:scale-95 transition-transform"
-                  >
-                    <Plus size={20} strokeWidth={3} /> Restock
-                  </Touchable>
-                  <Touchable 
-                    onPress={() => router.push(`/inventory/add?id=${displayProduct.local_id}&returnToDetail=true`)}
-                    className="w-full bg-secondary p-5 rounded-[24px] flex items-center justify-center gap-3 font-bold active:scale-95 transition-transform"
-                  >
-                    <Edit3 size={20} /> Edit Info
-                  </Touchable>
-                </div>
+                {!displayProduct.is_archived ? (
+                  <div className="grid grid-cols-2 gap-3 pt-4">
+                    <Touchable 
+                      onPress={() => setIsRestockOpen(true)}
+                      className="w-full bg-primary text-white p-5 rounded-[24px] shadow-xl shadow-primary/20 flex items-center justify-center gap-3 font-bold active:scale-95 transition-transform"
+                    >
+                      <Plus size={20} strokeWidth={3} /> Restock
+                    </Touchable>
+                    <Touchable 
+                      onPress={() => router.push(`/inventory/add?id=${displayProduct.local_id}&returnToDetail=true`)}
+                      className="w-full bg-secondary p-5 rounded-[24px] flex items-center justify-center gap-3 font-bold active:scale-95 transition-transform"
+                    >
+                      <Edit3 size={20} /> Edit Info
+                    </Touchable>
+                  </div>
+                ) : (
+                  <div className="bg-amber-500/5 border border-amber-500/20 p-5 rounded-[28px] text-center space-y-3">
+                    <p className="text-xs font-bold text-amber-700">This product is archived and hidden from sales.</p>
+                    <Touchable 
+                      onPress={handleUnarchive}
+                      className="w-full bg-amber-500 text-white p-4 rounded-2xl flex items-center justify-center gap-3 font-bold shadow-lg shadow-amber-500/20"
+                    >
+                      <Activity size={18} /> Restore Product
+                    </Touchable>
+                  </div>
+                )}
 
-                <Touchable 
-                  onPress={handleArchive}
-                  className="w-full flex items-center justify-center gap-2 p-4 text-red-500 font-bold opacity-60 hover:opacity-100"
-                >
-                  <Trash2 size={16} /> Archive Product
-                </Touchable>
+                {!displayProduct.is_archived && (
+                  <Touchable 
+                    onPress={handleArchive}
+                    className="w-full flex items-center justify-center gap-2 p-4 text-red-500 font-bold opacity-60 hover:opacity-100"
+                  >
+                    <Trash2 size={16} /> Archive Product
+                  </Touchable>
+                )}
               </div>
             ) : (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">

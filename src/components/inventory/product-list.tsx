@@ -11,7 +11,13 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Product } from '@/db/schema';
 import { useSearchParams } from 'next/navigation';
 
-export function ProductList({ searchQuery }: { searchQuery: string }) {
+export function ProductList({ 
+  searchQuery, 
+  isArchived = false 
+}: { 
+  searchQuery: string;
+  isArchived?: boolean;
+}) {
   const parentRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
   const productId = searchParams.get('productId');
@@ -20,7 +26,7 @@ export function ProductList({ searchQuery }: { searchQuery: string }) {
     const results = await db.products
       .orderBy('updated_at')
       .reverse()
-      .filter((product) => !product.is_archived && !product.deleted_at)
+      .filter((product) => product.is_archived === isArchived && !product.deleted_at)
       .toArray();
     
     if (!searchQuery) return results;
@@ -30,7 +36,7 @@ export function ProductList({ searchQuery }: { searchQuery: string }) {
       p.name.toLowerCase().includes(lowerSearch) || 
       p.sku?.toLowerCase().includes(lowerSearch)
     );
-  }, [searchQuery]);
+  }, [searchQuery, isArchived]);
 
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);

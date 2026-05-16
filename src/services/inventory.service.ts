@@ -73,6 +73,10 @@ export const inventoryService = {
     await this.updateProduct(local_id, { is_archived: true });
   },
 
+  async unarchiveProduct(local_id: string) {
+    await this.updateProduct(local_id, { is_archived: false });
+  },
+
   async restock(product_id: string, quantity: number, cost?: number, note?: string) {
     if (quantity <= 0) throw new Error('Quantity must be greater than zero');
     

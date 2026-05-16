@@ -13,7 +13,7 @@ export default function InventoryPage() {
   const router = useRouter();
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [view, setView] = useState<'active' | 'archived'>('active');
   const metrics = useInventoryMetrics();
 
   return (
@@ -27,8 +27,12 @@ export default function InventoryPage() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
             >
-              <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
-              <p className="text-sm text-muted-foreground font-medium">Your business backbone</p>
+              <h1 className="text-2xl font-bold tracking-tight">
+                {view === 'active' ? 'Inventory' : 'Archived Stock'}
+              </h1>
+              <p className="text-sm text-muted-foreground font-medium">
+                {view === 'active' ? 'Your business backbone' : 'Preserved history & assets'}
+              </p>
             </motion.div>
           ) : (
             <motion.div
@@ -70,15 +74,42 @@ export default function InventoryPage() {
           >
             {isSearchVisible ? <X size={20} /> : <Search size={20} />}
           </Touchable>
-          <Touchable className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground">
+          <Touchable 
+            onPress={() => setView(view === 'active' ? 'archived' : 'active')}
+            className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center transition-colors",
+              view === 'archived' ? "bg-amber-500 text-white" : "bg-secondary text-muted-foreground"
+            )}
+          >
             <Filter size={20} />
           </Touchable>
         </div>
       </header>
 
-      {metrics && <InventoryHeroCard metrics={metrics} />}
+      {metrics && view === 'active' && <InventoryHeroCard metrics={metrics} />}
 
-      <ProductList searchQuery={searchQuery} />
+      <div className="flex bg-secondary/50 p-1 rounded-2xl mb-4">
+        <button 
+          onClick={() => setView('active')}
+          className={cn(
+            "flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+            view === 'active' ? "bg-card text-primary shadow-sm" : "text-muted-foreground"
+          )}
+        >
+          Active
+        </button>
+        <button 
+          onClick={() => setView('archived')}
+          className={cn(
+            "flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+            view === 'archived' ? "bg-card text-amber-600 shadow-sm" : "text-muted-foreground"
+          )}
+        >
+          Archived
+        </button>
+      </div>
+
+      <ProductList searchQuery={searchQuery} isArchived={view === 'archived'} />
 
       {/* Floating Action Button */}
       {!isSearchVisible && (
