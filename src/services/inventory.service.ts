@@ -3,6 +3,7 @@ import { db, createBaseEntity } from '@/db/dexie';
 import { Product } from '@/db/schema';
 import { adjustStock } from '@/accounting/inventory';
 import { syncQueueService } from '@/services/syncQueueService';
+import { financeService } from '@/services/finance.service';
 
 export const inventoryService = {
   async addProduct(productData: Omit<Product, keyof import('@/db/schema').BaseEntity | 'id' | 'is_archived'>, business_id: string) {
@@ -92,28 +93,33 @@ export const inventoryService = {
     const newTotalQty = currentQty + quantity;
     const newWac = newTotalQty > 0 ? newTotalValue / newTotalQty : addedUnitCost;
 
-    // Update product: stock is updated by adjustStock later, but we update pricing here
-    await this.updateProduct(product_id, { 
-      buying_price: addedUnitCost, // Latest cost
-      wac_price: newWac 
+    return await db.transaction('rw', [
+      db.products,
+      db.transactions,
+      db.expenses,
+      db.ledger_entries,
+      db.inventory_movements,
+      db.sync_queue
+    ], async () => {
+      // Update product: stock is updated by adjustStock later, but we update pricing here.
+      await this.updateProduct(product_id, {
+        buying_price: addedUnitCost,
+        wac_price: newWac
+      });
+
+      // The expense transaction carries the inventory accounting impact:
+      // Debit Inventory, Credit Cash. Cash solvency is checked there.
+      await financeService.recordExpense({
+        amount: quantity * addedUnitCost,
+        category_id: 'restock-category',
+        category_name: 'Restock',
+        payment_method: 'cash',
+        note: `Restock: ${product.name} — ${quantity} ${product.unit_type}s @ ₦${addedUnitCost.toLocaleString()}`,
+        source_type: 'restock',
+        source_id: product_id
+      }, product.business_id);
+
+      return await adjustStock(product_id, quantity, 'stock-in', note, 'Manual restock', addedUnitCost, true);
     });
-
-    // Automatically record an expense for the restock
-    // Note: We do this before adjustStock so we can pass skipLedger: true
-    // ensuring the accounting impact (Debit Inventory, Credit Cash) 
-    // is handled by the expense transaction, not the adjustment.
-    await import('./finance.service').then(m => m.financeService.recordExpense({
-      amount: quantity * addedUnitCost,
-      category_id: 'restock-category',
-      category_name: 'Restock',
-      payment_method: 'cash', // Default to cash for now
-      note: `Restock: ${product.name} — ${quantity} ${product.unit_type}s @ ₦${addedUnitCost.toLocaleString()}`,
-      source_type: 'restock',
-      source_id: product_id
-    }, product.business_id));
-
-    return await adjustStock(product_id, quantity, 'stock-in', note, 'Manual restock', addedUnitCost, true);
   }
 };
-
-

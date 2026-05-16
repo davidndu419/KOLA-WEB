@@ -18,11 +18,30 @@ export default function ReportTransactionsPage() {
   const [customDate, setCustomDate] = useState<Date>(new Date());
   const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
   const businessId = useAuthStore((state) => state.activeBusinessId);
+  const business = useAuthStore((state) => state.business);
 
   const reportsData = useStableLiveQuery(
     () => businessId ? reportsService.getSnapshot(selectedRange, customDate, customEndDate) : undefined,
     [businessId, selectedRange, customDate, customEndDate]
   );
+
+  const showToast = (message: string) => {
+    window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message } }));
+  };
+
+  const handlePrint = () => {
+    if (!reportsData) return;
+
+    try {
+      exportService.printTransactionHistory(reportsData, {
+        businessId,
+        businessName: business?.name || business?.business_name || 'Kola Business',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to print transaction history.';
+      showToast(message);
+    }
+  };
 
   return (
     <div className="px-6 space-y-4">
@@ -52,7 +71,7 @@ export default function ReportTransactionsPage() {
           onOpenDatePicker={() => setIsDatePickerOpen(true)}
           secondaryAction={{
             icon: Printer,
-            onPress: () => exportService.toPdf(reportsData),
+            onPress: handlePrint,
             label: 'Export'
           }}
           stats={[

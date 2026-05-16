@@ -2,6 +2,7 @@ import { db, createBaseEntity } from '@/db/dexie';
 import { Transaction, LedgerEntry, InventoryMovement, SaleItem } from '@/db/schema';
 import { syncQueueService } from './syncQueueService';
 import { processAccounting } from '@/accounting/engine';
+import { assertBalanced, assertCashSolvencyForEntries } from '@/accounting/guards';
 
 export const correctionService = {
   async correctTransaction(
@@ -44,6 +45,8 @@ export const correctionService = {
       } as any));
 
       if (reversalEntries.length > 0) {
+        assertBalanced(reversalEntries);
+        await assertCashSolvencyForEntries(reversalEntries, business_id);
         await db.ledger_entries.bulkAdd(reversalEntries);
         // Sync enqueued later
       }

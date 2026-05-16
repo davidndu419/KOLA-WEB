@@ -1,6 +1,7 @@
 import { db, createBaseEntity } from '@/db/dexie';
 import type { AuditLog, LedgerEntry, Receivable, Transaction } from '@/db/schema';
 import { syncQueueService } from './syncQueueService';
+import { assertBalanced, assertCashSolvencyForEntries } from '@/accounting/guards';
 
 export type CreditSourceType = 'sale' | 'service';
 export type CreditFilter = 'all' | 'pending' | 'partially-paid' | 'paid' | 'overdue';
@@ -161,6 +162,8 @@ export const creditService = {
     is_reversal: false,
     is_correction: false,
 };
+      assertBalanced([entry]);
+      await assertCashSolvencyForEntries([entry], business_id);
       await db.ledger_entries.add(entry);
       await syncQueueService.enqueue('ledger_entries', 'create', entry, business_id);
 

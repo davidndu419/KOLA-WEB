@@ -1,6 +1,7 @@
 import { db, createBaseEntity } from '@/db/dexie';
 import { Product, InventoryMovement, LedgerEntry } from '@/db/schema';
 import { syncQueueService } from '@/services/syncQueueService';
+import { assertBalanced, assertCashSolvencyForEntries } from './guards';
 
 export async function adjustStock(
   product_id: string, 
@@ -80,6 +81,8 @@ export async function adjustStock(
         description: `Inventory Adjustment: ${reason || note || 'Manual'}`
       };
 
+      assertBalanced([entry]);
+      await assertCashSolvencyForEntries([entry], product.business_id);
       await db.ledger_entries.add(entry as LedgerEntry);
 
       await syncQueueService.enqueue('ledger_entries', 'create', entry, product.business_id);

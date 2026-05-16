@@ -2,6 +2,7 @@ import { db } from '@/db/dexie';
 import { Transaction, LedgerEntry, InventoryMovement, SaleItem, Product } from '@/db/schema';
 import { createBaseEntity } from '@/db/dexie';
 import { syncQueueService } from '@/services/syncQueueService';
+import { AccountingGuardError, assertBalanced, assertCashSolvencyForEntries } from './guards';
 
 export class StockGuardError extends Error {
   constructor(message: string) {
@@ -21,6 +22,7 @@ export async function processAccounting(
   const entries: Omit<LedgerEntry, 'id'>[] = [];
   const movements: Omit<InventoryMovement, 'id'>[] = [];
   const base = createBaseEntity(transaction.business_id);
+  const settlementAccount = transaction.payment_method === 'transfer' ? 'Bank' : 'Cash';
 
   // 1. Handle Sales
   if (transaction.type === 'sale' && items) {
@@ -63,7 +65,7 @@ export async function processAccounting(
       transaction_id: transaction.local_id,
       source_type: 'sale',
       source_id: transaction.reference_id,
-      debit_account: transaction.payment_method === 'credit' ? 'Receivables' : 'Cash',
+      debit_account: transaction.payment_method === 'credit' ? 'Receivables' : settlementAccount,
       credit_account: 'Revenue',
       amount: transaction.amount,
       is_reversal: false,
@@ -139,7 +141,7 @@ export async function processAccounting(
       transaction_id: transaction.local_id,
       source_type: 'service',
       source_id: transaction.reference_id,
-      debit_account: transaction.payment_method === 'credit' ? 'Receivables' : 'Cash',
+      debit_account: transaction.payment_method === 'credit' ? 'Receivables' : settlementAccount,
       credit_account: 'Service Revenue',
       amount: transaction.amount,
       is_reversal: false,
@@ -160,7 +162,7 @@ export async function processAccounting(
       source_type: 'expense',
       source_id: transaction.reference_id,
       debit_account: isRestock ? 'Inventory' : 'Expenses',
-      credit_account: 'Cash',
+      credit_account: settlementAccount,
       amount: transaction.amount,
       is_reversal: false,
       is_correction: false,
@@ -177,7 +179,7 @@ export async function processAccounting(
       transaction_id: transaction.local_id,
       source_type: 'credit_payment',
       source_id: transaction.reference_id,
-      debit_account: 'Cash',
+      debit_account: settlementAccount,
       credit_account: 'Receivables',
       amount: transaction.amount,
       is_reversal: false,
@@ -188,7 +190,14 @@ export async function processAccounting(
   }
 
   // Perform bulk operations
+  if (['sale', 'service', 'expense', 'credit_payment'].includes(transaction.type) && entries.length === 0) {
+    throw new AccountingGuardError('No ledger entries were generated. Transaction was not saved.');
+  }
+
   if (entries.length > 0) {
+    assertBalanced(entries);
+    await assertCashSolvencyForEntries(entries, transaction.business_id);
+
     await db.ledger_entries.bulkAdd(entries as LedgerEntry[]);
     await syncQueueService.enqueueMany(
       entries.map(e => ({ entity: 'ledger_entries', action: 'create', payload: e, business_id: transaction.business_id }))

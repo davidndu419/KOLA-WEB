@@ -1,6 +1,7 @@
 import { db, createBaseEntity } from '@/db/dexie';
 import { Transaction, LedgerEntry, InventoryMovement, SaleItem } from '@/db/schema';
 import { syncQueueService } from './syncQueueService';
+import { assertBalanced, assertCashSolvencyForEntries } from '@/accounting/guards';
 
 export const reversalService = {
   async reverseTransaction(transaction_id: string, reason: string, business_id: string) {
@@ -48,6 +49,8 @@ export const reversalService = {
 } as any)); 
 
       if (reversalEntries.length > 0) {
+        assertBalanced(reversalEntries);
+        await assertCashSolvencyForEntries(reversalEntries, business_id);
         await db.ledger_entries.bulkAdd(reversalEntries);
         await syncQueueService.enqueueMany(
           reversalEntries.map(e => ({ entity: 'ledger_entries', action: 'create', payload: e, business_id: business_id }))
