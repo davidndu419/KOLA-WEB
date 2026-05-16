@@ -118,53 +118,47 @@ export default function ServiceCategoriesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-32">
+    <div className="min-h-screen bg-background pb-32 max-w-7xl mx-auto w-full">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-border/40 px-6 py-4">
-        <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-border/40 px-6 py-6 md:px-10">
+        <div className="flex items-center gap-6">
           <Touchable 
             onPress={() => router.back()}
-            className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
+            className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center transition-transform active:scale-95"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={22} />
           </Touchable>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-black tracking-tight">Service Categories</h1>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+            <h1 className="text-2xl font-black tracking-tight md:text-3xl">Service Categories</h1>
+            <p className="text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">
               Manage Professional Services
             </p>
           </div>
-          <Touchable 
-            onPress={() => setIsAddSheetOpen(true)}
-            className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20"
-          >
-            <Plus size={20} />
-          </Touchable>
         </div>
 
         {/* Search Bar */}
-        <div className="mt-4 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+        <div className="mt-8 relative max-w-2xl">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
           <input 
             type="text"
             placeholder="Search categories..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-secondary/50 border-none rounded-2xl py-3 pl-12 pr-4 text-sm font-bold placeholder:text-muted-foreground/40 focus:ring-2 focus:ring-primary/20 outline-none"
+            className="w-full bg-secondary/50 border border-border/40 rounded-2xl py-4 pl-14 pr-6 text-sm md:text-base font-bold placeholder:text-muted-foreground/40 focus:ring-2 focus:ring-primary/20 outline-none transition-all"
           />
         </div>
       </header>
 
       {/* Categories List */}
-      <div className="px-6 py-6 space-y-4">
+      <div className="px-6 py-4 md:px-10 w-full">
         {filteredCategories.length === 0 ? (
-          <div className="py-20 flex flex-col items-center justify-center text-center px-10">
+          <div className="py-20 flex flex-col items-center justify-center text-center px-10 glass-card rounded-[40px] border-dashed max-w-4xl mx-auto">
             <div className="w-20 h-20 bg-secondary/50 rounded-full flex items-center justify-center mb-4 text-muted-foreground/40">
               <Zap size={40} />
             </div>
             <h3 className="font-black text-lg">No Categories Found</h3>
             <p className="text-sm text-muted-foreground font-medium mt-2">
-              Create service categories like "Haircut", "Consultation", or "Maintenance" to speed up your billing.
+              Create service categories to speed up your billing.
             </p>
             <Touchable 
               onPress={() => setIsAddSheetOpen(true)}
@@ -174,49 +168,72 @@ export default function ServiceCategoriesPage() {
             </Touchable>
           </div>
         ) : (
-          <div className="divide-y divide-border/40">
+          <div className="divide-y divide-border/30 w-full">
             {filteredCategories.map((cat) => (
               <Touchable 
                 key={cat.local_id} 
                 onPress={() => openEdit(cat)}
-                className="py-4 flex items-center gap-4 active:bg-secondary/40 transition-colors rounded-xl px-2 -mx-2"
+                className={cn(
+                  "w-full py-4 flex items-center justify-between group transition-colors active:bg-secondary/40 text-left",
+                  cat.status === 'inactive' && "opacity-60"
+                )}
               >
-                <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
-                  cat.status === 'active' ? "bg-indigo-500/10 text-indigo-600" : "bg-slate-500/10 text-slate-400"
-                )}>
-                  <Zap size={24} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className={cn(
-                      "font-black text-[15px] tracking-tight truncate",
-                      cat.status === 'inactive' && "text-muted-foreground"
-                    )}>
-                      {cat.name}
-                    </h4>
-                    {cat.status === 'inactive' && (
-                      <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">
-                        Inactive
-                      </span>
-                    )}
+                <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
+                  {/* Service Icon */}
+                  <div className={cn(
+                    "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-transform group-active:scale-95",
+                    cat.status === 'active' ? "bg-indigo-500/10 text-indigo-600" : "bg-slate-500/10 text-slate-400"
+                  )}>
+                    <Zap size={20} strokeWidth={2.5} />
                   </div>
-                  <p className="text-[11px] text-muted-foreground/60 font-bold uppercase truncate">
-                    {cat.description || 'No description'}
-                  </p>
+
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <h4 className={cn(
+                        "font-black text-[15px] tracking-tight truncate",
+                        cat.status === 'inactive' && "text-muted-foreground"
+                      )}>
+                        {cat.name}
+                      </h4>
+                      {cat.status === 'inactive' && (
+                        <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 flex-shrink-0">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground/60 font-bold uppercase tracking-wider truncate">
+                      {cat.description || 'No description'}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-black text-sm tabular-nums">
-                    {cat.default_price ? `₦${cat.default_price.toLocaleString()}` : 'No Price'}
-                  </p>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40">
-                    Default Rate
-                  </p>
+
+                <div className="flex-shrink-0 flex items-center gap-4">
+                  <div className="text-right space-y-0.5">
+                    <p className="font-black text-[16px] tabular-nums tracking-tighter">
+                      {cat.default_price ? `₦${cat.default_price.toLocaleString()}` : '—'}
+                    </p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40">
+                      Default Rate
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-secondary/50 flex items-center justify-center text-muted-foreground/40 group-hover:bg-primary group-hover:text-white transition-colors flex-shrink-0">
+                    <Edit2 size={14} />
+                  </div>
                 </div>
               </Touchable>
             ))}
           </div>
         )}
+      </div>
+
+      {/* Floating Action Button */}
+      <div className="fixed bottom-24 right-6 z-30">
+        <Touchable 
+          onPress={() => setIsAddSheetOpen(true)}
+          className="w-16 h-16 bg-primary text-white rounded-2xl shadow-2xl shadow-primary/40 flex items-center justify-center transition-transform active:scale-95"
+        >
+          <Plus size={32} strokeWidth={2.5} />
+        </Touchable>
       </div>
 
       {/* Add/Edit Sheet */}

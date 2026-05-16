@@ -25,14 +25,17 @@ export function RecordServiceSheet({
 
   const [serviceName, setServiceName] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
   const [amount, setAmount] = useState<number>(0);
   const [customerName, setCustomerName] = useState('');
   const [payment_method, setPaymentMethod] = useState<'cash' | 'transfer' | 'credit'>('cash');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isManualAmount, setIsManualAmount] = useState(false);
   
   // Quick Create State
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const [newCatPrice, setNewCatPrice] = useState('');
 
   const categories = useLiveQuery(
     () => businessId 
@@ -46,15 +49,19 @@ export function RecordServiceSheet({
   ) || [];
 
   // Handle category selection and price autofill
-  useEffect(() => {
-    if (selectedCategoryId) {
-      const cat = categories.find(c => c.local_id === selectedCategoryId);
-      if (cat) {
-        if (!serviceName) setServiceName(cat.name);
-        if (cat.default_price && amount === 0) setAmount(cat.default_price);
-      }
+  const handleCategorySelect = (categoryId: string) => {
+    const cat = categories.find(c => c.local_id === categoryId || c.id?.toString() === categoryId);
+    if (cat) {
+      setSelectedCategoryId(cat.local_id);
+      setSelectedCategoryName(cat.name);
+      setServiceName(cat.name);
+      
+      // Update amount to the category's default price
+      const price = Number(cat.default_price || 0);
+      setAmount(price);
+      setIsManualAmount(false);
     }
-  }, [selectedCategoryId, categories]);
+  };
 
   const handleConfirm = async () => {
     if (!serviceName || amount <= 0 || !businessId) return;
@@ -64,6 +71,7 @@ export function RecordServiceSheet({
       await financeService.recordService({
         name: serviceName,
         category_id: selectedCategoryId || undefined,
+        category_name: selectedCategoryName || undefined,
         amount: amount,
         payment_method: payment_method,
         customer_id: payment_method === 'credit' ? 'walk-in-customer' : undefined,
@@ -82,25 +90,35 @@ export function RecordServiceSheet({
   const resetForm = () => {
     setServiceName('');
     setSelectedCategoryId(null);
+    setSelectedCategoryName(null);
     setAmount(0);
     setCustomerName('');
     setPaymentMethod('cash');
+    setIsManualAmount(false);
   };
 
   const handleQuickCreate = async () => {
     if (!newCatName || !businessId) return;
     try {
+      const price = newCatPrice ? Number(newCatPrice) : 0;
       const newCat: ServiceCategory = {
         ...createBaseEntity(businessId),
         name: newCatName,
+        default_price: price,
         status: 'active',
       };
       await db.service_categories.add(newCat);
       await syncQueueService.enqueue('service_categories', 'create', newCat, businessId);
       
+      // Auto-select the newly created category
       setSelectedCategoryId(newCat.local_id);
-      setServiceName(newCatName);
+      setSelectedCategoryName(newCat.name);
+      setServiceName(newCat.name);
+      setAmount(price);
+      setIsManualAmount(false);
+      
       setNewCatName('');
+      setNewCatPrice('');
       setIsQuickCreateOpen(false);
     } catch (error) {
       console.error('Failed to quick-create category:', error);
@@ -124,7 +142,7 @@ export function RecordServiceSheet({
                 {categories.map(cat => (
                   <Touchable 
                     key={cat.local_id}
-                    onPress={() => setSelectedCategoryId(cat.local_id)}
+                    onPress={() => handleCategorySelect(cat.local_id)}
                     className={cn(
                       "px-4 py-2.5 rounded-xl border-2 transition-all flex items-center gap-2",
                       selectedCategoryId === cat.local_id 
@@ -163,7 +181,10 @@ export function RecordServiceSheet({
               <input 
                 type="number"
                 value={amount || ''}
-                onChange={(e) => setAmount(Number(e.target.value))}
+                onChange={(e) => {
+                  setAmount(Number(e.target.value));
+                  setIsManualAmount(true);
+                }}
                 placeholder="Amount Charged"
                 className="w-full bg-secondary rounded-2xl p-4 pl-10 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500 tabular-nums"
               />
@@ -231,6 +252,20 @@ export function RecordServiceSheet({
               className="w-full bg-secondary p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary"
               autoFocus
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2">Default Price (Optional)</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-muted-foreground">₦</span>
+              <input 
+                type="number"
+                placeholder="0.00"
+                value={newCatPrice}
+                onChange={e => setNewCatPrice(e.target.value)}
+                className="w-full bg-secondary py-4 pl-10 pr-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
           <Touchable 
             onPress={handleQuickCreate}
