@@ -116,9 +116,13 @@ export const reportService = {
       .where('created_at')
       .between(startDate, endDate)
       .each((entry: any) => {
-  if (entry.debit_account === 'Cash' || entry.debit_account === 'Bank') cashIn += entry.amount;
-  if (entry.credit_account === 'Cash' || entry.credit_account === 'Bank') cashOut += entry.amount;
-});
+        if (entry.debit_account === 'Cash' || entry.debit_account === 'Bank') cashIn += entry.amount;
+        
+        // Exclude restock (Inventory purchases) from cash outflow in this context
+        if ((entry.credit_account === 'Cash' || entry.credit_account === 'Bank') && entry.debit_account !== 'Inventory') {
+          cashOut += entry.amount;
+        }
+      });
 
     return { cashIn, cashOut, netCash: cashIn - cashOut };
   },

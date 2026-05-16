@@ -15,7 +15,8 @@ import {
   Banknote,
   ShieldAlert,
   Activity,
-  CheckCircle2
+  CheckCircle2,
+  Package
 } from 'lucide-react';
 import { Touchable } from '@/components/touchable';
 import { cn } from '@/lib/utils';
@@ -52,6 +53,7 @@ function TransactionRowComponent({
   onPress: () => void;
 }) {
   const tx = transaction;
+  const isRestock = tx.source_type === 'restock';
 
   // Configuration based on type
   const configMap: Record<string, any> = {
@@ -72,11 +74,11 @@ function TransactionRowComponent({
       prefix: '+'
     },
     expense: {
-      icon: Receipt,
-      bgColor: 'bg-red-500/10',
-      iconColor: 'text-red-600',
-      label: 'Expense',
-      amountColor: 'text-red-600',
+      icon: isRestock ? Package : Receipt,
+      bgColor: isRestock ? 'bg-amber-500/10' : 'bg-red-500/10',
+      iconColor: isRestock ? 'text-amber-600' : 'text-red-600',
+      label: isRestock ? 'Restock' : 'Expense',
+      amountColor: isRestock ? 'text-amber-600' : 'text-red-600',
       prefix: '-'
     },
     credit_payment: {
@@ -140,7 +142,7 @@ function TransactionRowComponent({
           <div className="min-w-0 space-y-0.5">
             <div className="flex items-center gap-2 min-w-0">
               <p className="font-black text-[15px] tracking-tight truncate">
-                {tx.type === 'sale' ? (tx.note || 'Walk-in Sale') : config.label}
+                {tx.type === 'sale' ? (tx.note || 'Walk-in Sale') : isRestock ? 'Restock' : config.label}
               </p>
               {tx.sync_status === 'synced' && (
                 <CheckCircle2 size={12} className="text-emerald-500 flex-shrink-0" />

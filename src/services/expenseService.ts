@@ -25,8 +25,8 @@ export const expenseService = {
     previousTransactions: Transaction[],
     range: ResolvedReportRange
   ): ExpenseAnalytics {
-    const expenses = transactions.filter((transaction) => transaction.type === 'expense');
-    const previousExpenses = previousTransactions.filter((transaction) => transaction.type === 'expense');
+    const expenses = transactions.filter((transaction) => transaction.type === 'expense' && transaction.source_type !== 'restock');
+    const previousExpenses = previousTransactions.filter((transaction) => transaction.type === 'expense' && transaction.source_type !== 'restock');
     const totalExpenses = roundCurrency(expenses.reduce((total, transaction) => total + transaction.amount, 0));
     const previousTotal = roundCurrency(previousExpenses.reduce((total, transaction) => total + transaction.amount, 0));
     const categoryMap = new Map<string, ExpenseCategoryBreakdown>();

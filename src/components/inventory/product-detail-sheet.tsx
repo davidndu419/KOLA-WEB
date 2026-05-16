@@ -223,7 +223,7 @@ export function ProductDetailSheet({
                     <Plus size={20} strokeWidth={3} /> Restock
                   </Touchable>
                   <Touchable 
-                    onPress={() => router.push(`/inventory/add?id=${displayProduct.local_id}`)}
+                    onPress={() => router.push(`/inventory/add?id=${displayProduct.local_id}&returnToDetail=true`)}
                     className="w-full bg-secondary p-5 rounded-[24px] flex items-center justify-center gap-3 font-bold active:scale-95 transition-transform"
                   >
                     <Edit3 size={20} /> Edit Info

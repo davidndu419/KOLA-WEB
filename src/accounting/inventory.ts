@@ -8,7 +8,8 @@ export async function adjustStock(
   type: InventoryMovement['type'],
   note?: string,
   reason?: string,
-  unitCost?: number
+  unitCost?: number,
+  skipLedger?: boolean
 ) {
   return await db.transaction('rw', [db.products, db.inventory_movements, db.ledger_entries, db.sync_queue], async () => {
     const product = await db.products.where('local_id').equals(product_id).first();
@@ -59,6 +60,8 @@ export async function adjustStock(
     await syncQueueService.enqueue('inventory_movements', 'create', movement, product.business_id);
 
     // 3. Accounting Impact
+    if (skipLedger) return movement;
+    
     if (type === 'stock-in' || type === 'damage' || type === 'adjustment') {
       const valueChange = (new_stock - previous_stock) * movementUnitCost;
       if (valueChange === 0) return movement;

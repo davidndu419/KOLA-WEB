@@ -87,6 +87,7 @@ function applyFilters(transactions: Transaction[], filters?: ReportFilters) {
 function formatTransactionTitle(transaction: Transaction) {
   if (transaction.type === 'sale') return 'Product sale';
   if (transaction.type === 'service') return transaction.note || 'Service income';
+  if (transaction.source_type === 'restock') return 'Restock';
   return transaction.category_name || 'Expense';
 }
 

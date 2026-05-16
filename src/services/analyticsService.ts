@@ -1,6 +1,6 @@
 import { LedgerEntry, Product, Transaction } from '@/db/schema';
 import { toDonutSegments } from './chartTransformers';
-import { compareDesc, percentageChange, roundCurrency, safeDivide } from './reportSelectors';
+import { compareDesc, isRestockTransaction, percentageChange, roundCurrency, safeDivide } from './reportSelectors';
 
 export interface RankedItem {
   id: string;
@@ -170,7 +170,9 @@ export const analyticsService = {
         .reduce((total, transaction) => total + transaction.amount, 0)
     );
     const cashOutflow = roundCurrency(
-      transactions.filter((transaction) => transaction.type === 'expense').reduce((total, transaction) => total + transaction.amount, 0)
+      transactions
+        .filter((transaction) => transaction.type === 'expense' && !isRestockTransaction(transaction))
+        .reduce((total, transaction) => total + transaction.amount, 0)
     );
     const creditImpact = roundCurrency(
       transactions
@@ -187,7 +189,9 @@ export const analyticsService = {
         .filter((transaction) => transaction.type === 'sale' || transaction.type === 'service')
         .filter((transaction) => transaction.payment_method !== 'credit')
         .reduce((total, transaction) => total + transaction.amount, 0) -
-        previousTransactions.filter((transaction) => transaction.type === 'expense').reduce((total, transaction) => total + transaction.amount, 0)
+        previousTransactions
+          .filter((transaction) => transaction.type === 'expense' && !isRestockTransaction(transaction))
+          .reduce((total, transaction) => total + transaction.amount, 0)
     );
     const netCashFlow = roundCurrency(cashInflow + transferInflow + paymentRecoveries - cashOutflow);
 

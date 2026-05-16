@@ -42,7 +42,7 @@ function revenueFromTransactions(transactions: Transaction[]) {
 function expensesFromTransactions(transactions: Transaction[]) {
   return roundCurrency(
     transactions
-      .filter((transaction) => transaction.type === 'expense')
+      .filter((transaction) => transaction.type === 'expense' && transaction.source_type !== 'restock')
       .reduce((total, transaction) => total + transaction.amount, 0)
   );
 }

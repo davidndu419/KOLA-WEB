@@ -8,9 +8,12 @@ export const financeService = {
     data: {
       amount: number;
       category_id: string;
+      category_name?: string;
       payment_method: 'cash' | 'transfer';
       recipient?: string;
       note?: string;
+      source_type?: string;
+      source_id?: string;
     },
     business_id: string
   ) {
@@ -25,6 +28,10 @@ export const financeService = {
       status: 'completed',
       reference_id: '', // Will be set to expense local_id
       note: data.note,
+      category_id: data.category_id,
+      category_name: data.category_name,
+      source_type: data.source_type,
+      source_id: data.source_id,
     };
 
     return await db.transaction('rw', [
@@ -46,6 +53,8 @@ export const financeService = {
         recipient: data.recipient,
         note: data.note,
         status: 'completed',
+        // We can add source fields to expense if needed by schema, 
+        // but Transaction is the primary source of truth for accounting
       };
       const expenseDbId = await db.expenses.add(expense);
       expense.id = expenseDbId as number;

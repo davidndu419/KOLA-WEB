@@ -162,6 +162,14 @@ export function isActiveTransaction(transaction: Transaction) {
   return !transaction.deleted_at && transaction.status !== 'voided' && transaction.status !== 'reversed';
 }
 
+export function isRestockTransaction(transaction: Transaction) {
+  return (
+    transaction.source_type === 'restock' ||
+    transaction.category_name === 'Restock' ||
+    (transaction as any).is_inventory_restock === true
+  );
+}
+
 export function transactionMatchesFilters(transaction: Transaction, filters: ReportFilters = {}) {
   if (!isActiveTransaction(transaction)) return false;
   if (filters.type && filters.type !== 'all' && transaction.type !== filters.type) return false;

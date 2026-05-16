@@ -31,15 +31,16 @@ export function formatFullTransactionDate(date: any) {
 }
 
 function receiptText(transaction: any) {
+  const isRestock = transaction.source_type === 'restock';
   return [
     'Kola Receipt',
     `Transaction ID: ${transaction.local_id}`,
-    `Type: ${transaction.type}`,
+    `Type: ${isRestock ? 'Restock' : transaction.type}`,
     `Amount: ${money(transaction.amount)}`,
     `Payment: ${transaction.payment_method}`,
     `Date: ${formatFullTransactionDate(transaction.created_at)}`,
     transaction.customer_name ? `Customer: ${transaction.customer_name}` : '',
-
+    isRestock ? 'Category: Inventory Purchase' : '',
     transaction.note ? `Note: ${transaction.note}` : '',
   ].filter(Boolean).join('\n');
 }
@@ -47,6 +48,7 @@ function receiptText(transaction: any) {
 function printReceipt(transaction: any) {
   const popup = window.open('', '_blank', 'noopener,noreferrer,width=390,height=640');
   if (!popup) return;
+  const isRestock = transaction.source_type === 'restock';
 
   popup.document.write(`
     <!doctype html>
@@ -68,7 +70,8 @@ function printReceipt(transaction: any) {
         <button onclick="window.print()">Save as PDF</button>
         <h1>Kola Receipt</h1>
         <p class="muted">${transaction.local_id}</p>
-        <div class="row"><span class="label">Type</span><span class="value">${transaction.type}</span></div>
+        <div class="row"><span class="label">Type</span><span class="value">${isRestock ? 'Restock' : transaction.type}</span></div>
+        ${isRestock ? `<div class="row"><span class="label">Category</span><span class="value">Inventory Purchase</span></div>` : ''}
         <div class="row"><span class="label">Amount</span><span class="value">${money(transaction.amount)}</span></div>
         <div class="row"><span class="label">Payment</span><span class="value">${transaction.payment_method}</span></div>
         <div class="row"><span class="label">Date</span><span class="value">${formatFullTransactionDate(transaction.created_at)}</span></div>
@@ -124,7 +127,8 @@ export function TransactionDetailSheet({
 
           <div className="bg-secondary/60 rounded-[24px] p-4 space-y-3">
             <InfoRow label="Status" value={transaction.status} color={transaction.is_reversed ? 'text-red-500' : transaction.is_edited ? 'text-amber-500' : ''} />
-            <InfoRow label="Type" value={transaction.type} />
+            <InfoRow label="Type" value={transaction.source_type === 'restock' ? 'Restock' : transaction.type} />
+            {transaction.source_type === 'restock' && <InfoRow label="Category" value="Inventory Purchase" />}
 
             <InfoRow label="Amount" value={money(transaction.amount)} />
             <InfoRow label="Payment Method" value={transaction.payment_method} />

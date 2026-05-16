@@ -1,7 +1,7 @@
 // src/components/inventory/product-list.tsx
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
 import { Touchable } from '@/components/touchable';
@@ -9,9 +9,12 @@ import { Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Product } from '@/db/schema';
+import { useSearchParams } from 'next/navigation';
 
 export function ProductList({ searchQuery }: { searchQuery: string }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const searchParams = useSearchParams();
+  const productId = searchParams.get('productId');
 
   const products = useLiveQuery(async () => {
     const results = await db.products
@@ -31,6 +34,15 @@ export function ProductList({ searchQuery }: { searchQuery: string }) {
 
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  
+  // Handle return flow: reopen product detail if productId is in URL
+  useEffect(() => {
+    if (productId && !selectedProduct) {
+      db.products.where('local_id').equals(productId).first().then(p => {
+        if (p) setSelectedProduct(p);
+      });
+    }
+  }, [productId]);
 
   // TanStack Virtual exposes imperative helpers that React Compiler cannot memoize safely.
   // eslint-disable-next-line react-hooks/incompatible-library

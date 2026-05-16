@@ -52,7 +52,13 @@ export default function DashboardPage() {
     for (const entry of relevantEntries) {
       if (entry.deleted_at) continue;
       if (accounts.includes(entry.debit_account)) totalBalance += entry.amount;
-      if (accounts.includes(entry.credit_account)) totalBalance -= entry.amount;
+      
+      // We exclude inventory purchases (restocks) from the balance reduction.
+      // In Option B accounting, restock is an asset conversion (Cash -> Inventory)
+      // and should not reduce the operating capital balance.
+      if (accounts.includes(entry.credit_account) && entry.debit_account !== 'Inventory') {
+        totalBalance -= entry.amount;
+      }
     }
 
     // 2. Range Profit calculation from snapshot

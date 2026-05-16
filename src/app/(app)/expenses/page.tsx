@@ -37,6 +37,9 @@ export default function ExpensesPage() {
     
     let results = await collection.toArray();
     
+    // Filter out restocks from operating expenses list
+    results = results.filter(tx => tx.source_type !== 'restock');
+
     // Filter by date range if not allTime
     if (reportsData?.range) {
         results = results.filter(tx => 

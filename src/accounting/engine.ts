@@ -98,18 +98,20 @@ export async function processAccounting(
 
   // 3. Handle Expenses
   if (transaction.type === 'expense') {
+    const isRestock = transaction.source_type === 'restock';
+    
     entries.push({
       ...base,
       local_id: crypto.randomUUID(),
       transaction_id: transaction.local_id,
       source_type: 'expense',
       source_id: transaction.reference_id,
-      debit_account: 'Expenses',
+      debit_account: isRestock ? 'Inventory' : 'Expenses',
       credit_account: 'Cash',
       amount: transaction.amount,
       is_reversal: false,
       is_correction: false,
-      description: `Expense: ${transaction.local_id}`
+      description: isRestock ? `Restock Purchase: ${transaction.note}` : `Expense: ${transaction.local_id}`
     });
 
   }

@@ -47,6 +47,7 @@ export default function AddProductPage() {
   const { incrementSheets, decrementSheets } = useUIStore();
   
   const productId = searchParams.get('id');
+  const returnToDetail = searchParams.get('returnToDetail') === 'true';
   const isEditing = !!productId;
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<ProductFormValues>({
@@ -88,6 +89,14 @@ export default function AddProductPage() {
     return () => decrementSheets();
   }, [incrementSheets, decrementSheets]);
 
+  const handleBack = () => {
+    if (returnToDetail && productId) {
+      router.push(`/inventory?productId=${productId}`);
+    } else {
+      router.back();
+    }
+  };
+
   const onSubmit = async (data: ProductFormValues) => {
     if (!business) return;
     try {
@@ -101,7 +110,11 @@ export default function AddProductPage() {
         }, business.id);
       }
       
-      router.push('/inventory');
+      if (returnToDetail && productId) {
+        router.push(`/inventory?productId=${productId}`);
+      } else {
+        router.push('/inventory');
+      }
     } catch (err: any) {
       console.error('Failed to save product:', err);
       alert('Error saving product: ' + err.message);
@@ -113,7 +126,7 @@ export default function AddProductPage() {
       {/* Header */}
       <header className="px-6 py-4 flex items-center gap-4 bg-background/80 backdrop-blur-md z-10 border-b border-border/50 flex-shrink-0">
         <Touchable 
-          onPress={() => router.back()}
+          onPress={handleBack}
           className="w-10 h-10 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground"
         >
           <ChevronLeft size={20} />
