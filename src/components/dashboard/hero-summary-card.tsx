@@ -122,14 +122,28 @@ export function HeroSummaryCard({
         </div>
 
         <div className="grid grid-cols-2 gap-y-4 gap-x-6 pt-5 border-t border-white/10">
-          {stats.map((stat, index) => (
-            <div key={index} className="space-y-1">
-              <p className="text-[9px] font-black uppercase tracking-widest text-white/40">{stat.label}</p>
-              <p className={cn("text-sm font-black tabular-nums", stat.color || "text-white")}>
-                {typeof stat.value === 'number' && stat.label.toLowerCase().includes('total') ? money(stat.value) : stat.value}
-              </p>
-            </div>
-          ))}
+          {stats.map((stat, index) => {
+            const isMoney = typeof stat.value === 'number' && 
+              (stat.label.toLowerCase().includes('total') || 
+               stat.label.toLowerCase().includes('revenue') || 
+               stat.label.toLowerCase().includes('profit') ||
+               stat.label.toLowerCase().includes('expense') ||
+               stat.label.toLowerCase().includes('balance') ||
+               stat.label.toLowerCase().includes('value') ||
+               stat.label.toLowerCase().includes('amount')) &&
+              !stat.label.toLowerCase().includes('records') &&
+              !stat.label.toLowerCase().includes('count') &&
+              !stat.label.toLowerCase().includes('items');
+
+            return (
+              <div key={index} className="space-y-1">
+                <p className="text-[9px] font-black uppercase tracking-widest text-white/40">{stat.label}</p>
+                <p className={cn("text-sm font-black tabular-nums", stat.color || "text-white")}>
+                  {isMoney ? money(stat.value as number) : stat.value}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
     </motion.div>
