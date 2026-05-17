@@ -361,7 +361,14 @@ export const syncService = {
 
   async getQueueDiagnostics(business_id: string) {
     await this.recoverStaleSyncState(business_id);
+    return this.readQueueDiagnostics(business_id);
+  },
 
+  /**
+   * Read-only diagnostics — safe to call inside useLiveQuery / liveQuery.
+   * Does NOT perform any write operations (no stale recovery).
+   */
+  async readQueueDiagnostics(business_id: string) {
     const queue = await db.sync_queue
       .where('business_id')
       .equals(business_id)
@@ -391,6 +398,7 @@ export const syncService = {
       }),
     };
   },
+
 
   async retryFailed(business_id: string) {
     await db.sync_queue

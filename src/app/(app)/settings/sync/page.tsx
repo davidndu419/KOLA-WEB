@@ -69,7 +69,7 @@ export default function SyncSettingsPage() {
   }, [businessId]);
 
   const diagnostics = useLiveQuery(
-    () => businessId ? syncService.getQueueDiagnostics(businessId) : Promise.resolve(null),
+    () => businessId ? syncService.readQueueDiagnostics(businessId) : Promise.resolve(null),
     [businessId, syncTick]
   );
   
@@ -78,6 +78,15 @@ export default function SyncSettingsPage() {
   const failedCount = diagnostics?.failedCount || 0;
   const firstProblem = diagnostics?.firstProblem;
   const syncLock = diagnostics?.lock;
+
+  // Run stale sync recovery on mount (write operation — must be outside liveQuery)
+  useEffect(() => {
+    if (businessId) {
+      syncService.recoverStaleSyncState(businessId).then(() => {
+        setSyncTick((v) => v + 1);
+      });
+    }
+  }, [businessId]);
 
   useEffect(() => {
     setHasSwController(typeof navigator !== 'undefined' && !!navigator.serviceWorker?.controller);
