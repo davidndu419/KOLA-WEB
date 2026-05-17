@@ -131,10 +131,9 @@ export default function ExpensesPage() {
       <div className="fixed bottom-24 right-4 z-40">
         <Touchable 
           onPress={() => setIsExpenseSheetOpen(true)}
-          className="h-14 px-6 bg-red-500 text-white rounded-[24px] flex items-center gap-3 shadow-2xl shadow-red-500/40 active:scale-95 transition-transform"
+          className="w-16 h-16 bg-red-500 text-white rounded-2xl shadow-2xl shadow-red-500/40 flex items-center justify-center active:scale-95 transition-transform"
         >
-          <Plus size={24} strokeWidth={3} />
-          <span className="text-xs font-black uppercase tracking-widest">Record</span>
+          <Plus size={32} strokeWidth={2.5} />
         </Touchable>
       </div>
 

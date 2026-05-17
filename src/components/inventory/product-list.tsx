@@ -33,13 +33,23 @@ export function ProductList({
       .filter((product) => product.business_id === businessId && product.is_archived === isArchived && !product.deleted_at)
       .toArray();
     
-    if (!searchQuery) return results;
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return results;
     
-    const lowerSearch = searchQuery.toLowerCase();
-    return results.filter(p => 
-      p.name.toLowerCase().includes(lowerSearch) || 
-      p.sku?.toLowerCase().includes(lowerSearch)
-    );
+    return results.filter((product) => {
+      const searchText = [
+        product.name,
+        product.sku,
+        product.barcode,
+        product.selling_price,
+        product.buying_price,
+        product.wac_price,
+      ].filter((value) => value !== undefined && value !== null)
+        .join(' ')
+        .toLowerCase();
+
+      return searchText.includes(query);
+    });
   }, [businessId, searchQuery, isArchived]);
 
 
@@ -72,7 +82,7 @@ export function ProductList({
           <Package size={32} />
         </div>
         <div>
-          <h3 className="font-bold text-lg">No Products Found</h3>
+          <h3 className="font-bold text-lg">{searchQuery.trim() ? 'No results found' : 'No Products Found'}</h3>
           <p className="text-sm text-muted-foreground max-w-[200px] mx-auto">
             {searchQuery ? "Try a different search term" : "Start by adding your first product to track stock."}
           </p>
