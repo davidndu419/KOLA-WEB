@@ -8,6 +8,7 @@ import { getStorageKeys } from '@/lib/runtime-mode';
 const MAX_RETRIES = 5;
 const BATCH_SIZE = 20;
 const STALE_SYNC_MS = 60_000;
+const autoRetriedBusinesses = new Set<string>();
 
 // Mode-specific sync lock and instance keys
 const getSyncLockKey = () => getStorageKeys().syncLock;
@@ -172,10 +173,76 @@ const stripDexieId = (payload: any) => {
   return clean;
 };
 
+const getSyncFailureInfo = (error?: string) => {
+  const message = error || '';
+  const lower = message.toLowerCase();
+
+  if (!message) {
+    return {
+      type: 'none',
+      label: 'No error',
+      detail: 'No sync error recorded',
+      retryable: false,
+    };
+  }
+
+  const columnMatch = message.match(/'([^']+)' column|column ['"]?([a-zA-Z0-9_]+)['"]?|Could not find the '([^']+)'/i);
+  const column = columnMatch?.[1] || columnMatch?.[2] || columnMatch?.[3];
+
+  if (lower.includes('row-level security') || lower.includes('rls') || lower.includes('42501')) {
+    return {
+      type: 'rls_violation',
+      label: 'RLS violation',
+      detail: 'Supabase rejected this row through row-level security. Run the RLS parity migration, then retry.',
+      retryable: true,
+    };
+  }
+
+  if (lower.includes('could not find') || lower.includes('schema cache') || lower.includes('pgrst204') || lower.includes('column')) {
+    return {
+      type: 'schema_mismatch',
+      label: 'Schema mismatch',
+      detail: column
+        ? `Supabase is missing or has not refreshed column "${column}". Run the schema parity migration and reload PostgREST schema cache.`
+        : 'Supabase schema/cache does not match the local sync payload.',
+      retryable: true,
+    };
+  }
+
+  if (lower.includes('foreign key') || lower.includes('violates foreign key')) {
+    return {
+      type: 'reference_mismatch',
+      label: 'Reference mismatch',
+      detail: 'Supabase still expects remote UUID foreign keys, but the offline app syncs local IDs.',
+      retryable: true,
+    };
+  }
+
+  if (lower.includes('failed to fetch') || lower.includes('network') || lower.includes('timeout')) {
+    return {
+      type: 'network',
+      label: 'Network',
+      detail: 'Network or Supabase connectivity failed during sync.',
+      retryable: true,
+    };
+  }
+
+  return {
+    type: 'unknown',
+    label: 'Sync error',
+    detail: message,
+    retryable: true,
+  };
+};
+
 const serializeBusinessForSync = (payload: any) => ({
   ...serializeBase(payload),
   owner_id: payload.user_id,
   name: payload.business_name || payload.name,
+  business_name: payload.business_name || payload.name,
+  business_type: payload.business_type || payload.type,
+  type: payload.type || payload.business_type,
+  currency: payload.currency || 'NGN',
 });
 
 const serializeLedgerEntryForSync = (payload: any) => ({
@@ -204,6 +271,9 @@ const serializeTransactionForSync = (payload: any) => ({
   customer_name: payload.customer_name,
   category_id: payload.category_id,
   category_name: payload.category_name,
+  display_title: payload.display_title,
+  item_names: payload.item_names,
+  service_name: payload.service_name,
   note: payload.note,
   is_reversed: !!payload.is_reversed,
   is_edited: !!payload.is_edited,
@@ -213,6 +283,20 @@ const serializeTransactionForSync = (payload: any) => ({
   source_id: payload.source_id,
   correction_version: payload.correction_version,
   corrected_at: payload.corrected_at,
+  original_payload: payload.original_payload,
+});
+
+const serializeServiceForSync = (payload: any) => ({
+  ...serializeBase(payload),
+  transaction_id: payload.transaction_id,
+  name: payload.name,
+  category_id: payload.category_id,
+  category_name: payload.category_name,
+  customer_id: payload.customer_id,
+  amount: payload.amount,
+  payment_method: payload.payment_method,
+  status: payload.status,
+  note: payload.note,
 });
 
 const serializeSaleForSync = (payload: any) => ({
@@ -270,6 +354,8 @@ const serializeInventoryMovementForSync = (payload: any) => ({
   note: payload.note,
   reason: payload.reason,
   status: payload.status,
+  unit_cost: payload.unit_cost,
+  total_cost: payload.total_cost,
 });
 
 const serializeProductForSync = (payload: any) => ({
@@ -291,6 +377,7 @@ const serializeProductForSync = (payload: any) => ({
   notes: payload.notes,
   tags: payload.tags,
   is_archived: !!payload.is_archived,
+  wac_price: payload.wac_price,
 });
 
 const serializeServiceCategoryForSync = (payload: any) => ({
@@ -320,6 +407,7 @@ const serializeForSync = (entity: string, payload: any) => {
     case 'sales': return serializeSaleForSync(payload);
     case 'sale_items': return serializeSaleItemForSync(payload);
     case 'expenses': return serializeExpenseForSync(payload);
+    case 'services': return serializeServiceForSync(payload);
     case 'receivables': return serializeReceivableForSync(payload);
     case 'inventory_movements': return serializeInventoryMovementForSync(payload);
     case 'products': return serializeProductForSync(payload);
@@ -391,27 +479,69 @@ export const syncService = {
         stale: isStaleLock(lock),
         ownedByThisInstance: isBrowser() ? lock.owner === getInstanceId() : true,
       } : null,
-      items: queue.sort((a, b) => {
-        const left = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const right = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return left - right;
-      }),
+      items: queue
+        .sort((a, b) => {
+          const left = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const right = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return left - right;
+        })
+        .map((item) => ({
+          ...item,
+          failure: getSyncFailureInfo(item.error),
+          retryEligible: item.status === 'failed' && getSyncFailureInfo(item.error).retryable,
+        })),
     };
   },
 
 
   async retryFailed(business_id: string) {
-    await db.sync_queue
+    return this.retryFailedQueueItems(business_id);
+  },
+
+  async retryFailedQueueItems(business_id: string) {
+    const failedItems = await db.sync_queue
       .where('business_id')
       .equals(business_id)
       .filter((item) => item.status === 'failed')
-      .modify({
+      .toArray();
+
+    const retryableItems = failedItems.filter((item) => getSyncFailureInfo(item.error).retryable && item.id !== undefined);
+    if (retryableItems.length === 0) return 0;
+
+    await db.sync_queue.bulkUpdate(retryableItems.map((item) => ({
+      key: item.id!,
+      changes: {
         status: 'pending',
+        retry_count: 0,
         error: undefined,
         sync_started_at: null,
         sync_lock_owner: null,
         last_sync_heartbeat_at: null,
-      });
+      },
+    })));
+
+    return retryableItems.length;
+  },
+
+  async retrySingleItem(id: number) {
+    const item = await db.sync_queue.get(id);
+    if (!item || item.status !== 'failed') {
+      throw new Error('Only failed sync items can be retried');
+    }
+
+    const failure = getSyncFailureInfo(item.error);
+    if (!failure.retryable) {
+      throw new Error('This sync item is not retryable');
+    }
+
+    await db.sync_queue.update(id, {
+      status: 'pending',
+      retry_count: 0,
+      error: undefined,
+      sync_started_at: null,
+      sync_lock_owner: null,
+      last_sync_heartbeat_at: null,
+    });
   },
 
   async recoverStaleSyncState(business_id?: string) {
@@ -740,6 +870,13 @@ export const syncService = {
     }
 
     await this.recoverStaleSyncState(business_id);
+    if (!autoRetriedBusinesses.has(business_id)) {
+      const retriedCount = await this.retryFailedQueueItems(business_id);
+      if (retriedCount > 0) {
+        console.info(`[SyncService] Retrying ${retriedCount} recoverable failed sync item(s) after schema/RLS recovery.`);
+      }
+      autoRetriedBusinesses.add(business_id);
+    }
 
     const lock = acquireSyncLock(business_id);
     if (!lock.acquired) {

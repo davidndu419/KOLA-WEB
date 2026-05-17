@@ -124,8 +124,15 @@ export default function SyncSettingsPage() {
 
   const handleRetryFailed = async () => {
     if (!businessId) return;
-    await syncService.retryFailed(businessId);
-    setSyncMessage('Failed sync items moved back to pending');
+    const count = await syncService.retryFailedQueueItems(businessId);
+    setSyncMessage(count > 0 ? `${count} failed sync item(s) moved back to pending` : 'No retryable failed sync items found');
+    setSyncTick((value) => value + 1);
+  };
+
+  const handleRetrySingleItem = async (id?: number) => {
+    if (!id) return;
+    await syncService.retrySingleItem(id);
+    setSyncMessage('Sync item moved back to pending');
     setSyncTick((value) => value + 1);
   };
 
@@ -347,6 +354,47 @@ export default function SyncSettingsPage() {
                   {item.error && (
                     <div className="p-3 bg-red-500/5 rounded-xl border border-red-500/10">
                       <p className="text-[10px] font-bold text-red-600 break-words leading-relaxed">{item.error}</p>
+                    </div>
+                  )}
+
+                  {item.failure && item.failure.type !== 'none' && (
+                    <div className="p-3 bg-secondary/60 rounded-xl border border-border/40 space-y-1">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                        Diagnosis
+                      </p>
+                      <p className="text-[11px] font-black text-foreground">{item.failure.label}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground leading-relaxed">{item.failure.detail}</p>
+                      <p className={cn(
+                        "text-[9px] font-black uppercase tracking-widest",
+                        item.retryEligible ? "text-emerald-600" : "text-red-600"
+                      )}>
+                        {item.retryEligible ? 'Retry eligible' : 'Not retry eligible'}
+                      </p>
+                    </div>
+                  )}
+
+                  {item.status === 'failed' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Touchable
+                        onPress={() => handleRetrySingleItem(item.id)}
+                        disabled={!item.retryEligible}
+                        className={cn(
+                          "h-10 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest",
+                          item.retryEligible
+                            ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                            : "bg-secondary text-muted-foreground"
+                        )}
+                      >
+                        <RefreshCw size={12} />
+                        Retry Item
+                      </Touchable>
+                      <Touchable
+                        onPress={() => handleClearFailedItem(item.id)}
+                        className="h-10 rounded-xl bg-red-500/10 text-red-600 border border-red-500/20 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest"
+                      >
+                        <Trash2 size={12} />
+                        Clear Permanently
+                      </Touchable>
                     </div>
                   )}
                 </div>
