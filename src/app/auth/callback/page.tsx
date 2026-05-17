@@ -45,12 +45,15 @@ export default function AuthCallbackPage() {
 
         setStatus('success');
 
-        // Hydrate auth via checkSession (handles local DB, stores, etc.)
+        // Hydrate auth via checkSession — this will:
+        // 1. Detect user switch and clear stale Dexie data if needed
+        // 2. Load or pull the correct business for THIS user
+        // 3. Hydrate Zustand stores with the correct user/business
         await authService.checkSession();
 
         showToast('Successfully signed in!');
 
-        // Determine where to redirect
+        // Determine where to redirect — re-read store AFTER checkSession
         const store = useAuthStore.getState();
         
         // Small delay for toast visibility

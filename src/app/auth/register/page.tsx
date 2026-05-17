@@ -42,6 +42,14 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
+      // Check if email is already registered (prevents duplicate accounts across providers)
+      const emailExists = await authService.checkEmailExists(formData.email);
+      if (emailExists) {
+        setError('Email already exists. Please login instead.');
+        setIsLoading(false);
+        return;
+      }
+
       const data = await authService.signUp(formData.email, formData.password, formData.fullName);
       
       // If Supabase requires email confirmation, redirect to verification page

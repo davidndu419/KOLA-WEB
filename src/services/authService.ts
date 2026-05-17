@@ -48,6 +48,100 @@ function isBrowserOnline() {
   return typeof navigator === 'undefined' || navigator.onLine;
 }
 
+// ─── USER-SWITCH ISOLATION ───────────────────────────────────────────────────
+// Tracks the last authenticated user ID per runtime mode so we can detect
+// when a *different* user signs in and clear stale data.
+
+const LAST_USER_KEY_PREFIX = 'kola-last-auth-user';
+
+function getLastUserKey(): string {
+  const mode = getRuntimeMode();
+  return `${LAST_USER_KEY_PREFIX}-${mode}`;
+}
+
+function getLastAuthUserId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(getLastUserKey());
+}
+
+function setLastAuthUserId(userId: string): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(getLastUserKey(), userId);
+}
+
+function clearLastAuthUserId(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(getLastUserKey());
+}
+
+/**
+ * Clears ALL user-scoped data from Dexie tables for the current runtime mode.
+ * Called when a different user signs in to prevent cross-user data leakage.
+ * Preserves only the database structure (schema/indexes).
+ */
+async function clearLocalUserData(): Promise<void> {
+  console.log('[Auth] Clearing local Dexie user data for user switch');
+
+  const tablesToClear = [
+    'businesses',
+    'products',
+    'categories',
+    'service_categories',
+    'expense_categories',
+    'transactions',
+    'sales',
+    'sale_items',
+    'services',
+    'expenses',
+    'ledger_entries',
+    'sync_queue',
+    'inventory_movements',
+    'customers',
+    'suppliers',
+    'receivables',
+    'app_settings',
+    'receipts',
+    'audit_logs',
+  ];
+
+  for (const tableName of tablesToClear) {
+    try {
+      const table = (db as any)[tableName];
+      if (table && typeof table.clear === 'function') {
+        await table.clear();
+      }
+    } catch (err) {
+      console.warn(`[Auth] Failed to clear table ${tableName}:`, err);
+    }
+  }
+
+  console.log('[Auth] Local Dexie data cleared');
+}
+
+/**
+ * Detects if the signing-in user is different from the last authenticated user.
+ * If so, clears all stale local data before proceeding with hydration.
+ */
+async function handleUserSwitch(newUserId: string): Promise<void> {
+  const lastUserId = getLastAuthUserId();
+
+  if (lastUserId && lastUserId !== newUserId) {
+    console.log(`[Auth] User switch detected: ${lastUserId.slice(0, 8)}… → ${newUserId.slice(0, 8)}…`);
+
+    // 1. Clear Zustand stores immediately
+    useAuthStore.getState().clearAuth();
+    useStore.getState().logout();
+
+    // 2. Clear all Dexie user data
+    await clearLocalUserData();
+  }
+
+  // Record the new user
+  setLastAuthUserId(newUserId);
+}
+
+// ─── END USER-SWITCH ISOLATION ───────────────────────────────────────────────
+
 function normalizeBusiness(raw: any, userId: string): BusinessProfile {
   const businessId = raw?.business_id || raw?.local_id || raw?.id || crypto.randomUUID();
   const name = raw?.business_name || raw?.name || 'Kola Business';
@@ -127,26 +221,32 @@ function hydrateStores(user: UserProfile, business: BusinessProfile | null) {
 }
 
 async function loadLocalBusiness(userId: string): Promise<BusinessProfile | null> {
+  // First try to find a business that belongs to this specific user
+  const byUser = await db.businesses.where('user_id').equals(userId).first();
+  if (byUser) return normalizeBusiness(byUser, userId);
+
+  // Check active_business_id setting, but ONLY use it if the business belongs to this user
   const activeSetting = await db.app_settings.where('key').equals('active_business_id').first();
   const activeBusinessId = activeSetting?.value;
 
   if (activeBusinessId) {
     const active = await db.businesses.where('business_id').equals(activeBusinessId).first();
-    if (active && (!active.user_id || active.user_id === userId)) {
-      const normalized = normalizeBusiness(active, userId);
-      if (!active.user_id) await saveBusinessLocally(normalized);
-      return normalized;
+    // CRITICAL: Only return if this business belongs to the current user
+    if (active && active.user_id === userId) {
+      return normalizeBusiness(active, userId);
     }
   }
 
-  const byUser = await db.businesses.where('user_id').equals(userId).first();
-  if (byUser) return normalizeBusiness(byUser, userId);
-
+  // Check business_profile setting, but validate ownership
   const profileSetting = await db.app_settings.where('key').equals('business_profile').first();
   if (profileSetting?.value) {
-    const normalized = normalizeBusiness(profileSetting.value, userId);
-    await saveBusinessLocally(normalized);
-    return normalized;
+    const profileUserId = profileSetting.value.user_id || profileSetting.value.owner_id;
+    // Only use if it belongs to this user or has no user_id set
+    if (!profileUserId || profileUserId === userId) {
+      const normalized = normalizeBusiness(profileSetting.value, userId);
+      await saveBusinessLocally(normalized);
+      return normalized;
+    }
   }
 
   return null;
@@ -175,6 +275,31 @@ async function pullBusinessFromCloud(userId: string): Promise<BusinessProfile | 
 }
 
 export const authService = {
+  /**
+   * Check if an email is already registered (server-side via API route).
+   * Returns true if the email exists, false otherwise.
+   */
+  async checkEmailExists(email: string): Promise<boolean> {
+    try {
+      const response = await fetch('/api/auth/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim() }),
+      });
+
+      if (!response.ok) {
+        console.warn('[Auth] Email check API returned non-OK status:', response.status);
+        return false; // Fail open — let Supabase handle it
+      }
+
+      const data = await response.json();
+      return data.exists === true;
+    } catch (err) {
+      console.warn('[Auth] Email check failed, allowing signup to proceed:', err);
+      return false; // Fail open on network error
+    }
+  },
+
   async signUp(email: string, password: string, fullName: string) {
     try {
       const redirectUrl = `${getAuthRedirectBase()}/auth/callback`;
@@ -227,6 +352,9 @@ export const authService = {
       }
 
       if (data.user) {
+        // ── USER-SWITCH CHECK ──
+        await handleUserSwitch(data.user.id);
+
         const userProfile = {
           id: data.user.id,
           email: data.user.email!,
@@ -237,8 +365,19 @@ export const authService = {
         hydrateStores(userProfile, business);
 
         if (business && isBrowserOnline()) {
-          // Attempt sync but don't block login if it fails
-          syncService.pullFromCloud(business.business_id).catch(e => console.warn('[Auth] Initial sync failed:', e));
+          // Run batched initial sync — blocks until complete so dashboard
+          // shows full data instead of drip-feeding items one by one
+          useAuthStore.getState().setHydrationStatus('hydrating');
+          try {
+            await syncService.pullFromCloudBatched(business.business_id);
+            useAuthStore.getState().setHydrationStatus('complete');
+          } catch (e) {
+            console.warn('[Auth] Initial batched sync failed:', e);
+            useAuthStore.getState().setHydrationStatus('complete'); // Show what we have
+          }
+        } else {
+          // Offline or no business — skip hydration
+          useAuthStore.getState().setHydrationStatus('complete');
         }
       }
 
@@ -319,8 +458,17 @@ export const authService = {
     } catch (err) {
       console.warn('[Auth] Supabase signOut failed (offline?):', err);
     }
+
+    // Clear all stores
     useAuthStore.getState().clearAuth();
     useStore.getState().logout();
+
+    // Clear local Dexie data to prevent data leaking to next user
+    await clearLocalUserData();
+
+    // Clear the last user tracker
+    clearLastAuthUserId();
+
     // Clear PWA runtime mode marker so next launch shows login
     clearRuntimeModeMarker();
   },
@@ -402,6 +550,9 @@ export const authService = {
       }
 
       if (session?.user) {
+        // ── USER-SWITCH CHECK ──
+        await handleUserSwitch(session.user.id);
+
         const userProfile = {
           id: session.user.id,
           email: session.user.email!,
@@ -410,11 +561,26 @@ export const authService = {
 
         const business = (await loadLocalBusiness(session.user.id)) || (await pullBusinessFromCloud(session.user.id));
         hydrateStores(userProfile, business);
+
+        // Run batched initial sync for new/switched users
+        if (business && isBrowserOnline()) {
+          useAuthStore.getState().setHydrationStatus('hydrating');
+          try {
+            await syncService.pullFromCloudBatched(business.business_id);
+            useAuthStore.getState().setHydrationStatus('complete');
+          } catch (e) {
+            console.warn('[Auth] checkSession batched sync failed:', e);
+            useAuthStore.getState().setHydrationStatus('complete');
+          }
+        } else {
+          useAuthStore.getState().setHydrationStatus('complete');
+        }
       } else if (store.isAuthenticated && store.user) {
         // No Supabase session but we have local auth — use it (critical for offline/PWA)
         console.log('[Auth] Using local persistent session (no Supabase session)');
         const business = store.business || await loadLocalBusiness(store.user.id);
         hydrateStores(store.user, business as BusinessProfile | null);
+        useAuthStore.getState().setHydrationStatus('complete');
       } else {
         // No session anywhere — clear auth
         console.log('[Auth] No session found, clearing auth');

@@ -36,11 +36,13 @@ interface AuthState {
   businessType: string | null;
   isAuthenticated: boolean;
   isInitialized: boolean;
+  initialHydrationStatus: 'idle' | 'hydrating' | 'complete' | 'failed';
   
   setAuth: (user: UserProfile, business: BusinessProfile | null) => void;
   updateBusiness: (business: BusinessProfile) => void;
   clearAuth: () => void;
   setInitialized: (value: boolean) => void;
+  setHydrationStatus: (status: 'idle' | 'hydrating' | 'complete' | 'failed') => void;
 }
 
 // Resolve the storage key at module load time (client-side) or use a safe default (SSR)
@@ -59,6 +61,7 @@ export const useAuthStore = create<AuthState>()(
       businessType: null,
       isAuthenticated: false,
       isInitialized: false,
+      initialHydrationStatus: 'idle' as const,
 
       setAuth: (user, business) => set({ 
         user, 
@@ -84,10 +87,13 @@ export const useAuthStore = create<AuthState>()(
         activeBusinessId: null,
         businessName: null,
         businessType: null,
-        isAuthenticated: false 
+        isAuthenticated: false,
+        initialHydrationStatus: 'idle' as const,
       }),
 
       setInitialized: (isInitialized) => set({ isInitialized }),
+
+      setHydrationStatus: (initialHydrationStatus) => set({ initialHydrationStatus }),
     }),
     {
       name: storageKey,

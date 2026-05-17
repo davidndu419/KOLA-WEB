@@ -954,6 +954,153 @@ export const syncService = {
     await this.updateMetadata(business_id, 'last_pull_at', new Date().toISOString());
   },
 
+  /**
+   * Batch-optimized pull for initial hydration after login/user-switch.
+   * Fetches ALL tables from Supabase first, then writes everything into Dexie
+   * in a single transaction. This prevents the "drip-feed" effect where
+   * dashboard items appear one by one.
+   *
+   * Falls back gracefully on timeout (10s) or network errors.
+   */
+  async pullFromCloudBatched(business_id: string): Promise<boolean> {
+    if (!onlineStatusService.getOnlineStatus()) return false;
+
+    const tables = Object.keys(ENTITY_PRIORITY).sort(
+      (a, b) => ENTITY_PRIORITY[a] - ENTITY_PRIORITY[b]
+    );
+
+    // Phase 1: Fetch all data from Supabase (network-bound)
+    const allData: Record<string, any[]> = {};
+    const syncTimestamps: Record<string, string> = {};
+
+    const fetchPromises = tables.map(async (table) => {
+      try {
+        const syncKey = `last_sync_${table}`;
+        const lastSyncSetting = await db.app_settings
+          .where('business_id')
+          .equals(business_id)
+          .filter((setting) => setting.key === syncKey)
+          .first();
+        const lastSyncTime = lastSyncSetting?.value || new Date(0).toISOString();
+
+        const { data, error } = await supabase
+          .from(table)
+          .select('*')
+          .eq('business_id', business_id)
+          .gt('updated_at', lastSyncTime)
+          .order('updated_at', { ascending: true })
+          .limit(500);
+
+        if (error) {
+          console.warn(`[SyncService] Batch pull: Error fetching ${table}:`, error.message);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          allData[table] = data;
+          syncTimestamps[table] = (data[data.length - 1] as any).updated_at;
+        }
+      } catch (err) {
+        console.warn(`[SyncService] Batch pull: Failed to fetch ${table}:`, err);
+      }
+    });
+
+    // Fetch all tables in parallel with a 10-second overall timeout
+    try {
+      await Promise.race([
+        Promise.all(fetchPromises),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Initial sync timeout')), 10000)
+        ),
+      ]);
+    } catch (err: any) {
+      console.warn('[SyncService] Batch pull timed out, using partial data:', err.message);
+    }
+
+    // Phase 2: Write all fetched data into Dexie in a single transaction
+    const tablesWithData = Object.keys(allData);
+    if (tablesWithData.length === 0) {
+      await this.updateMetadata(business_id, 'last_pull_at', new Date().toISOString());
+      return true;
+    }
+
+    try {
+      // Collect Dexie table references for the transaction scope
+      const txTables: any[] = tablesWithData
+        .map((t) => (syncTables as any)[t])
+        .filter(Boolean);
+      txTables.push(db.app_settings);
+
+      await db.transaction('rw', txTables, async () => {
+          for (const table of tablesWithData) {
+            const localTable = (syncTables as any)[table];
+            if (!localTable) continue;
+
+            const items = allData[table];
+
+            for (const remoteItem of items) {
+              const { id: _remoteId, ...remoteWithoutId } = remoteItem as any;
+
+              const processedItem: any = {
+                ...remoteWithoutId,
+                created_at: remoteItem.created_at ? new Date(remoteItem.created_at) : new Date(),
+                updated_at: remoteItem.updated_at ? new Date(remoteItem.updated_at) : new Date(),
+                deleted_at: remoteItem.deleted_at ? new Date(remoteItem.deleted_at) : null,
+                sync_status: 'synced',
+              };
+
+              const localItem = await localTable
+                .where('local_id')
+                .equals(remoteItem.local_id)
+                .first();
+
+              if (localItem) {
+                if (localItem.sync_status === 'pending' || localItem.sync_status === 'failed') {
+                  await conflictResolver.resolve(table, localItem, processedItem);
+                } else {
+                  await localTable.update(localItem.id, processedItem);
+                }
+              } else {
+                await localTable.add(processedItem);
+              }
+            }
+
+            // Update sync timestamp for this table
+            if (syncTimestamps[table]) {
+              const syncKey = `last_sync_${table}`;
+              const existing = await db.app_settings
+                .where('business_id')
+                .equals(business_id)
+                .filter((s: any) => s.key === syncKey)
+                .first();
+
+              if (existing) {
+                await db.app_settings.update(existing.id!, {
+                  value: syncTimestamps[table],
+                  updated_at: new Date(),
+                });
+              } else {
+                await db.app_settings.add({
+                  business_id,
+                  key: syncKey,
+                  value: syncTimestamps[table],
+                  updated_at: new Date(),
+                });
+              }
+            }
+          }
+        }
+      );
+    } catch (err) {
+      console.error('[SyncService] Batch pull: Dexie transaction failed:', err);
+      // Fall back to individual writes if transaction fails
+      await this.pullFromCloud(business_id);
+    }
+
+    await this.updateMetadata(business_id, 'last_pull_at', new Date().toISOString());
+    return true;
+  },
+
   async pullLatestFromCloud(business_id: string) {
     if (!onlineStatusService.getOnlineStatus()) return false;
     if (this.isProcessing || this.isFullSyncing) return false;

@@ -3,12 +3,14 @@
 import React, { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/stores/authStore';
 import { getRuntimeMode } from '@/lib/runtime-mode';
-import { Loader2, WifiOff } from 'lucide-react';
+import { Loader2, WifiOff, CloudDownload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized, user, business } = useAuth();
+  const initialHydrationStatus = useAuthStore((s) => s.initialHydrationStatus);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -25,6 +27,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           hasBusiness: !!business,
           isOffline,
           pathname,
+          initialHydrationStatus,
         });
       }
 
@@ -38,7 +41,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         router.push('/dashboard');
       }
     }
-  }, [isInitialized, isAuthenticated, business, router, pathname, user]);
+  }, [isInitialized, isAuthenticated, business, router, pathname, user, initialHydrationStatus]);
 
   if (!isInitialized) {
     return (
@@ -53,6 +56,44 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center justify-center gap-2 text-muted-foreground font-bold uppercase tracking-widest text-[10px]">
             <Loader2 className="animate-spin" size={12} /> Initializing Kola...
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ── HYDRATION LOADING SCREEN ──
+  // Show a full-screen loading state while initial data sync is in progress.
+  // This prevents the dashboard from rendering with empty/partial data.
+  if (isAuthenticated && business && initialHydrationStatus === 'hydrating') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center space-y-5"
+        >
+          <div className="w-16 h-16 bg-emerald-500 rounded-[22px] flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+            <span className="text-white text-3xl font-black">K</span>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-center gap-2.5 text-emerald-500">
+              <CloudDownload size={16} className="animate-pulse" />
+              <span className="font-bold text-sm">Preparing your workspace…</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground font-medium max-w-[240px] mx-auto leading-relaxed">
+              Syncing your business data. This only takes a moment.
+            </p>
+          </div>
+          <div className="flex justify-center pt-1">
+            <div className="w-32 h-1 bg-secondary rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-emerald-500 rounded-full"
+                initial={{ width: '0%' }}
+                animate={{ width: '90%' }}
+                transition={{ duration: 8, ease: 'easeOut' }}
+              />
+            </div>
           </div>
         </motion.div>
       </div>
