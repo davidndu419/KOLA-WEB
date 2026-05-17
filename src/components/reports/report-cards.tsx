@@ -404,84 +404,114 @@ function LegendRow({ label, value, colorClass }: { label: string; value: string;
 }
 
 export function OperationalReports({ snapshot }: { snapshot: ReportsSnapshot }) {
-  const cards = [
+  const snapshotMetrics = [
     {
       key: 'inventory',
-      label: 'Inventory',
-      title: `${snapshot.inventory.lowStockProducts.length} low stock`,
+      label: 'Inventory Value',
+      value: money(snapshot.inventory.inventoryValue),
       icon: Package,
-      iconClass: 'text-blue-600',
-      stats: [
-        ['Value', money(snapshot.inventory.inventoryValue)],
-        ['Potential', money(snapshot.inventory.estimatedProfitPotential)],
-        ['Age', `${snapshot.inventory.averageStockAgeDays}d`],
-      ],
+      tone: 'blue' as const,
+      helper: `${snapshot.inventory.lowStockProducts.length} low stock`,
     },
     {
       key: 'cash',
       label: 'Cash Flow',
-      title: money(snapshot.cashFlow.netCashFlow),
+      value: money(snapshot.cashFlow.netCashFlow),
       icon: Wallet,
-      iconClass: 'text-emerald-600',
-      stats: [
-        ['Inflow', money(snapshot.cashFlow.cashInflow)],
-        ['Outflow', money(snapshot.cashFlow.cashOutflow)],
-        ['Credit', money(snapshot.cashFlow.creditImpact)],
-      ],
+      tone: snapshot.cashFlow.netCashFlow >= 0 ? 'emerald' as const : 'red' as const,
+      helper: 'Net movement',
     },
     {
       key: 'receivables',
       label: 'Receivables',
-      title: money(snapshot.receivables.totalOutstanding),
+      value: money(snapshot.receivables.totalOutstanding),
       icon: CreditCard,
-      iconClass: 'text-amber-600',
-      stats: [
-        ['Overdue', money(snapshot.receivables.overdueAmount)],
-        ['Paid', `${snapshot.receivables.paymentCompletionRate}%`],
-        ['Customers', String(snapshot.receivables.customerBalances.length)],
-      ],
+      tone: 'amber' as const,
+      helper: `${snapshot.receivables.customerBalances.length} customers`,
     },
+    {
+      key: 'stock',
+      label: 'Stock Count',
+      value: compact(snapshot.inventory.stockMovementCount),
+      icon: ShoppingBag,
+      tone: 'slate' as const,
+      helper: `${compact(snapshot.inventory.stockInQuantity)} in / ${compact(snapshot.inventory.stockOutQuantity)} out`,
+    },
+  ];
+  const supportingStats = [
+    { label: 'Inflow', value: money(snapshot.cashFlow.cashInflow), tone: 'emerald' as const },
+    { label: 'Outflow', value: money(snapshot.cashFlow.cashOutflow), tone: 'red' as const },
+    { label: 'Potential Profit', value: money(snapshot.inventory.estimatedProfitPotential), tone: 'blue' as const },
+    { label: 'Overdue', value: money(snapshot.receivables.overdueAmount), tone: 'amber' as const },
+    { label: 'Credit Impact', value: money(snapshot.cashFlow.creditImpact), tone: 'slate' as const },
+    { label: 'Paid Rate', value: `${snapshot.receivables.paymentCompletionRate}%`, tone: 'emerald' as const },
   ];
 
   return (
-    <section className="-mx-6 overflow-x-auto scrollbar-none px-6" style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
-      <div className="flex gap-3 pr-6" style={{ willChange: 'transform' }}>
-        {cards.map((card) => {
-          const Icon = card.icon;
+    <section className="bg-card border border-border/60 shadow-lg shadow-black/5 rounded-[28px] p-4 space-y-4">
+      <div className="flex items-center justify-between px-1">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60">Financial Snapshot</p>
+          <h3 className="text-lg font-black tracking-tighter">Operations at a glance</h3>
+        </div>
+        <Banknote size={18} className="text-primary" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        {snapshotMetrics.map((metric) => {
+          const Icon = metric.icon;
+          const isMoneyValue = metric.value.includes('NGN');
           return (
             <div
-              key={card.key}
-              className="snap-start min-w-[285px] bg-card border border-border/60 shadow-lg shadow-black/5 p-5 rounded-[28px] space-y-4"
-              style={{ scrollSnapAlign: 'start', willChange: 'transform' }}
+              key={metric.key}
+              className="min-w-0 rounded-[22px] bg-secondary/45 border border-border/40 p-3.5 space-y-3 active:bg-secondary/60 transition-colors"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{card.label}</p>
-                  <h3 className={cn('text-lg font-bold', card.key === 'cash' && snapshot.cashFlow.netCashFlow >= 0 && 'text-emerald-600', card.key === 'cash' && snapshot.cashFlow.netCashFlow < 0 && 'text-red-600')}>
-                    {card.title}
-                  </h3>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground/70 truncate">{metric.label}</p>
+                <div className={cn(
+                  "w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
+                  metric.tone === 'emerald' && 'bg-emerald-500/10 text-emerald-600',
+                  metric.tone === 'red' && 'bg-red-500/10 text-red-600',
+                  metric.tone === 'amber' && 'bg-amber-500/10 text-amber-600',
+                  metric.tone === 'blue' && 'bg-blue-500/10 text-blue-600',
+                  metric.tone === 'slate' && 'bg-slate-500/10 text-slate-600'
+                )}>
+                  <Icon size={16} strokeWidth={2.5} />
                 </div>
-                <Icon size={20} className={card.iconClass} />
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                {card.stats.map(([label, value]) => (
-                  <MiniStat key={label} label={label} value={value} />
-                ))}
+              <div className="min-w-0">
+                <p className={cn(
+                  "font-black tabular-nums tracking-tighter truncate",
+                  isMoneyValue ? "text-[15px]" : "text-2xl",
+                  metric.tone === 'emerald' && 'text-emerald-600',
+                  metric.tone === 'red' && 'text-red-600'
+                )}>
+                  {metric.value}
+                </p>
+                <p className="mt-0.5 text-[10px] font-bold text-muted-foreground truncate">{metric.helper}</p>
               </div>
             </div>
           );
         })}
       </div>
-    </section>
-  );
-}
 
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-secondary/70 rounded-2xl p-3 min-w-0">
-      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground truncate">{label}</p>
-      <p className="text-xs font-bold tabular-nums truncate">{value}</p>
-    </div>
+      <div className="grid grid-cols-3 gap-2">
+        {supportingStats.map((stat) => (
+          <div key={stat.label} className="min-w-0 rounded-2xl bg-background/70 border border-border/30 p-2.5">
+            <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground truncate">{stat.label}</p>
+            <p className={cn(
+              "mt-0.5 text-[11px] font-black tabular-nums tracking-tight truncate",
+              stat.tone === 'emerald' && 'text-emerald-600',
+              stat.tone === 'red' && 'text-red-600',
+              stat.tone === 'amber' && 'text-amber-600',
+              stat.tone === 'blue' && 'text-blue-600'
+            )}>
+              {stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
