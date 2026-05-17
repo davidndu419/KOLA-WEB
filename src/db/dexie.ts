@@ -197,6 +197,8 @@ export class KolaDatabase extends Dexie {
           name: value.name || value.business_name || 'Kola Business',
           type: value.type || value.business_type || 'retail',
           currency: value.currency || 'NGN',
+          address: value.physical_address || value.address || '',
+          physical_address: value.physical_address || value.address || '',
           created_at: value.created_at ? new Date(value.created_at) : new Date(),
           updated_at: value.updated_at ? new Date(value.updated_at) : new Date(),
           sync_status: value.sync_status || 'pending',

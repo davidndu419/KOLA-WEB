@@ -23,6 +23,8 @@ type BusinessProfile = {
   business_name: string;
   business_type: string;
   currency: string;
+  address?: string;
+  physical_address?: string;
   created_at: Date;
   updated_at: Date;
   sync_status: 'pending' | 'synced' | 'failed' | 'conflict';
@@ -38,6 +40,7 @@ function normalizeBusiness(raw: any, userId: string): BusinessProfile {
   const businessId = raw?.business_id || raw?.local_id || raw?.id || crypto.randomUUID();
   const name = raw?.business_name || raw?.name || 'Kola Business';
   const type = raw?.business_type || raw?.type || 'retail';
+  const address = raw?.physical_address || raw?.address || '';
 
   return {
     local_id: businessId,
@@ -49,6 +52,8 @@ function normalizeBusiness(raw: any, userId: string): BusinessProfile {
     name,
     type,
     currency: raw?.currency || 'NGN',
+    address,
+    physical_address: address,
     created_at: raw?.created_at ? new Date(raw.created_at) : new Date(),
     updated_at: raw?.updated_at ? new Date(raw.updated_at) : new Date(),
     sync_status: raw?.sync_status || 'synced',
@@ -104,6 +109,7 @@ function hydrateStores(user: UserProfile, business: BusinessProfile | null) {
       name: business.business_name,
       currency: business.currency,
       ownerName: user.full_name || user.email,
+      address: business.physical_address || business.address || '',
     });
   }
 }
@@ -250,6 +256,8 @@ export const authService = {
       name: details.name,
       type: details.type,
       currency: details.currency,
+      address: '',
+      physical_address: '',
       created_at: now,
       updated_at: now,
       sync_status: 'pending' as const,

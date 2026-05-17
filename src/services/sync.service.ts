@@ -267,6 +267,8 @@ const serializeBusinessForSync = (payload: any) => ({
   business_type: payload.business_type || payload.type,
   type: payload.type || payload.business_type,
   currency: payload.currency || 'NGN',
+  address: payload.address || payload.physical_address || null,
+  physical_address: payload.physical_address || payload.address || null,
 });
 
 const serializeLedgerEntryForSync = (payload: any) => ({

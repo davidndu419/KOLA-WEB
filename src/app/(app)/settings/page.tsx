@@ -28,6 +28,7 @@ import { cn, safeTime } from '@/lib/utils';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { syncService } from '@/services/sync.service';
+import { syncQueueService } from '@/services/syncQueueService';
 import { onlineStatusService } from '@/services/onlineStatusService';
 import { formatDistanceToNow } from 'date-fns';
 import { authService } from '@/services/authService';
@@ -56,6 +57,11 @@ function latestSettingValue(settings: { key: string; value: any; updated_at: Dat
     })[0]?.value;
 }
 
+function showToast(message: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message } }));
+}
+
 export default function SettingsPage() {
   const router = useRouter();
 
@@ -68,21 +74,34 @@ export default function SettingsPage() {
   } = useStore();
   const authBusiness = useAuthStore((state) => state.business);
   const authUser = useAuthStore((state) => state.user);
+  const updateAuthBusiness = useAuthStore((state) => state.updateBusiness);
+  const authBusinessId = authBusiness?.business_id || authBusiness?.local_id || authBusiness?.id || null;
+  const storedBusiness = useLiveQuery(async () => {
+    if (!authBusinessId) return null;
+    return (await db.businesses.where('business_id').equals(authBusinessId).first()) || null;
+  }, [authBusinessId], null);
   
-  const business = authBusiness
+  const businessSource = storedBusiness || authBusiness;
+  const business = businessSource
     ? {
-        id: authBusiness.id,
-        name: authBusiness.business_name || authBusiness.name,
-        type: authBusiness.business_type || authBusiness.type,
-        currency: authBusiness.currency,
+        id: businessSource.business_id || businessSource.local_id || authBusinessId || businessSource.id?.toString(),
+        name: businessSource.business_name || businessSource.name,
+        type: businessSource.business_type || businessSource.type,
+        currency: businessSource.currency || 'NGN',
         ownerName: authUser?.full_name || authUser?.email || 'Owner',
-        address: '',
+        address: businessSource.physical_address || businessSource.address || '',
       }
     : null;
 
   const [activeSheet, setActiveSheet] = useState<'profile' | 'notifications' | null>(null);
   const [profileForm, setProfileForm] = useState({ name: business?.name || '', address: business?.address || '' });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+
+  useEffect(() => {
+    if (activeSheet !== 'profile' || !business) return;
+    setProfileForm({ name: business.name || '', address: business.address || '' });
+  }, [activeSheet, business?.id, business?.name, business?.address]);
 
   useEffect(() => {
     if (notificationsEnabled && !notificationService.isPermissionGranted()) {
@@ -140,10 +159,68 @@ export default function SettingsPage() {
     }
   };
 
-  const saveProfile = () => {
-    if (business) {
-      setBusiness({ ...business, name: profileForm.name, address: profileForm.address });
+  const saveProfile = async () => {
+    if (!business || isSavingProfile) return;
+
+    const businessId = business.id || authBusinessId;
+    if (!businessId) {
+      showToast('Failed to save business profile');
+      return;
+    }
+
+    const name = profileForm.name.trim() || business.name || 'Kola Business';
+    const address = profileForm.address.trim();
+    const now = new Date();
+
+    setIsSavingProfile(true);
+    try {
+      const existing = await db.businesses.where('business_id').equals(businessId).first();
+      const source = existing || authBusiness || {};
+      const version = Number((source as any).version || 1);
+      const businessRecord = {
+        local_id: (source as any).local_id || businessId,
+        business_id: businessId,
+        user_id: (source as any).user_id || authUser?.id || '',
+        business_name: name,
+        business_type: (source as any).business_type || (source as any).type || business.type || 'retail',
+        name,
+        type: (source as any).type || (source as any).business_type || business.type || 'retail',
+        currency: (source as any).currency || business.currency || 'NGN',
+        address,
+        physical_address: address,
+        created_at: (source as any).created_at ? new Date((source as any).created_at) : now,
+        updated_at: now,
+        sync_status: 'pending' as const,
+        version: version + 1,
+        device_id: (source as any).device_id || 'web-pwa',
+      };
+      const authProfile = { ...businessRecord, id: businessId };
+
+      if (existing?.id) {
+        await db.businesses.update(existing.id, businessRecord);
+      } else {
+        await db.businesses.add(businessRecord);
+      }
+
+      await syncService.updateMetadata(businessId, 'active_business_id', businessId);
+      await syncService.updateMetadata(businessId, 'business_profile', authProfile);
+      await syncQueueService.enqueue('businesses', 'update', businessRecord, businessId);
+
+      updateAuthBusiness(authProfile);
+      setBusiness({
+        id: businessId,
+        name,
+        currency: businessRecord.currency,
+        ownerName: authUser?.full_name || authUser?.email || 'Owner',
+        address,
+      });
+      showToast('Business profile saved');
       setActiveSheet(null);
+    } catch (error) {
+      console.error('[Settings] Failed to save business profile:', error);
+      showToast('Failed to save business profile');
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -273,7 +350,7 @@ export default function SettingsPage() {
             </div>
           </div>
           <Touchable onPress={saveProfile} className="w-full bg-primary text-white p-5 rounded-2xl font-bold text-center shadow-lg shadow-primary/20">
-            Save Business Info
+            {isSavingProfile ? 'Saving...' : 'Save Business Info'}
           </Touchable>
         </div>
       </BottomSheet>

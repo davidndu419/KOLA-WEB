@@ -21,6 +21,7 @@ interface BusinessProfile {
   currency: string;
   ownerName?: string;
   address?: string;
+  physical_address?: string;
   created_at?: Date | string;
   updated_at?: Date | string;
   sync_status?: 'pending' | 'synced' | 'failed' | 'conflict';

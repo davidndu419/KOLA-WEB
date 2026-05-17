@@ -20,6 +20,8 @@ export interface Business extends BaseEntity {
   name: string;
   type: string;
   currency: string;
+  address?: string;
+  physical_address?: string;
 }
 
 export interface Product extends BaseEntity {
