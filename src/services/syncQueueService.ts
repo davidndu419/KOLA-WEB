@@ -1,6 +1,25 @@
 import { db } from '@/db/dexie';
 import type { SyncQueue } from '@/db/schema';
 
+const pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function scheduleImmediatePush(business_id: string) {
+  if (typeof window === 'undefined') return;
+  if (!navigator.onLine) return;
+
+  const existing = pushTimers.get(business_id);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    pushTimers.delete(business_id);
+    import('@/services/sync.service')
+      .then(({ syncService }) => syncService.runFullSync(business_id))
+      .catch((error) => console.warn('[SyncQueue] Immediate background push failed:', error));
+  }, 250);
+
+  pushTimers.set(business_id, timer);
+}
+
 export const syncQueueService = {
   createItem(
     entity: string,
@@ -27,13 +46,16 @@ export const syncQueueService = {
 
   async enqueue(entity: string, action: SyncQueue['action'], payload: any, business_id: string) {
     const item = this.createItem(entity, action, payload, business_id);
-    return await db.sync_queue.add(item as SyncQueue);
+    const id = await db.sync_queue.add(item as SyncQueue);
+    scheduleImmediatePush(business_id);
+    return id;
   },
 
   async enqueueMany(items: { entity: string; action: SyncQueue['action']; payload: any; business_id: string }[]) {
     const syncItems = items.map(item => this.createItem(item.entity, item.action, item.payload, item.business_id));
-    return await db.sync_queue.bulkAdd(syncItems as SyncQueue[]);
+    const ids = await db.sync_queue.bulkAdd(syncItems as SyncQueue[]);
+    Array.from(new Set(items.map((item) => item.business_id))).forEach(scheduleImmediatePush);
+    return ids;
   },
 };
-
 

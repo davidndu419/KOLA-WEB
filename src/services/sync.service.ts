@@ -173,6 +173,17 @@ const stripDexieId = (payload: any) => {
   return clean;
 };
 
+const roundTo = (value: any, decimals: number) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return undefined;
+  const factor = 10 ** decimals;
+  return Number((Math.round((numeric + Number.EPSILON) * factor) / factor).toFixed(decimals));
+};
+
+const roundMoney = (value: any) => roundTo(value, 2);
+const roundCost = (value: any) => roundTo(value, 4);
+
 const getSyncFailureInfo = (error?: string) => {
   const message = error || '';
   const lower = message.toLowerCase();
@@ -194,6 +205,15 @@ const getSyncFailureInfo = (error?: string) => {
       type: 'rls_violation',
       label: 'RLS violation',
       detail: 'Supabase rejected this row through row-level security. Run the RLS parity migration, then retry.',
+      retryable: true,
+    };
+  }
+
+  if (lower.includes('numeric field overflow') || lower.includes('precision') || lower.includes('22003')) {
+    return {
+      type: 'numeric_overflow',
+      label: 'Numeric overflow',
+      detail: 'A Supabase numeric column is too small for this value. Run the numeric precision migration, then retry.',
       retryable: true,
     };
   }
@@ -252,7 +272,7 @@ const serializeLedgerEntryForSync = (payload: any) => ({
   source_id: payload.source_id,
   debit_account: payload.debit_account,
   credit_account: payload.credit_account,
-  amount: payload.amount,
+  amount: roundMoney(payload.amount) ?? 0,
   description: payload.description,
   is_correction: !!payload.is_correction,
   reversal_of_entry_id: payload.reversal_of_entry_id,
@@ -263,7 +283,7 @@ const serializeLedgerEntryForSync = (payload: any) => ({
 const serializeTransactionForSync = (payload: any) => ({
   ...serializeBase(payload),
   type: payload.type,
-  amount: payload.amount,
+  amount: roundMoney(payload.amount) ?? 0,
   payment_method: payload.payment_method,
   status: payload.status,
   reference_id: payload.reference_id,
@@ -293,7 +313,7 @@ const serializeServiceForSync = (payload: any) => ({
   category_id: payload.category_id,
   category_name: payload.category_name,
   customer_id: payload.customer_id,
-  amount: payload.amount,
+  amount: roundMoney(payload.amount) ?? 0,
   payment_method: payload.payment_method,
   status: payload.status,
   note: payload.note,
@@ -303,10 +323,10 @@ const serializeSaleForSync = (payload: any) => ({
   ...serializeBase(payload),
   transaction_id: payload.transaction_id,
   customer_id: payload.customer_id,
-  total_amount: payload.total_amount,
-  discount_amount: payload.discount_amount,
-  tax_amount: payload.tax_amount,
-  net_amount: payload.net_amount,
+  total_amount: roundMoney(payload.total_amount) ?? 0,
+  discount_amount: roundMoney(payload.discount_amount) ?? 0,
+  tax_amount: roundMoney(payload.tax_amount) ?? 0,
+  net_amount: roundMoney(payload.net_amount) ?? 0,
   payment_method: payload.payment_method,
   status: payload.status,
   note: payload.note,
@@ -316,10 +336,10 @@ const serializeSaleItemForSync = (payload: any) => ({
   ...serializeBase(payload),
   sale_id: payload.sale_id,
   product_id: payload.product_id,
-  quantity: payload.quantity,
-  unit_price: payload.unit_price,
-  total_price: payload.total_price,
-  cost: payload.cost,
+  quantity: roundCost(payload.quantity) ?? 0,
+  unit_price: roundMoney(payload.unit_price) ?? 0,
+  total_price: roundMoney(payload.total_price) ?? 0,
+  cost: roundCost(payload.cost) ?? 0,
 });
 
 const serializeExpenseForSync = (payload: any) => ({
@@ -327,7 +347,7 @@ const serializeExpenseForSync = (payload: any) => ({
   transaction_id: payload.transaction_id,
   category_id: payload.category_id,
   category_name: payload.category_name,
-  amount: payload.amount,
+  amount: roundMoney(payload.amount) ?? 0,
   payment_method: payload.payment_method,
   recipient: payload.recipient,
   note: payload.note,
@@ -338,8 +358,8 @@ const serializeReceivableForSync = (payload: any) => ({
   ...serializeBase(payload),
   transaction_id: payload.transaction_id,
   customer_id: payload.customer_id,
-  amount: payload.amount,
-  paid_amount: payload.paid_amount,
+  amount: roundMoney(payload.amount) ?? 0,
+  paid_amount: roundMoney(payload.paid_amount) ?? 0,
   due_date: payload.due_date,
   status: payload.status,
 });
@@ -348,14 +368,14 @@ const serializeInventoryMovementForSync = (payload: any) => ({
   ...serializeBase(payload),
   product_id: payload.product_id,
   type: payload.type,
-  quantity: payload.quantity,
-  previous_stock: payload.previous_stock,
-  new_stock: payload.new_stock,
+  quantity: roundCost(payload.quantity) ?? 0,
+  previous_stock: roundCost(payload.previous_stock) ?? 0,
+  new_stock: roundCost(payload.new_stock) ?? 0,
   note: payload.note,
   reason: payload.reason,
   status: payload.status,
-  unit_cost: payload.unit_cost,
-  total_cost: payload.total_cost,
+  unit_cost: roundCost(payload.unit_cost),
+  total_cost: roundMoney(payload.total_cost),
 });
 
 const serializeProductForSync = (payload: any) => ({
@@ -365,26 +385,26 @@ const serializeProductForSync = (payload: any) => ({
   barcode: payload.barcode,
   category_id: payload.category_id,
   unit_type: payload.unit_type,
-  buying_price: payload.buying_price,
-  selling_price: payload.selling_price,
-  profit_margin: payload.profit_margin,
-  stock: payload.stock,
-  min_stock: payload.min_stock,
-  max_stock: payload.max_stock,
+  buying_price: roundMoney(payload.buying_price) ?? 0,
+  selling_price: roundMoney(payload.selling_price) ?? 0,
+  profit_margin: roundCost(payload.profit_margin),
+  stock: roundCost(payload.stock) ?? 0,
+  min_stock: roundCost(payload.min_stock) ?? 0,
+  max_stock: roundCost(payload.max_stock),
   supplier_id: payload.supplier_id,
   expiry_date: payload.expiry_date,
   image_url: payload.image_url,
   notes: payload.notes,
   tags: payload.tags,
   is_archived: !!payload.is_archived,
-  wac_price: payload.wac_price,
+  wac_price: roundCost(payload.wac_price),
 });
 
 const serializeServiceCategoryForSync = (payload: any) => ({
   ...serializeBase(payload),
   name: payload.name,
   description: payload.description,
-  default_price: payload.default_price,
+  default_price: roundMoney(payload.default_price),
   status: payload.status,
 });
 
@@ -392,7 +412,7 @@ const serializeExpenseCategoryForSync = (payload: any) => ({
   ...serializeBase(payload),
   name: payload.name,
   description: payload.description,
-  default_amount: payload.default_amount,
+  default_amount: roundMoney(payload.default_amount),
   status: payload.status,
 });
 
@@ -678,6 +698,7 @@ export const syncService = {
         await heartbeatSyncLock(activeBusinessId, lockOwner || getInstanceId());
         await this.syncItem(item);
       }
+      await this.updateMetadata(activeBusinessId, 'last_push_at', new Date().toISOString());
 
       const remainingPending = await db.sync_queue
         .where('status')
@@ -851,6 +872,32 @@ export const syncService = {
           await db.app_settings.add({ business_id, key: syncKey, value: latestTime, updated_at: new Date() });
         }
       }
+    }
+    await this.updateMetadata(business_id, 'last_pull_at', new Date().toISOString());
+  },
+
+  async pullLatestFromCloud(business_id: string) {
+    if (!onlineStatusService.getOnlineStatus()) return false;
+    if (this.isProcessing || this.isFullSyncing) return false;
+
+    await this.recoverStaleSyncState(business_id);
+    const lock = acquireSyncLock(business_id);
+    if (!lock.acquired) return false;
+
+    this.isProcessing = true;
+    try {
+      await this.updateMetadata(business_id, 'last_sync_status', 'pulling');
+      await heartbeatSyncLock(business_id, lock.owner);
+      await this.pullFromCloud(business_id);
+      await this.updateMetadata(business_id, 'last_sync_status', 'synced');
+      return true;
+    } catch (error: any) {
+      await this.updateMetadata(business_id, 'last_sync_status', 'failed');
+      await this.updateMetadata(business_id, 'last_sync_error', error.message || 'Unknown error');
+      return false;
+    } finally {
+      this.isProcessing = false;
+      clearSyncLock(lock.owner);
     }
   },
 

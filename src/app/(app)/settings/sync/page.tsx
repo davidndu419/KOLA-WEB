@@ -65,6 +65,10 @@ export default function SyncSettingsPage() {
       lastAttempt: latestSettingValue(settings, 'last_sync_attempt_at'),
       status: latestSettingValue(settings, 'last_sync_status'),
       error: latestSettingValue(settings, 'last_sync_error'),
+      realtimeStatus: latestSettingValue(settings, 'realtime_status'),
+      lastRealtimeEvent: latestSettingValue(settings, 'last_realtime_event_at'),
+      lastPush: latestSettingValue(settings, 'last_push_at'),
+      lastPull: latestSettingValue(settings, 'last_pull_at'),
     };
   }, [businessId]);
 
@@ -211,6 +215,14 @@ export default function SyncSettingsPage() {
             />
             <StatusRow label="Last Successful Sync" value={formatTime(metadata?.lastSuccess)} />
             <StatusRow label="Last Sync Attempt" value={formatTime(metadata?.lastAttempt)} />
+            <StatusRow label="Last Push" value={formatTime(metadata?.lastPush)} />
+            <StatusRow label="Last Pull" value={formatTime(metadata?.lastPull)} />
+            <StatusRow
+              label="Realtime"
+              value={metadata?.realtimeStatus || 'Disconnected'}
+              color={metadata?.realtimeStatus === 'SUBSCRIBED' ? "text-emerald-500" : "text-amber-500"}
+            />
+            <StatusRow label="Last Realtime Event" value={formatTime(metadata?.lastRealtimeEvent)} />
             <StatusRow
               label="Pending Changes"
               value={pendingCount === 0 ? '0 pending' : `${pendingCount} waiting`}
