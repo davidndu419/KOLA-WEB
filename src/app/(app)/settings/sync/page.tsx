@@ -19,7 +19,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { syncService } from '@/services/sync.service';
 import { onlineStatusService } from '@/services/onlineStatusService';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { cn } from '@/lib/utils';
+import { cn, safeTime } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
 function useOnlineStatus() {
@@ -39,8 +39,8 @@ function latestSettingValue(settings: { key: string; value: any; updated_at: Dat
   return settings
     .filter((setting) => setting.key === key)
     .sort((a, b) => {
-      const left = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-      const right = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      const left = safeTime(a.updated_at);
+      const right = safeTime(b.updated_at);
       return right - left;
     })[0]?.value;
 }

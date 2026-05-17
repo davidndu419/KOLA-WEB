@@ -2,6 +2,7 @@ import { db, createBaseEntity } from '@/db/dexie';
 import type { AuditLog, LedgerEntry, Receivable, Transaction } from '@/db/schema';
 import { syncQueueService } from './syncQueueService';
 import { assertBalanced, assertCashSolvencyForEntries } from '@/accounting/guards';
+import { safeTime } from '@/lib/utils';
 
 export type CreditSourceType = 'sale' | 'service';
 export type CreditFilter = 'all' | 'pending' | 'partially-paid' | 'paid' | 'overdue';
@@ -37,11 +38,11 @@ export interface CreditPaymentInput {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function defaultDueDate(receivable: Receivable) {
-  return receivable.due_date || new Date(receivable.created_at.getTime() + 30 * DAY_MS);
+  return receivable.due_date || new Date(safeTime(receivable.created_at) + 30 * DAY_MS);
 }
 
 function isOverdue(receivable: Receivable, now = new Date()) {
-  return receivable.status !== 'paid' && defaultDueDate(receivable).getTime() < now.getTime();
+  return receivable.status !== 'paid' && safeTime(defaultDueDate(receivable)) < safeTime(now);
 }
 
 function getBalance(receivable: Receivable) {
@@ -78,7 +79,7 @@ async function creditHistory(sourceType: CreditSourceType): Promise<CreditHistor
       };
     })
     .filter((item): item is CreditHistoryItem => Boolean(item))
-    .sort((a, b) => b.receivable.created_at.getTime() - a.receivable.created_at.getTime());
+    .sort((a, b) => safeTime(b.receivable.created_at) - safeTime(a.receivable.created_at));
 }
 
 function summarize(items: CreditHistoryItem[]): CreditSummary {

@@ -29,6 +29,7 @@ import { Transaction, Product, TransactionWithItems } from '@/db/schema';
 import { AnimatePresence, motion } from 'framer-motion';
 import { notificationService } from '@/services/notificationService';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
+import { safeTime } from '@/lib/utils';
 
 type CartItem = {
   product_id: string;
@@ -40,11 +41,6 @@ type CartItem = {
   stock: number;
   unit_type: string;
 };
-
-function dateTime(value: Date | string | number | null | undefined) {
-  const time = new Date(value || 0).getTime();
-  return Number.isFinite(time) ? time : 0;
-}
 
 export function RecordSaleSheet({ 
   isOpen, 
@@ -101,7 +97,7 @@ export function RecordSaleSheet({
       .where('business_id')
       .equals(business.id)
       .toArray())
-      .sort((a, b) => dateTime(b.created_at) - dateTime(a.created_at))
+      .sort((a, b) => safeTime(b.created_at) - safeTime(a.created_at))
       .slice(0, 10);
     const recentSaleIds = recentSales.map(s => s.local_id);
     const recentItems = recentSaleIds.length > 0

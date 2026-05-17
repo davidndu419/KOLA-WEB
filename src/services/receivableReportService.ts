@@ -1,4 +1,5 @@
 import { Customer, LedgerEntry, Receivable } from '@/db/schema';
+import { safeTime } from '@/lib/utils';
 import { compareDesc, roundCurrency, safeDivide } from './reportSelectors';
 
 export interface CustomerBalance {
@@ -70,14 +71,14 @@ export const receivableReportService = {
       totalPaid += receivable.paid_amount;
       totalCredit += receivable.amount;
 
-      const due_date = receivable.due_date || new Date(receivable.created_at.getTime() + 30 * DAY_MS);
+      const due_date = receivable.due_date || new Date(safeTime(receivable.created_at) + 30 * DAY_MS);
       if (outstanding > 0 && due_date < now) {
         overdueAmount += outstanding;
         overdueCount += 1;
       }
 
       if (outstanding > 0) {
-        const ageDays = Math.max(0, Math.floor((now.getTime() - receivable.created_at.getTime()) / DAY_MS));
+        const ageDays = Math.max(0, Math.floor((safeTime(now) - safeTime(receivable.created_at)) / DAY_MS));
         const bucket = ageDays <= 7 ? aging[0] : ageDays <= 30 ? aging[1] : ageDays <= 60 ? aging[2] : aging[3];
         bucket.amount += outstanding;
         bucket.count += 1;
@@ -86,7 +87,7 @@ export const receivableReportService = {
 
     const recentPayments = ledgerEntries
   .filter((entry: any) => !entry.deleted_at && entry.credit_account === 'Receivables' && entry.amount > 0)
-  .sort((a: any, b: any) => b.created_at.getTime() - a.created_at.getTime())
+  .sort((a: any, b: any) => safeTime(b.created_at) - safeTime(a.created_at))
   .slice(0, 8);
 
 

@@ -1,4 +1,5 @@
 import { Transaction } from '@/db/schema';
+import { safeTime } from '@/lib/utils';
 
 export type ReportRange =
   | 'today'
@@ -144,9 +145,9 @@ export function resolveReportDateRange(
     endDate = start <= end ? end : endOfDay(customStartDate);
   }
 
-  const duration = Math.max(1, endDate.getTime() - startDate.getTime());
-  const previousEndDate = new Date(startDate.getTime() - 1);
-  const previousStartDate = new Date(previousEndDate.getTime() - duration);
+  const duration = Math.max(1, safeTime(endDate) - safeTime(startDate));
+  const previousEndDate = new Date(safeTime(startDate) - 1);
+  const previousStartDate = new Date(safeTime(previousEndDate) - duration);
 
   return {
     id,
@@ -222,8 +223,8 @@ export function compareDesc<T>(selector: (item: T) => number) {
 export function fingerprintRange(range: ResolvedReportRange, filters?: ReportFilters) {
   return JSON.stringify({
     id: range.id,
-    startDate: range.startDate.getTime(),
-    endDate: range.endDate.getTime(),
+    startDate: safeTime(range.startDate),
+    endDate: safeTime(range.endDate),
     filters,
   });
 }

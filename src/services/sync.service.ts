@@ -4,6 +4,7 @@ import { SyncQueue } from '@/db/schema';
 import { onlineStatusService } from './onlineStatusService';
 import { conflictResolver } from './conflictResolver';
 import { getStorageKeys } from '@/lib/runtime-mode';
+import { safeTime } from '@/lib/utils';
 
 const MAX_RETRIES = 5;
 const BATCH_SIZE = 20;
@@ -51,7 +52,7 @@ const readSyncLock = (): SyncLock | null => {
 
 const getLockAge = (lock: SyncLock | null) => {
   if (!lock) return 0;
-  return Date.now() - new Date(lock.heartbeat_at || lock.started_at).getTime();
+  return Date.now() - safeTime(lock.heartbeat_at || lock.started_at);
 };
 
 const isStaleLock = (lock: SyncLock | null) => !!lock && getLockAge(lock) > STALE_SYNC_MS;
@@ -516,8 +517,8 @@ export const syncService = {
       .equals([business_id, key])
       .toArray();
     const [existing, ...duplicates] = matches.sort((a, b) => {
-      const left = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-      const right = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      const left = safeTime(a.updated_at);
+      const right = safeTime(b.updated_at);
       return right - left;
     });
 
@@ -566,8 +567,8 @@ export const syncService = {
       } : null,
       items: queue
         .sort((a, b) => {
-          const left = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const right = b.created_at ? new Date(b.created_at).getTime() : 0;
+          const left = safeTime(a.created_at);
+          const right = safeTime(b.created_at);
           return left - right;
         })
         .map((item) => ({
@@ -641,7 +642,7 @@ export const syncService = {
         if (business_id && item.business_id !== business_id) return false;
         const heartbeat = item.last_sync_heartbeat_at || item.sync_started_at;
         if (!heartbeat) return true;
-        return new Date(heartbeat).getTime() < cutoff;
+        return safeTime(heartbeat) < cutoff;
       });
 
     if (staleItems.length > 0) {
@@ -758,8 +759,8 @@ export const syncService = {
         const priorityB = ENTITY_PRIORITY[b.entity] || 99;
         if (priorityA !== priorityB) return priorityA - priorityB;
         
-        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        const dateA = safeTime(a.created_at);
+        const dateB = safeTime(b.created_at);
         return dateA - dateB;
       });
 

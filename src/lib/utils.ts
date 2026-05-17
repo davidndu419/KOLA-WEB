@@ -5,10 +5,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function safeTime(value: unknown): number {
+  if (!value) return 0;
+  const time = value instanceof Date
+    ? value.getTime()
+    : new Date(value as string | number | Date).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 export function formatRelativeTime(date: Date | string | number): string {
   const d = new Date(date);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
+  const diffMs = Date.now() - safeTime(d);
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);

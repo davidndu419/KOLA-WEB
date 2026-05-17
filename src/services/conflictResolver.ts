@@ -1,5 +1,6 @@
 import { db } from '@/db/dexie';
 import { BaseEntity } from '@/db/schema';
+import { safeTime } from '@/lib/utils';
 
 export type ResolutionStrategy = 'server-wins' | 'client-wins' | 'manual';
 
@@ -28,8 +29,8 @@ export class ConflictResolver {
     }
 
     // Default: Compare timestamps
-    const localTime = localItem.updated_at ? new Date(localItem.updated_at).getTime() : 0;
-    const remoteTime = remoteItem.updated_at ? new Date(remoteItem.updated_at).getTime() : 0;
+    const localTime = safeTime(localItem.updated_at);
+    const remoteTime = safeTime(remoteItem.updated_at);
 
 
     if (localTime >= remoteTime) {

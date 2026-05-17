@@ -14,13 +14,13 @@ import {
   Zap,
 } from 'lucide-react';
 import { Touchable } from '@/components/touchable';
-import { cn } from '@/lib/utils';
+import { cn, safeTime } from '@/lib/utils';
 import type { Transaction } from '@/db/schema';
 import { getTransactionCustomerLabel, getTransactionTitle, type DisplayTransaction } from '@/services/transactionDisplay';
 
 export function formatTransactionListStamp(date: Date) {
   const value = new Date(date);
-  if (!Number.isFinite(value.getTime())) return 'Date unavailable';
+  if (!safeTime(value)) return 'Date unavailable';
 
   const now = new Date();
   const isToday = value.toDateString() === now.toDateString();
@@ -194,8 +194,8 @@ function TransactionRowComponent({
 }
 
 export const TransactionRow = memo(TransactionRowComponent, (prev, next) => {
-  const prevUpdatedAt = new Date(prev.transaction.updated_at || 0).getTime();
-  const nextUpdatedAt = new Date(next.transaction.updated_at || 0).getTime();
+  const prevUpdatedAt = safeTime(prev.transaction.updated_at);
+  const nextUpdatedAt = safeTime(next.transaction.updated_at);
 
   return (
     prev.transaction.local_id === next.transaction.local_id &&

@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { Product, ProductWithCategory, InventoryMovement } from '@/db/schema';
 import { inventoryService } from '@/services/inventory.service';
-import { cn } from '@/lib/utils';
+import { cn, safeTime } from '@/lib/utils';
 import { RestockSheet } from './restock-sheet';
 
 export function ProductDetailSheet({ 
@@ -85,7 +85,7 @@ export function ProductDetailSheet({
       }))
     ];
 
-    return unifiedHistory.sort((a, b) => b.date.getTime() - a.date.getTime());
+    return unifiedHistory.sort((a, b) => safeTime(b.date) - safeTime(a.date));
   }, [initialProduct, isOpen]);
 
   if (!initialProduct) return null;

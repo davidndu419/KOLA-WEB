@@ -1,5 +1,6 @@
 import { db } from '@/db/dexie';
 import { AuditLog, Customer, LedgerEntry, Product, Receivable, Transaction } from '@/db/schema';
+import { safeTime } from '@/lib/utils';
 import { analyticsService, PaymentBreakdown, RankedItem } from './analyticsService';
 import { ExpenseAnalytics, expenseService } from './expenseService';
 import { InventoryReport, inventoryReportService } from './inventoryReportService';
@@ -66,7 +67,7 @@ export interface ReportsSnapshot {
 }
 
 async function rangeTransactions(startDate: Date, endDate: Date) {
-  if (startDate.getTime() === 0) {
+  if (safeTime(startDate) === 0) {
     return (await db.transactions.toArray()).filter(isActiveTransaction);
   }
 
@@ -74,7 +75,7 @@ async function rangeTransactions(startDate: Date, endDate: Date) {
 }
 
 async function rangeLedger(startDate: Date, endDate: Date) {
-  if (startDate.getTime() === 0) {
+  if (safeTime(startDate) === 0) {
     return (await db.ledger_entries.toArray()).filter((entry) => !entry.deleted_at);
   }
 
@@ -110,7 +111,7 @@ function buildHistory(
 
   return transactions
     .slice()
-    .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+    .sort((a, b) => safeTime(b.created_at) - safeTime(a.created_at))
     .slice(0, limit)
     .map((transaction) => {
       const entries = ledgerMap.get(transaction.local_id) || [];

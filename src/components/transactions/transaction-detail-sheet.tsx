@@ -4,7 +4,7 @@ import { FileText, Share2, RotateCcw, Edit3, History } from 'lucide-react';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import type { Transaction } from '@/db/schema';
-import { cn } from '@/lib/utils';
+import { cn, safeTime } from '@/lib/utils';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 import { enrichTransactionsForDisplay, getTransactionTitle, type DisplayTransaction } from '@/services/transactionDisplay';
 import { useAuthStore } from '@/stores/authStore';
@@ -86,7 +86,7 @@ export function TransactionDetailSheet({
     }
   };
 
-  const isRecent = displayTransaction ? (new Date().getTime() - new Date(displayTransaction.created_at).getTime()) < 24 * 60 * 60 * 1000 : false;
+  const isRecent = displayTransaction ? (Date.now() - safeTime(displayTransaction.created_at)) < 24 * 60 * 60 * 1000 : false;
   const canModify = displayTransaction && !displayTransaction.is_reversed && isRecent;
 
 

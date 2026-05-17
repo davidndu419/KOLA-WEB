@@ -1,4 +1,5 @@
 import { InventoryMovement, Product, Transaction } from '@/db/schema';
+import { safeTime } from '@/lib/utils';
 import { compareDesc, roundCurrency } from './reportSelectors';
 
 export interface InventoryProductMetric {
@@ -73,7 +74,7 @@ export const inventoryReportService = {
     const recentlySoldIds = new Set<string>();
 
     for (const transaction of transactions) {
-      if (transaction.created_at < recentSaleCutoff || transaction.type !== 'sale') continue;
+      if (safeTime(transaction.created_at) < safeTime(recentSaleCutoff) || transaction.type !== 'sale') continue;
       const items = (transaction as any).items || [];
       for (const item of items) recentlySoldIds.add(item.product_id);
     }
@@ -89,9 +90,9 @@ export const inventoryReportService = {
     const stockAges = activeProducts.map((product) => {
       const lastMovement = inventoryMovements
         .filter((movement) => movement.product_id === product.local_id)
-        .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0];
+        .sort((a, b) => safeTime(b.created_at) - safeTime(a.created_at))[0];
       const ageSource = lastMovement?.created_at || product.created_at;
-      return Math.max(0, Math.floor((now.getTime() - ageSource.getTime()) / DAY_MS));
+      return Math.max(0, Math.floor((safeTime(now) - safeTime(ageSource)) / DAY_MS));
     });
 
     return {

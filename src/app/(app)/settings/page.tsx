@@ -24,7 +24,7 @@ import { db } from '@/db/dexie';
 import { useStore } from '@/store/use-store';
 import { useAuthStore } from '@/stores/authStore';
 import { BottomSheet } from '@/components/bottom-sheet';
-import { cn } from '@/lib/utils';
+import { cn, safeTime } from '@/lib/utils';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { syncService } from '@/services/sync.service';
@@ -50,8 +50,8 @@ function latestSettingValue(settings: { key: string; value: any; updated_at: Dat
   return settings
     .filter((setting) => setting.key === key)
     .sort((a, b) => {
-      const left = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-      const right = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      const left = safeTime(a.updated_at);
+      const right = safeTime(b.updated_at);
       return right - left;
     })[0]?.value;
 }

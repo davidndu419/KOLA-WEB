@@ -1,5 +1,6 @@
 import { Transaction } from '@/db/schema';
 import { ResolvedReportRange, roundCurrency } from './reportSelectors';
+import { safeTime } from '@/lib/utils';
 
 export interface ChartPoint {
   key: string;
@@ -41,7 +42,7 @@ function bucketLabel(date: Date, unit: 'day' | 'week' | 'month') {
 }
 
 function chooseUnit(range: ResolvedReportRange): 'day' | 'week' | 'month' {
-  const days = Math.max(1, Math.ceil((range.endDate.getTime() - range.startDate.getTime()) / DAY_MS));
+  const days = Math.max(1, Math.ceil((safeTime(range.endDate) - safeTime(range.startDate)) / DAY_MS));
   if (days > 180) return 'month';
   if (days > 45) return 'week';
   return 'day';
