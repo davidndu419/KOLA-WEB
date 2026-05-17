@@ -90,7 +90,7 @@ export function DateRangePickerSheet({
         <div className="flex flex-wrap gap-2 px-1">
           {presets.map((preset) => (
             <Touchable
-              key={preset.id}
+              key={`preset-${preset.id}`}
               onPress={() => {
                 onSelectRange(preset.id);
                 onClose();
@@ -128,13 +128,13 @@ export function DateRangePickerSheet({
           </div>
 
           <div className="grid grid-cols-7 gap-1">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-              <div key={day} className="h-8 flex items-center justify-center text-[10px] font-black text-muted-foreground">
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+              <div key={`weekday-${day}-${index}`} className="h-8 flex items-center justify-center text-[10px] font-black text-muted-foreground">
                 {day}
               </div>
             ))}
             {calendarDays.map((date, i) => (
-              <div key={i} className="aspect-square relative">
+              <div key={date ? `day-${date.toISOString()}` : `empty-${viewDate.getMonth()}-${i}`} className="aspect-square relative">
                 {date && (
                   <Touchable
                     onPress={() => {
