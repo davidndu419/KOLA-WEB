@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { getRuntimeMode } from '@/lib/runtime-mode';
 import { Loader2, WifiOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -14,15 +15,30 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isInitialized) {
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      const mode = getRuntimeMode();
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[AuthGuard] State:', {
+          mode,
+          isAuthenticated,
+          hasUser: !!user,
+          hasBusiness: !!business,
+          isOffline,
+          pathname,
+        });
+      }
+
       if (!isAuthenticated) {
-        router.push('/auth/login');
+        // Preserve PWA source marker in the login redirect
+        const loginUrl = mode === 'pwa' ? '/auth/login?source=pwa' : '/auth/login';
+        router.push(loginUrl);
       } else if (isAuthenticated && !business && !isOffline && pathname !== '/auth/business-setup') {
         router.push('/auth/business-setup');
       } else if (isAuthenticated && business && pathname === '/auth/business-setup') {
         router.push('/dashboard');
       }
     }
-  }, [isInitialized, isAuthenticated, business, router, pathname]);
+  }, [isInitialized, isAuthenticated, business, router, pathname, user]);
 
   if (!isInitialized) {
     return (
@@ -57,7 +73,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         </div>
         <div className="pt-2">
           <button
-            onClick={() => router.push('/auth/login')}
+            onClick={() => {
+              const mode = getRuntimeMode();
+              router.push(mode === 'pwa' ? '/auth/login?source=pwa' : '/auth/login');
+            }}
             className="px-8 py-3 bg-emerald-500 text-white rounded-full font-bold text-sm shadow-lg shadow-emerald-500/20"
           >
             Go to Login

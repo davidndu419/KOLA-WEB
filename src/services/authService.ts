@@ -3,6 +3,7 @@ import { db } from '@/db/dexie';
 import { useAuthStore } from '@/stores/authStore';
 import { useStore } from '@/store/use-store';
 import { syncService } from './sync.service';
+import { getRuntimeMode, getStorageKeys, clearRuntimeModeMarker } from '@/lib/runtime-mode';
 
 type UserProfile = {
   id: string;
@@ -223,9 +224,15 @@ export const authService = {
   },
 
   async signOut() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('[Auth] Supabase signOut failed (offline?):', err);
+    }
     useAuthStore.getState().clearAuth();
     useStore.getState().logout();
+    // Clear PWA runtime mode marker so next launch shows login
+    clearRuntimeModeMarker();
   },
 
   async setupBusiness(userId: string, details: { name: string; type: string; currency: string }) {
@@ -273,9 +280,22 @@ export const authService = {
   async checkSession() {
     try {
       const store = useAuthStore.getState();
+      const mode = getRuntimeMode();
+      const keys = getStorageKeys();
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Auth] checkSession starting:', {
+          mode,
+          authStorageKey: keys.authStorage,
+          supabaseKey: keys.supabaseAuth,
+          storeHasUser: !!store.user,
+          storeIsAuthenticated: store.isAuthenticated,
+          isOnline: isBrowserOnline(),
+        });
+      }
 
       if (!isBrowserOnline()) {
-        console.log('[Auth] Using local persistent session (Offline)');
+        console.log('[Auth] Offline — using local persistent session');
         if (store.isAuthenticated && store.user) {
           const business = store.business || await loadLocalBusiness(store.user.id);
           hydrateStores(store.user, business as BusinessProfile | null);
@@ -291,6 +311,13 @@ export const authService = {
         console.warn('[Auth] Supabase session check failed, using local session if available:', error);
       }
 
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Auth] Session check results:', {
+          supabaseSessionFound: !!session?.user,
+          localAuthExists: store.isAuthenticated && !!store.user,
+        });
+      }
+
       if (session?.user) {
         const userProfile = {
           id: session.user.id,
@@ -301,10 +328,13 @@ export const authService = {
         const business = (await loadLocalBusiness(session.user.id)) || (await pullBusinessFromCloud(session.user.id));
         hydrateStores(userProfile, business);
       } else if (store.isAuthenticated && store.user) {
-        console.log('[Auth] Using local persistent session');
+        // No Supabase session but we have local auth — use it (critical for offline/PWA)
+        console.log('[Auth] Using local persistent session (no Supabase session)');
         const business = store.business || await loadLocalBusiness(store.user.id);
         hydrateStores(store.user, business as BusinessProfile | null);
       } else {
+        // No session anywhere — clear auth
+        console.log('[Auth] No session found, clearing auth');
         store.clearAuth();
         useStore.getState().logout();
       }

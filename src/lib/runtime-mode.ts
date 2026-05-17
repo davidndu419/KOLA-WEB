@@ -4,44 +4,83 @@
 
 export type RuntimeMode = 'pwa' | 'browser';
 
+// Module-level cache — stable for the lifetime of this JS context
 let cachedMode: RuntimeMode | null = null;
+
+const RUNTIME_MODE_KEY = 'kola-runtime-mode';
 
 /**
  * Detects the current runtime mode.
- * PWA mode if:
- *  - display-mode: standalone
- *  - display-mode: fullscreen
- *  - document.referrer starts with android-app://
- *  - URL has ?source=pwa
- *  - localStorage has the pwa mode marker from a previous detection
+ *
+ * PWA mode if ANY of these are true:
+ *  1. localStorage marker 'kola-runtime-mode' === 'pwa' (persisted from prior detection)
+ *  2. display-mode: standalone (installed PWA)
+ *  3. display-mode: fullscreen
+ *  4. document.referrer starts with android-app://
+ *  5. iOS navigator.standalone
+ *  6. URL has ?source=pwa
+ *
+ * IMPORTANT: Uses localStorage (NOT sessionStorage) so the marker persists
+ * after the PWA is closed and reopened. sessionStorage clears on close.
  *
  * SSR-safe: returns 'browser' on the server.
  */
 export function getRuntimeMode(): RuntimeMode {
   if (typeof window === 'undefined') return 'browser';
 
-  // Return cached result for consistency within a session
+  // Return cached result for consistency within this JS context
   if (cachedMode) return cachedMode;
 
+  // 1. Check persistent localStorage marker FIRST (survives PWA close/reopen)
+  const persistedMarker = window.localStorage.getItem(RUNTIME_MODE_KEY);
+  if (persistedMarker === 'pwa') {
+    cachedMode = 'pwa';
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[RuntimeMode] Detected PWA from localStorage marker');
+    }
+    return cachedMode;
+  }
+
+  // 2. Check live signals
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
   const isFullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
   const isAndroidTWA = document.referrer.startsWith('android-app://');
   const isIOSStandalone = (window.navigator as any).standalone === true;
   const isPwaSource = new URLSearchParams(window.location.search).get('source') === 'pwa';
 
-  // Check if this session was already marked as PWA (persists across navigations within session)
-  const sessionMarker = window.sessionStorage.getItem('kola-runtime-mode');
+  const isPwa = isStandalone || isFullscreen || isAndroidTWA || isIOSStandalone || isPwaSource;
 
-  if (isStandalone || isFullscreen || isAndroidTWA || isIOSStandalone || isPwaSource || sessionMarker === 'pwa') {
+  if (isPwa) {
     cachedMode = 'pwa';
-    // Persist in sessionStorage so subsequent page navigations within the same PWA window remain consistent
-    window.sessionStorage.setItem('kola-runtime-mode', 'pwa');
+    // Persist to localStorage so it survives PWA close/reopen
+    window.localStorage.setItem(RUNTIME_MODE_KEY, 'pwa');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[RuntimeMode] Detected PWA from live signals:', {
+        isStandalone, isFullscreen, isAndroidTWA, isIOSStandalone, isPwaSource
+      });
+    }
   } else {
     cachedMode = 'browser';
-    window.sessionStorage.setItem('kola-runtime-mode', 'browser');
+    // Only persist 'browser' if no marker exists yet (never overwrite 'pwa' with 'browser')
+    if (!persistedMarker) {
+      window.localStorage.setItem(RUNTIME_MODE_KEY, 'browser');
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[RuntimeMode] Detected browser mode');
+    }
   }
 
   return cachedMode;
+}
+
+/**
+ * Force-clears the runtime mode marker. Called only during explicit logout
+ * from PWA mode so the next launch shows the login screen.
+ */
+export function clearRuntimeModeMarker() {
+  if (typeof window === 'undefined') return;
+  cachedMode = null;
+  window.localStorage.removeItem(RUNTIME_MODE_KEY);
 }
 
 /**
