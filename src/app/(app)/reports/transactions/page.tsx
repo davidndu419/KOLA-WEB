@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowLeft, Receipt, FileText, Printer } from 'lucide-react';
+import { ArrowLeft, Receipt, FileText } from 'lucide-react';
 import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
 import { TransactionList } from '@/components/sales/transaction-list';
 import { HeroSummaryCard } from '@/components/dashboard/hero-summary-card';
@@ -33,16 +33,16 @@ export default function ReportTransactionsPage() {
     window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message } }));
   };
 
-  const handlePrint = () => {
+  const handlePdf = () => {
     if (!reportsData) return;
 
     try {
-      exportService.printTransactionHistory(reportsData, {
+      exportService.downloadTransactionHistoryPdf(reportsData, {
         businessId,
         businessName: business?.name || business?.business_name || 'Kola Business',
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to print transaction history.';
+      const message = error instanceof Error ? error.message : 'Export failed';
       showToast(message);
     }
   };
@@ -74,9 +74,9 @@ export default function ReportTransactionsPage() {
           rangeLabel={reportsData.range.label}
           onOpenDatePicker={() => setIsDatePickerOpen(true)}
           secondaryAction={{
-            icon: Printer,
-            onPress: handlePrint,
-            label: 'Export'
+            icon: FileText,
+            onPress: handlePdf,
+            label: 'PDF'
           }}
           stats={[
             { label: 'Total Records', value: reportsData.transactions.length },

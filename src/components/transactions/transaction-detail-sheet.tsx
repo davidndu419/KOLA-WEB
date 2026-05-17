@@ -7,6 +7,8 @@ import type { Transaction } from '@/db/schema';
 import { cn } from '@/lib/utils';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 import { enrichTransactionsForDisplay, getTransactionTitle, type DisplayTransaction } from '@/services/transactionDisplay';
+import { exportService } from '@/services/exportService';
+import { useAuthStore } from '@/stores/authStore';
 
 const currency = new Intl.NumberFormat('en-NG', {
   style: 'currency',
@@ -32,65 +34,6 @@ export function formatFullTransactionDate(date: any) {
   });
 }
 
-function receiptText(transaction: any) {
-  const isRestock = transaction.source_type === 'restock';
-  return [
-    'Kola Receipt',
-    `Transaction ID: ${transaction.local_id}`,
-    `Type: ${isRestock ? 'Restock' : transaction.type}`,
-    `Amount: ${money(transaction.amount)}`,
-    `Payment: ${transaction.payment_method}`,
-    `Date: ${formatFullTransactionDate(transaction.created_at)}`,
-    transaction.customer_name ? `Customer: ${transaction.customer_name}` : '',
-    isRestock ? 'Category: Inventory Purchase' : transaction.category_name ? `Category: ${transaction.category_name}` : '',
-    transaction.service_name ? `Service: ${transaction.service_name}` : '',
-    transaction.items?.length ? `Items: ${transaction.items.map((item: any) => `${item.name} x${item.quantity}`).join(', ')}` : '',
-    transaction.note ? `Note: ${transaction.note}` : '',
-  ].filter(Boolean).join('\n');
-}
-
-function printReceipt(transaction: any) {
-  const popup = window.open('', '_blank', 'noopener,noreferrer,width=390,height=640');
-  if (!popup) return;
-  const isRestock = transaction.source_type === 'restock';
-
-  popup.document.write(`
-    <!doctype html>
-    <html>
-      <head>
-        <title>Kola Receipt</title>
-        <style>
-          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #111827; }
-          h1 { margin: 0 0 4px; font-size: 22px; }
-          .muted { color: #6b7280; font-size: 12px; margin-bottom: 20px; }
-          .row { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #f3f4f6; }
-          .label { color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
-          .value { font-weight: 800; text-align: right; }
-          button { padding: 10px 14px; border: 0; border-radius: 12px; background: #10b981; color: white; font-weight: 800; margin-bottom: 20px; }
-          @media print { button { display: none; } }
-        </style>
-      </head>
-      <body>
-        <button onclick="window.print()">Save as PDF</button>
-        <h1>Kola Receipt</h1>
-        <p class="muted">${transaction.local_id}</p>
-        <div class="row"><span class="label">Type</span><span class="value">${isRestock ? 'Restock' : transaction.type}</span></div>
-        ${isRestock ? `<div class="row"><span class="label">Category</span><span class="value">Inventory Purchase</span></div>` : ''}
-        ${!isRestock && transaction.category_name ? `<div class="row"><span class="label">Category</span><span class="value">${transaction.category_name}</span></div>` : ''}
-        ${transaction.service_name ? `<div class="row"><span class="label">Service</span><span class="value">${transaction.service_name}</span></div>` : ''}
-        <div class="row"><span class="label">Amount</span><span class="value">${money(transaction.amount)}</span></div>
-        <div class="row"><span class="label">Payment</span><span class="value">${transaction.payment_method}</span></div>
-        <div class="row"><span class="label">Date</span><span class="value">${formatFullTransactionDate(transaction.created_at)}</span></div>
-        ${transaction.customer_name ? `<div class="row"><span class="label">Customer</span><span class="value">${transaction.customer_name}</span></div>` : ''}
-        ${transaction.items?.length ? `<h2 style="font-size:14px;margin:20px 0 6px;">Items Sold</h2>${transaction.items.map((item: any) => `<div class="row"><span class="label">${item.quantity} x ${item.name}</span><span class="value">${money(item.total_price || item.quantity * item.unit_price)}</span></div>`).join('')}` : ''}
-
-        ${transaction.note ? `<div class="row"><span class="label">Note</span><span class="value">${transaction.note}</span></div>` : ''}
-      </body>
-    </html>
-  `);
-  popup.document.close();
-}
-
 export function TransactionDetailSheet({
   transaction,
   onClose,
@@ -104,6 +47,7 @@ export function TransactionDetailSheet({
   onCorrect?: (tx: Transaction) => void;
   onViewAuditTrail?: (tx: Transaction) => void;
 }) {
+  const business = useAuthStore((state) => state.business);
   const detailTransaction = useStableLiveQuery<DisplayTransaction | null>(
     () => transaction ? enrichTransactionsForDisplay([transaction]).then(([item]) => item || null) : undefined,
     [transaction?.local_id, transaction?.updated_at],
@@ -114,15 +58,31 @@ export function TransactionDetailSheet({
     ? detailTransaction
     : (transaction as DisplayTransaction | null);
 
+  const businessInfo = {
+    businessName: business?.name || business?.business_name || 'Kola Business',
+    businessAddress: business?.address,
+  };
+
+  const showExportError = () => {
+    window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Export failed' } }));
+  };
+
   const handleShare = async () => {
     if (!displayTransaction) return;
-    const text = receiptText(displayTransaction);
-    if (navigator.share) {
-      await navigator.share({ title: 'Kola Receipt', text });
-      return;
+    try {
+      await exportService.shareTransactionDetailImage(displayTransaction, businessInfo);
+    } catch {
+      showExportError();
     }
-    await navigator.clipboard?.writeText(text);
-    alert('Receipt copied to clipboard');
+  };
+
+  const handlePdf = () => {
+    if (!displayTransaction) return;
+    try {
+      exportService.downloadTransactionDetailPdf(displayTransaction, businessInfo);
+    } catch {
+      showExportError();
+    }
   };
 
   const isRecent = displayTransaction ? (new Date().getTime() - new Date(displayTransaction.created_at).getTime()) < 24 * 60 * 60 * 1000 : false;
@@ -196,7 +156,7 @@ export function TransactionDetailSheet({
               <Share2 size={16} /> Share
             </Touchable>
             <Touchable
-              onPress={() => printReceipt(displayTransaction)}
+              onPress={handlePdf}
               className="bg-secondary text-foreground rounded-2xl py-4 flex items-center justify-center gap-2 text-xs font-bold border border-border"
             >
 

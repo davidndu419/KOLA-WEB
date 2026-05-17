@@ -3,9 +3,10 @@
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
-import { Printer, Share2, CheckCircle2 } from 'lucide-react';
+import { FileText, Share2, CheckCircle2 } from 'lucide-react';
 import type { TransactionWithItems } from '@/db/schema';
 import { useStore } from '@/store/use-store';
+import { exportService } from '@/services/exportService';
 
 export function ReceiptSheet({ 
   transaction,
@@ -19,6 +20,31 @@ export function ReceiptSheet({
   const { business } = useStore();
 
   if (!transaction) return null;
+
+  const showExportError = () => {
+    window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Export failed' } }));
+  };
+
+  const businessInfo = {
+    businessName: business?.name || 'Kola Business',
+    businessAddress: business?.address,
+  };
+
+  const handlePdf = () => {
+    try {
+      exportService.downloadReceiptPdf(transaction, businessInfo);
+    } catch {
+      showExportError();
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      await exportService.shareReceiptImage(transaction, businessInfo);
+    } catch {
+      showExportError();
+    }
+  };
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Transaction Receipt">
@@ -72,10 +98,16 @@ export function ReceiptSheet({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Touchable className="w-full bg-secondary p-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm">
-            <Printer size={18} /> Print
+          <Touchable
+            onPress={handlePdf}
+            className="w-full bg-secondary p-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm"
+          >
+            <FileText size={18} /> PDF
           </Touchable>
-          <Touchable className="w-full bg-primary text-white p-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm">
+          <Touchable
+            onPress={handleShare}
+            className="w-full bg-primary text-white p-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm"
+          >
             <Share2 size={18} /> Share
           </Touchable>
         </div>
