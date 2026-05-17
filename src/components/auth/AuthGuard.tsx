@@ -13,9 +13,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isInitialized) {
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
       if (!isAuthenticated) {
         router.push('/auth/login');
-      } else if (isAuthenticated && !business && pathname !== '/auth/business-setup') {
+      } else if (isAuthenticated && !business && !isOffline && pathname !== '/auth/business-setup') {
         router.push('/auth/business-setup');
       } else if (isAuthenticated && business && pathname === '/auth/business-setup') {
         router.push('/dashboard');

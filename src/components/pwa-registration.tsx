@@ -2,16 +2,22 @@
 
 import { useEffect } from 'react';
 
+export const KOLA_APP_BUILD_VERSION = 'kola-offline-stability-v1';
+
 export function PWARegistration() {
   useEffect(() => {
     if (
       typeof window !== 'undefined' &&
       'serviceWorker' in navigator
     ) {
+      (window as any).__KOLA_APP_BUILD_VERSION__ = KOLA_APP_BUILD_VERSION;
+
       let refreshing = false;
       const handleControllerChange = () => {
         if (refreshing) return;
+        if (window.sessionStorage.getItem('kola-sw-reloaded-once') === KOLA_APP_BUILD_VERSION) return;
         refreshing = true;
+        window.sessionStorage.setItem('kola-sw-reloaded-once', KOLA_APP_BUILD_VERSION);
         window.location.reload();
       };
 
@@ -79,6 +85,19 @@ export function PWARegistration() {
 
           const readyRegistration = await navigator.serviceWorker.ready;
           console.log('[PWA] SW ready with scope', readyRegistration.scope);
+
+          const storedVersion = window.localStorage.getItem('kola-app-build-version');
+          if (storedVersion && storedVersion !== KOLA_APP_BUILD_VERSION) {
+            console.log('[PWA] App version changed, refreshing caches:', storedVersion, '->', KOLA_APP_BUILD_VERSION);
+            window.localStorage.setItem('kola-app-build-version', KOLA_APP_BUILD_VERSION);
+            if (window.sessionStorage.getItem('kola-version-reloaded-once') !== KOLA_APP_BUILD_VERSION) {
+              window.sessionStorage.setItem('kola-version-reloaded-once', KOLA_APP_BUILD_VERSION);
+              window.location.reload();
+              return;
+            }
+          } else {
+            window.localStorage.setItem('kola-app-build-version', KOLA_APP_BUILD_VERSION);
+          }
 
           // Auto-cache on registration if online
           if (navigator.onLine) {

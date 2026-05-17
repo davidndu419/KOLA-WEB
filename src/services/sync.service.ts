@@ -6,6 +6,100 @@ import { conflictResolver } from './conflictResolver';
 
 const MAX_RETRIES = 5;
 const BATCH_SIZE = 20;
+const STALE_SYNC_MS = 60_000;
+const SYNC_LOCK_KEY = 'kola-sync-lock';
+const INSTANCE_ID_KEY = 'kola-sync-instance-id';
+
+type SyncLock = {
+  owner: string;
+  business_id: string;
+  started_at: string;
+  heartbeat_at: string;
+};
+
+const isBrowser = () => typeof window !== 'undefined';
+
+const getInstanceId = () => {
+  if (!isBrowser()) return 'server';
+
+  const existing = window.sessionStorage.getItem(INSTANCE_ID_KEY);
+  if (existing) return existing;
+
+  const next = crypto.randomUUID();
+  window.sessionStorage.setItem(INSTANCE_ID_KEY, next);
+  return next;
+};
+
+const readSyncLock = (): SyncLock | null => {
+  if (!isBrowser()) return null;
+
+  try {
+    const raw = window.localStorage.getItem(SYNC_LOCK_KEY);
+    return raw ? JSON.parse(raw) as SyncLock : null;
+  } catch {
+    return null;
+  }
+};
+
+const getLockAge = (lock: SyncLock | null) => {
+  if (!lock) return 0;
+  return Date.now() - new Date(lock.heartbeat_at || lock.started_at).getTime();
+};
+
+const isStaleLock = (lock: SyncLock | null) => !!lock && getLockAge(lock) > STALE_SYNC_MS;
+
+const writeSyncLock = (business_id: string) => {
+  if (!isBrowser()) return null;
+
+  const now = new Date().toISOString();
+  const lock: SyncLock = {
+    owner: getInstanceId(),
+    business_id,
+    started_at: now,
+    heartbeat_at: now,
+  };
+  window.localStorage.setItem(SYNC_LOCK_KEY, JSON.stringify(lock));
+  return lock;
+};
+
+const clearSyncLock = (owner?: string) => {
+  if (!isBrowser()) return;
+
+  const current = readSyncLock();
+  if (!current || !owner || current.owner === owner || isStaleLock(current)) {
+    window.localStorage.removeItem(SYNC_LOCK_KEY);
+  }
+};
+
+const heartbeatSyncLock = async (business_id: string, owner: string) => {
+  const current = readSyncLock();
+  if (!current || current.owner !== owner) return;
+
+  const heartbeat = new Date().toISOString();
+  window.localStorage.setItem(SYNC_LOCK_KEY, JSON.stringify({ ...current, heartbeat_at: heartbeat }));
+  try {
+    await syncService.updateMetadata(business_id, 'last_sync_heartbeat_at', heartbeat);
+  } catch (error) {
+    console.warn('[SyncService] Unable to write sync heartbeat metadata:', error);
+  }
+};
+
+const acquireSyncLock = (business_id: string) => {
+  if (!isBrowser()) return { acquired: true, owner: 'server' };
+
+  const current = readSyncLock();
+  const instanceId = getInstanceId();
+  if (current && current.owner !== instanceId && !isStaleLock(current)) {
+    return { acquired: false, owner: current.owner };
+  }
+
+  if (current && isStaleLock(current)) {
+    clearSyncLock();
+  }
+
+  const lock = writeSyncLock(business_id);
+  return { acquired: true, owner: lock?.owner || instanceId };
+};
 
 // Strict ordering of entities to maintain referential integrity in Supabase
 const ENTITY_PRIORITY: Record<string, number> = {
@@ -237,6 +331,7 @@ const serializeForSync = (entity: string, payload: any) => {
 export const syncService = {
   isProcessing: false,
   isFullSyncing: false,
+  fullSyncStartedAt: null as number | null,
 
   async updateMetadata(business_id: string, key: string, value: any) {
     const matches = await db.app_settings
@@ -261,19 +356,30 @@ export const syncService = {
   },
 
   async getQueueDiagnostics(business_id: string) {
+    await this.recoverStaleSyncState(business_id);
+
     const queue = await db.sync_queue
       .where('business_id')
       .equals(business_id)
       .toArray();
 
-    const pendingItems = queue.filter((item) => item.status === 'pending' || item.status === 'syncing');
+    const pendingItems = queue.filter((item) => item.status === 'pending');
+    const syncingItems = queue.filter((item) => item.status === 'syncing');
     const failedItems = queue.filter((item) => item.status === 'failed');
-    const firstProblem = failedItems[0] || pendingItems[0] || null;
+    const firstProblem = failedItems[0] || syncingItems[0] || pendingItems[0] || null;
+    const lock = readSyncLock();
 
     return {
       pendingCount: pendingItems.length,
+      syncingCount: syncingItems.length,
       failedCount: failedItems.length,
       firstProblem,
+      lock: lock ? {
+        ...lock,
+        ageMs: getLockAge(lock),
+        stale: isStaleLock(lock),
+        ownedByThisInstance: isBrowser() ? lock.owner === getInstanceId() : true,
+      } : null,
       items: queue.sort((a, b) => {
         const left = a.created_at ? new Date(a.created_at).getTime() : 0;
         const right = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -287,7 +393,56 @@ export const syncService = {
       .where('business_id')
       .equals(business_id)
       .filter((item) => item.status === 'failed')
-      .modify({ status: 'pending', error: undefined });
+      .modify({
+        status: 'pending',
+        error: undefined,
+        sync_started_at: null,
+        sync_lock_owner: null,
+        last_sync_heartbeat_at: null,
+      });
+  },
+
+  async recoverStaleSyncState(business_id?: string) {
+    const lock = readSyncLock();
+    if (isStaleLock(lock)) {
+      clearSyncLock();
+    }
+
+    const cutoff = Date.now() - STALE_SYNC_MS;
+    const staleItems = (await db.sync_queue.where('status').equals('syncing').toArray())
+      .filter((item) => {
+        if (business_id && item.business_id !== business_id) return false;
+        const heartbeat = item.last_sync_heartbeat_at || item.sync_started_at;
+        if (!heartbeat) return true;
+        return new Date(heartbeat).getTime() < cutoff;
+      });
+
+    if (staleItems.length > 0) {
+      await db.sync_queue.bulkUpdate(staleItems
+        .filter((item) => item.id !== undefined)
+        .map((item) => ({
+          key: item.id!,
+          changes: {
+            status: 'pending',
+            error: 'Recovered stale syncing item from an interrupted sync run',
+            sync_started_at: null,
+            sync_lock_owner: null,
+            last_sync_heartbeat_at: null,
+          },
+        })));
+    }
+
+    if (business_id) {
+      const pendingCount = await db.sync_queue.where('business_id').equals(business_id).filter((item) => item.status === 'pending').count();
+      const syncingCount = await db.sync_queue.where('business_id').equals(business_id).filter((item) => item.status === 'syncing').count();
+      const failedCount = await db.sync_queue.where('business_id').equals(business_id).filter((item) => item.status === 'failed').count();
+      await this.updateMetadata(business_id, 'sync_lock_owner', readSyncLock()?.owner || null);
+      await this.updateMetadata(
+        business_id,
+        'last_sync_status',
+        syncingCount > 0 ? 'syncing' : pendingCount > 0 ? 'pending' : failedCount > 0 ? 'failed' : 'synced',
+      );
+    }
   },
 
   async clearFailedItem(id: number) {
@@ -298,45 +453,61 @@ export const syncService = {
     await db.sync_queue.delete(id);
   },
 
-  async processQueue(business_id?: string) {
-    if (this.isProcessing || !onlineStatusService.getOnlineStatus()) return;
-    
-    this.isProcessing = true;
-    
-    const firstItem = business_id
-      ? await db.sync_queue.where('business_id').equals(business_id).first()
-      : await db.sync_queue.limit(1).first();
-    const activeBusinessId = business_id || firstItem?.business_id;
+  async processQueue(business_id?: string, lockAlreadyHeld = false) {
+    if (!onlineStatusService.getOnlineStatus()) return false;
+    if (this.isProcessing) return false;
 
-    if (activeBusinessId) {
+    let activeBusinessId = business_id;
+    let lockOwner: string | null = null;
+    let lockAcquiredHere = false;
+
+    try {
+      const firstItem = business_id
+        ? await db.sync_queue.where('business_id').equals(business_id).first()
+        : await db.sync_queue.limit(1).first();
+      activeBusinessId = business_id || firstItem?.business_id;
+      if (!activeBusinessId) return false;
+
+      await this.recoverStaleSyncState(activeBusinessId);
+
+      if (!lockAlreadyHeld) {
+        const lock = acquireSyncLock(activeBusinessId);
+        if (!lock.acquired) return false;
+        lockOwner = lock.owner;
+        lockAcquiredHere = true;
+      } else {
+        lockOwner = readSyncLock()?.owner || getInstanceId();
+      }
+
+      this.isProcessing = true;
+
       // Auto-recovery for businesses schema mismatch
       await db.sync_queue
         .where('entity').equals('businesses')
         .and(item => !!(item.status === 'failed' && (item.error?.includes('business_name') || item.error?.includes('PGRST204'))))
-        .modify({ status: 'pending', retry_count: 0, error: undefined });
-
-      await db.sync_queue
-        .where('business_id')
-        .equals(activeBusinessId)
-        .filter((item) => item.status === 'syncing')
         .modify({
           status: 'pending',
-          error: 'Recovered stale syncing item from an interrupted sync run',
+          retry_count: 0,
+          error: undefined,
+          sync_started_at: null,
+          sync_lock_owner: null,
+          last_sync_heartbeat_at: null,
         });
-      await this.updateMetadata(activeBusinessId, 'last_sync_attempt_at', new Date().toISOString());
+
+      const startedAt = new Date().toISOString();
+      await this.updateMetadata(activeBusinessId, 'last_sync_attempt_at', startedAt);
+      await this.updateMetadata(activeBusinessId, 'sync_started_at', startedAt);
+      await this.updateMetadata(activeBusinessId, 'sync_lock_owner', lockOwner);
       await this.updateMetadata(activeBusinessId, 'last_sync_status', 'syncing');
-    }
+      await heartbeatSyncLock(activeBusinessId, lockOwner || getInstanceId());
 
-
-    try {
       // Fetch more than BATCH_SIZE so we can sort them and still have a good batch
-      let items = await db.sync_queue.where('status').anyOf(['pending', 'failed']).limit(100).toArray();
+      let items = await db.sync_queue.where('status').equals('pending').limit(100).toArray();
       if (activeBusinessId) {
         items = items.filter((item) => item.business_id === activeBusinessId);
       }
 
       if (items.length === 0) {
-        this.isProcessing = false;
         if (activeBusinessId) {
           const failedCount = await db.sync_queue.where('business_id').equals(activeBusinessId).filter((item) => item.status === 'failed').count();
           await this.updateMetadata(activeBusinessId, 'last_sync_status', failedCount > 0 ? 'failed' : 'synced');
@@ -362,6 +533,7 @@ export const syncService = {
       const batch = sortedItems.slice(0, BATCH_SIZE);
 
       for (const item of batch) {
+        await heartbeatSyncLock(activeBusinessId, lockOwner || getInstanceId());
         await this.syncItem(item);
       }
 
@@ -394,7 +566,9 @@ export const syncService = {
       }
     } finally {
       this.isProcessing = false;
+      if (lockAcquiredHere) clearSyncLock(lockOwner || undefined);
     }
+    return true;
   },
 
   async syncItem(item: SyncQueue) {
@@ -410,7 +584,14 @@ export const syncService = {
         throw new Error(`Unsupported sync entity: ${entity}`);
       }
 
-      await db.sync_queue.update(id!, { status: 'syncing' });
+      const lock = readSyncLock();
+      const syncTime = new Date().toISOString();
+      await db.sync_queue.update(id!, {
+        status: 'syncing',
+        sync_started_at: syncTime,
+        sync_lock_owner: lock?.owner || getInstanceId(),
+        last_sync_heartbeat_at: syncTime,
+      });
 
       let result;
       switch (action) {
@@ -445,12 +626,15 @@ export const syncService = {
 
     } catch (error: any) {
 
-      const newRetryCount = retry_count + 1;
+      const newRetryCount = (retry_count || 0) + 1;
       const status = newRetryCount >= MAX_RETRIES ? 'failed' : 'pending';
       await db.sync_queue.update(id!, { 
         status,
         retry_count: newRetryCount,
-        error: error.message || error.details || 'Unknown error'
+        error: error.message || error.details || 'Unknown error',
+        sync_started_at: null,
+        sync_lock_owner: null,
+        last_sync_heartbeat_at: null,
       });
     }
   },
@@ -529,14 +713,41 @@ export const syncService = {
   },
 
   async runFullSync(business_id: string) {
-    if (this.isFullSyncing || !onlineStatusService.getOnlineStatus()) return false;
+    if (!onlineStatusService.getOnlineStatus()) {
+      await this.recoverStaleSyncState(business_id);
+      return false;
+    }
+
+    if (this.isFullSyncing) {
+      if (this.fullSyncStartedAt && Date.now() - this.fullSyncStartedAt > STALE_SYNC_MS) {
+        this.isFullSyncing = false;
+        this.fullSyncStartedAt = null;
+      } else {
+        return false;
+      }
+    }
+
+    await this.recoverStaleSyncState(business_id);
+
+    const lock = acquireSyncLock(business_id);
+    if (!lock.acquired) {
+      await this.updateMetadata(business_id, 'sync_lock_owner', lock.owner);
+      return false;
+    }
 
     this.isFullSyncing = true;
-    await this.updateMetadata(business_id, 'last_sync_attempt_at', new Date().toISOString());
-    await this.updateMetadata(business_id, 'last_sync_status', 'syncing');
+    this.fullSyncStartedAt = Date.now();
 
     try {
-      await this.processQueue(business_id);
+      const startedAt = new Date().toISOString();
+      await this.updateMetadata(business_id, 'last_sync_attempt_at', startedAt);
+      await this.updateMetadata(business_id, 'sync_started_at', startedAt);
+      await this.updateMetadata(business_id, 'sync_lock_owner', lock.owner);
+      await this.updateMetadata(business_id, 'last_sync_status', 'syncing');
+      await heartbeatSyncLock(business_id, lock.owner);
+
+      await this.processQueue(business_id, true);
+      await heartbeatSyncLock(business_id, lock.owner);
       await this.pullFromCloud(business_id);
 
       const pendingCount = await db.sync_queue
@@ -570,6 +781,8 @@ export const syncService = {
       throw error;
     } finally {
       this.isFullSyncing = false;
+      this.fullSyncStartedAt = null;
+      clearSyncLock(lock.owner);
     }
   }
 

@@ -48,11 +48,14 @@ function latestSettingValue(settings: { key: string; value: any; updated_at: Dat
 export default function SyncSettingsPage() {
   const router = useRouter();
   const business = useAuthStore((state) => state.business);
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isOnline = useOnlineStatus();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncTick, setSyncTick] = useState(0);
-  const businessId = business?.id;
+  const [hasSwController, setHasSwController] = useState(false);
+  const businessId = business?.id || business?.business_id;
 
   const metadata = useLiveQuery(async () => {
     if (!businessId) return null;
@@ -71,8 +74,14 @@ export default function SyncSettingsPage() {
   );
   
   const pendingCount = diagnostics?.pendingCount || 0;
+  const syncingCount = diagnostics?.syncingCount || 0;
   const failedCount = diagnostics?.failedCount || 0;
   const firstProblem = diagnostics?.firstProblem;
+  const syncLock = diagnostics?.lock;
+
+  useEffect(() => {
+    setHasSwController(typeof navigator !== 'undefined' && !!navigator.serviceWorker?.controller);
+  }, []);
 
   const handleForceSync = async () => {
     if (!isOnline || !businessId) return;
@@ -108,6 +117,13 @@ export default function SyncSettingsPage() {
     if (!businessId) return;
     await syncService.retryFailed(businessId);
     setSyncMessage('Failed sync items moved back to pending');
+    setSyncTick((value) => value + 1);
+  };
+
+  const handleRecoverStaleLock = async () => {
+    if (!businessId) return;
+    await syncService.recoverStaleSyncState(businessId);
+    setSyncMessage('Stale sync locks checked and interrupted items recovered if needed');
     setSyncTick((value) => value + 1);
   };
 
@@ -167,11 +183,11 @@ export default function SyncSettingsPage() {
           </div>
 
           <div className="glass-card rounded-[32px] p-6 space-y-5 border border-border/40 shadow-sm">
-            <StatusRow 
-              label="Sync Status" 
-              value={isManualSyncing ? 'Syncing...' : !isOnline ? 'Offline' : pendingCount > 0 ? 'Pending' : failedCount > 0 ? 'Failed' : metadata?.status === 'syncing' ? 'Syncing' : metadata?.lastSuccess ? 'Synced' : 'Not synced yet'} 
+            <StatusRow
+              label="Sync Status"
+              value={isManualSyncing ? 'Syncing...' : !isOnline ? 'Offline' : syncingCount > 0 ? 'Syncing' : pendingCount > 0 ? 'Pending' : failedCount > 0 ? 'Failed' : metadata?.status === 'syncing' ? 'Syncing' : metadata?.lastSuccess ? 'Synced' : 'Not synced yet'}
               color={
-                isManualSyncing || metadata?.status === 'syncing' ? "text-primary animate-pulse" :
+                isManualSyncing || syncingCount > 0 || metadata?.status === 'syncing' ? "text-primary animate-pulse" :
                 !isOnline ? "text-slate-500" :
                 failedCount > 0 || metadata?.status === 'failed' ? "text-red-500" :
                 pendingCount > 0 ? "text-amber-500" : "text-emerald-500"
@@ -179,16 +195,32 @@ export default function SyncSettingsPage() {
             />
             <StatusRow label="Last Successful Sync" value={formatTime(metadata?.lastSuccess)} />
             <StatusRow label="Last Sync Attempt" value={formatTime(metadata?.lastAttempt)} />
-            <StatusRow 
-              label="Pending Changes" 
-              value={pendingCount === 0 ? '0 pending' : `${pendingCount} waiting`} 
+            <StatusRow
+              label="Pending Changes"
+              value={pendingCount === 0 ? '0 pending' : `${pendingCount} waiting`}
               color={pendingCount > 0 ? "text-amber-500" : ""}
             />
-            <StatusRow 
-              label="Failed Changes" 
-              value={failedCount === 0 ? '0 failed' : `${failedCount} failed`} 
+            <StatusRow
+              label="Currently Syncing"
+              value={syncingCount === 0 ? '0 syncing' : `${syncingCount} syncing`}
+              color={syncingCount > 0 ? "text-primary animate-pulse" : ""}
+            />
+            <StatusRow
+              label="Failed Changes"
+              value={failedCount === 0 ? '0 failed' : `${failedCount} failed`}
               color={failedCount > 0 ? "text-red-500" : ""}
             />
+            <StatusRow
+              label="Sync Lock"
+              value={!syncLock ? 'Free' : syncLock.stale ? `Stale ${Math.round(syncLock.ageMs / 1000)}s` : `Active ${Math.round(syncLock.ageMs / 1000)}s`}
+              color={syncLock?.stale ? "text-red-500" : syncLock ? "text-primary" : "text-emerald-500"}
+            />
+            <StatusRow label="Lock Owner" value={syncLock?.owner ? `${syncLock.owner.slice(0, 8)}...` : 'None'} />
+            <StatusRow label="Online Status" value={isOnline ? 'Online' : 'Offline'} color={isOnline ? "text-emerald-500" : "text-slate-500"} />
+            <StatusRow label="Local Session" value={isAuthenticated && user ? 'Present' : 'Missing'} color={isAuthenticated && user ? "text-emerald-500" : "text-red-500"} />
+            <StatusRow label="Business ID" value={businessId ? 'Present' : 'Missing'} color={businessId ? "text-emerald-500" : "text-red-500"} />
+            <StatusRow label="SW Controller" value={hasSwController ? 'Present' : 'Missing'} color={hasSwController ? "text-emerald-500" : "text-amber-500"} />
+            <StatusRow label="IndexedDB Version" value={db.verno.toString()} />
 
             {metadata?.error && (
               <div className="rounded-2xl bg-red-500/10 p-4 flex gap-3 items-start border border-red-500/20">
@@ -233,6 +265,20 @@ export default function SyncSettingsPage() {
                   <Trash2 size={14} />
                   Clear Failed
                 </Touchable>
+              </div>
+            )}
+            {(syncingCount > 0 || syncLock) && (
+              <Touchable
+                onPress={handleRecoverStaleLock}
+                className="h-12 rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center justify-center gap-2 text-xs font-bold"
+              >
+                <RefreshCw size={14} />
+                Recover Stale Sync Lock
+              </Touchable>
+            )}
+            {syncMessage && (
+              <div className="rounded-2xl bg-secondary/60 border border-border/40 p-4">
+                <p className="text-xs font-bold text-muted-foreground leading-relaxed">{syncMessage}</p>
               </div>
             )}
           </div>

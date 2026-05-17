@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { Touchable } from '@/components/touchable';
 import { cn } from '@/lib/utils';
+import { KOLA_APP_BUILD_VERSION } from '@/components/pwa-registration';
+import { db } from '@/db/dexie';
 
 export default function PWACachePage() {
   const router = useRouter();
@@ -54,9 +56,24 @@ export default function PWACachePage() {
   const [isOnline, setIsOnline] = useState(true);
   const [isCaching, setIsCaching] = useState(false);
   const [cacheNames, setCacheNames] = useState<string[]>([]);
+  const [versionInfo, setVersionInfo] = useState({
+    appBuildVersion: KOLA_APP_BUILD_VERSION,
+    cachedBuildVersion: '',
+    staleCache: false,
+    indexedDbVersion: 0,
+    dbVersionChangeAt: '',
+  });
 
   const checkStatus = async () => {
     setIsOnline(navigator.onLine);
+    const cachedBuildVersion = localStorage.getItem('kola-app-build-version') || '';
+    setVersionInfo({
+      appBuildVersion: KOLA_APP_BUILD_VERSION,
+      cachedBuildVersion,
+      staleCache: !!cachedBuildVersion && cachedBuildVersion !== KOLA_APP_BUILD_VERSION,
+      indexedDbVersion: db.verno,
+      dbVersionChangeAt: localStorage.getItem('kola-db-versionchange-at') || '',
+    });
     
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
@@ -163,9 +180,18 @@ export default function PWACachePage() {
             <DiagnosticRow label="Registered" success={swStatus.registered} />
             <DiagnosticRow label="Controlling Page" success={swStatus.controlling} />
             <DiagnosticRow label="Active Status" success={swStatus.active} />
+            <DiagnosticRow label="Cache Version Current" success={!versionInfo.staleCache} />
             <div className="pt-2">
               <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-1">Scope</p>
               <p className="text-[11px] font-mono text-foreground break-all bg-secondary/50 p-2 rounded-lg">{swStatus.scope || 'None'}</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 pt-2">
+              <VersionLine label="App Build" value={versionInfo.appBuildVersion} />
+              <VersionLine label="Cached Build" value={versionInfo.cachedBuildVersion || 'Not recorded'} />
+              <VersionLine label="IndexedDB Version" value={versionInfo.indexedDbVersion.toString()} />
+              {versionInfo.dbVersionChangeAt && (
+                <VersionLine label="Last DB Version Change" value={versionInfo.dbVersionChangeAt} />
+              )}
             </div>
           </div>
         </section>
@@ -287,6 +313,15 @@ function DiagnosticRow({
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+function VersionLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="text-[10px] font-mono text-right text-foreground break-all">{value}</p>
     </div>
   );
 }

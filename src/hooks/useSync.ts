@@ -11,25 +11,44 @@ export function useSync() {
   const business = useAuthStore((state) => state.business);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const wasOfflineRef = useRef(false);
+  const runningRef = useRef(false);
 
   const triggerSync = async () => {
-    if (!business?.id) return;
+    const businessId = business?.id || business?.business_id;
+    if (!businessId) return;
+    if (!onlineStatusService.getOnlineStatus()) {
+      await syncService.recoverStaleSyncState(businessId);
+      wasOfflineRef.current = true;
+      return;
+    }
+    if (runningRef.current) return;
 
     try {
-      const success = await syncService.runFullSync(business.id);
+      runningRef.current = true;
+      const success = await syncService.runFullSync(businessId);
       if (success && wasOfflineRef.current && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Changes synced successfully' } }));
       }
     } catch (error) {
       console.error('[useSync] Sync error:', error);
+    } finally {
+      runningRef.current = false;
     }
   };
 
   useEffect(() => {
-    if (!business?.id) return;
+    const businessId = business?.id || business?.business_id;
+    if (!businessId) return;
 
-    // Initial sync
-    triggerSync();
+    syncService.recoverStaleSyncState(businessId).catch((error) => {
+      console.warn('[useSync] Stale sync recovery failed:', error);
+    });
+
+    if (onlineStatusService.getOnlineStatus()) {
+      triggerSync();
+    } else {
+      wasOfflineRef.current = true;
+    }
 
     // Set up interval
     timerRef.current = setInterval(triggerSync, SYNC_INTERVAL);
@@ -50,7 +69,7 @@ export function useSync() {
       unsubscribe();
       window.removeEventListener('online', triggerSync);
     };
-  }, [business?.id]);
+  }, [business?.id, business?.business_id]);
 
   return {
     triggerSync,

@@ -235,5 +235,8 @@ export interface SyncQueue {
   status: 'pending' | 'syncing' | 'synced' | 'failed' | 'conflict';
   retry_count: number;
   error?: string;
+  sync_started_at?: Date | string | null;
+  sync_lock_owner?: string | null;
+  last_sync_heartbeat_at?: Date | string | null;
   created_at: Date;
 }

@@ -271,35 +271,51 @@ export const authService = {
   },
 
   async checkSession() {
-    let session = null;
     try {
-      const result = await supabase.auth.getSession();
-      session = result.data.session;
-    } catch (error) {
-      console.warn('[Auth] Supabase session check failed, using local session if available:', error);
-    }
-    
-    if (session?.user) {
-      const userProfile = {
-        id: session.user.id,
-        email: session.user.email!,
-        full_name: session.user.user_metadata?.full_name,
-      };
-
-      const business = (await loadLocalBusiness(session.user.id)) || (await pullBusinessFromCloud(session.user.id));
-      hydrateStores(userProfile, business);
-    } else {
       const store = useAuthStore.getState();
-      if (store.isAuthenticated && store.user) {
+
+      if (!isBrowserOnline()) {
         console.log('[Auth] Using local persistent session (Offline)');
+        if (store.isAuthenticated && store.user) {
+          const business = store.business || await loadLocalBusiness(store.user.id);
+          hydrateStores(store.user, business as BusinessProfile | null);
+        }
+        return;
+      }
+
+      let session = null;
+      try {
+        const result = await supabase.auth.getSession();
+        session = result.data.session;
+      } catch (error) {
+        console.warn('[Auth] Supabase session check failed, using local session if available:', error);
+      }
+
+      if (session?.user) {
+        const userProfile = {
+          id: session.user.id,
+          email: session.user.email!,
+          full_name: session.user.user_metadata?.full_name,
+        };
+
+        const business = (await loadLocalBusiness(session.user.id)) || (await pullBusinessFromCloud(session.user.id));
+        hydrateStores(userProfile, business);
+      } else if (store.isAuthenticated && store.user) {
+        console.log('[Auth] Using local persistent session');
         const business = store.business || await loadLocalBusiness(store.user.id);
         hydrateStores(store.user, business as BusinessProfile | null);
       } else {
         store.clearAuth();
         useStore.getState().logout();
       }
+    } catch (error) {
+      console.warn('[Auth] Session check failed, preserving local session if present:', error);
+      const store = useAuthStore.getState();
+      if (store.isAuthenticated && store.user) {
+        hydrateStores(store.user, store.business as BusinessProfile | null);
+      }
+    } finally {
+      useAuthStore.getState().setInitialized(true);
     }
-    
-    useAuthStore.getState().setInitialized(true);
   }
 };

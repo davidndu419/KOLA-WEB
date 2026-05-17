@@ -233,6 +233,20 @@ export class KolaDatabase extends Dexie {
 
 export const db = new KolaDatabase();
 
+if (typeof window !== 'undefined') {
+  db.on('blocked', () => {
+    console.warn('[Dexie] Database upgrade blocked by another open Kola window.');
+    window.dispatchEvent(new CustomEvent('kola:db-blocked'));
+  });
+
+  db.on('versionchange', () => {
+    console.warn('[Dexie] Database version changed in another Kola window. Closing this connection.');
+    db.close();
+    window.localStorage.setItem('kola-db-versionchange-at', new Date().toISOString());
+    window.dispatchEvent(new CustomEvent('kola:db-versionchange'));
+  });
+}
+
 export function createBaseEntity(business_id: string): Omit<BaseEntity, 'id'> {
   return {
     local_id: crypto.randomUUID(),
