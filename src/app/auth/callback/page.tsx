@@ -16,30 +16,56 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Supabase auto-detects the hash/query tokens and exchanges them for a session
-        // when detectSessionInUrl is true (which it is in our config)
-        const { data, error } = await supabase.auth.getSession();
+        // Detect recovery flow before Supabase consumes the hash tokens
+        const isRecovery = 
+          window.location.hash.includes('type=recovery') || 
+          window.location.search.includes('type=recovery');
 
-        if (error) {
-          console.error('[AuthCallback] Session error:', error);
-          setErrorMessage(error.message);
+        // Check for PKCE code flow
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+        
+        let sessionData;
+        let sessionError;
+
+        if (code) {
+          const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          sessionData = exchangeData;
+          sessionError = exchangeError;
+        } else {
+          // Fallback to implicit flow (hash tokens)
+          const { data, error } = await supabase.auth.getSession();
+          sessionData = data;
+          sessionError = error;
+        }
+
+        if (sessionError) {
+          console.error('[AuthCallback] Session error:', sessionError);
+          setErrorMessage(sessionError.message);
           setStatus('error');
           return;
         }
 
-        if (!data.session?.user) {
+        if (!sessionData.session?.user) {
           // No session established — might be an expired link
           setErrorMessage('Authentication link has expired. Please try again.');
           setStatus('error');
           return;
         }
 
-        const user = data.session.user;
+        const user = sessionData.session.user;
 
-        // Check if email is verified (for email+password signups coming back from verification)
-        if (!user.email_confirmed_at) {
-          showToast('Please verify your email to continue.');
-          router.replace(`/auth/verify-email?email=${encodeURIComponent(user.email || '')}`);
+        // Temporarily disabled email verification check
+        // if (!user.email_confirmed_at) {
+        //   showToast('Please verify your email to continue.');
+        //   router.replace(`/auth/verify-email?email=${encodeURIComponent(user.email || '')}`);
+        //   return;
+        // }
+
+        // If this is a password reset flow, redirect directly to the reset page
+        if (isRecovery) {
+          showToast('Session verified. Please set your new password.');
+          router.replace('/auth/reset-password');
           return;
         }
 

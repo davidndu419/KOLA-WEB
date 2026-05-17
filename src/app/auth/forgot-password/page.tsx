@@ -58,33 +58,23 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <AuthCard title="Reset Password" subtitle="Enter your email to receive a reset link">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <AuthInput
-          label="Email Address"
-          type="email"
-          placeholder="name@business.com"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          error={error || undefined}
-        />
-
-        <div className="pt-2">
-          <Touchable
-            onPress={() => {}}
-            className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[20px] flex items-center justify-center font-bold text-base transition-colors shadow-lg shadow-emerald-500/20"
-          >
-            {isLoading ? <Loader2 className="animate-spin" /> : 'Send Reset Link'}
-          </Touchable>
+    <AuthCard title="Reset Password" subtitle="Service Temporarily Unavailable">
+      <div className="space-y-6 text-center">
+        <div className="p-4 rounded-[16px] bg-red-500/10 border border-red-500/20 text-red-500 font-medium text-sm">
+          Password reset is temporarily unavailable while we perform maintenance on our email systems. Please contact support.
         </div>
-
-        <div className="text-center pt-2">
-          <Link href="/auth/login" className="inline-block text-xs text-muted-foreground hover:text-foreground font-semibold uppercase tracking-widest transition-colors">
-            ← Back to Login
+        
+        <div className="pt-2">
+          <Link href="/auth/login">
+            <Touchable
+              onPress={() => {}}
+              className="w-full h-14 bg-secondary text-foreground rounded-[20px] flex items-center justify-center font-bold text-base transition-colors"
+            >
+              Return to Login
+            </Touchable>
           </Link>
         </div>
-      </form>
+      </div>
     </AuthCard>
   );
 }

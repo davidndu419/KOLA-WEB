@@ -27,13 +27,41 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const checkResetSession = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
-          setIsValidSession(true);
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+        const hash = window.location.hash;
+        
+        console.log('[ResetPassword] checkResetSession starting. Code present:', !!code, 'Hash present:', !!hash);
+        
+        let sessionValid = false;
+
+        if (code) {
+          // Handle PKCE flow
+          console.log('[ResetPassword] Attempting exchangeCodeForSession...');
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (data.session && !error) {
+            console.log('[ResetPassword] exchangeCodeForSession SUCCESS');
+            sessionValid = true;
+            // Clean up the URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+          } else {
+            console.error('[ResetPassword] PKCE error:', error);
+          }
         } else {
-          setIsValidSession(false);
+          // Handle implicit flow (hash tokens) or existing session
+          console.log('[ResetPassword] Attempting getSession...');
+          const { data } = await supabase.auth.getSession();
+          if (data.session) {
+            console.log('[ResetPassword] getSession SUCCESS');
+            sessionValid = true;
+          } else {
+             console.log('[ResetPassword] getSession returned no session');
+          }
         }
-      } catch {
+
+        setIsValidSession(sessionValid);
+      } catch (err) {
+        console.error('[ResetPassword] Session check failed:', err);
         setIsValidSession(false);
       }
     };
@@ -58,10 +86,25 @@ export default function ResetPasswordPage() {
 
     setIsLoading(true);
     try {
+      console.log('[ResetPassword] Attempting updateUser...');
       await authService.updatePassword(formData.password);
+      
+      console.log('[ResetPassword] updateUser returned success. Verifying session...');
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !userData?.user) {
+        throw new Error(`Verification failed after update: ${userError?.message || 'No user'}`);
+      }
+      
+      console.log('[ResetPassword] Session verified. Signing out...');
+      
+      // Destroy the recovery session locally so they must log in again
+      await authService.signOut();
+      
       setIsSuccess(true);
-      showToast('Password updated successfully!');
+      showToast('Password updated successfully! Please log in.');
     } catch (err: any) {
+      console.error('[ResetPassword] Update failed:', err);
       setError(err.message || 'Failed to update password');
     } finally {
       setIsLoading(false);

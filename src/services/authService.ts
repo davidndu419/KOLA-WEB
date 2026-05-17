@@ -320,9 +320,13 @@ export const authService = {
         )
       ]);
       
-      if (error) throw error;
+      if (error) {
+        console.error('[Supabase SignUp Error]:', error);
+        throw new Error(`[${error.status || 'ERROR'}] ${error.message}`);
+      }
       return data;
     } catch (err: any) {
+      console.error('[SignUp Exception]:', err);
       if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
         throw new Error('Network error: Unable to reach authentication server.');
       }
@@ -345,11 +349,10 @@ export const authService = {
 
       if (error) throw error;
 
-      // Check email verification
-      if (data.user && !data.user.email_confirmed_at) {
-        // User exists but email not verified — let the caller handle redirect
-        return { ...data, emailVerified: false };
-      }
+      // Temporarily disabled email verification enforcement
+      // if (data.user && !data.user.email_confirmed_at) {
+      //   return { ...data, emailVerified: false };
+      // }
 
       if (data.user) {
         // ── USER-SWITCH CHECK ──
@@ -423,7 +426,10 @@ export const authService = {
       redirectTo: redirectUrl,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Supabase Reset Password Error]:', error);
+      throw new Error(`[${error.status || 'ERROR'}] ${error.message}`);
+    }
   },
 
   async updatePassword(newPassword: string) {
@@ -431,7 +437,10 @@ export const authService = {
       password: newPassword,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Supabase Update Password Error]:', error);
+      throw new Error(`[${error.status || 'ERROR'}] ${error.message}`);
+    }
   },
 
   async resendVerificationEmail(email: string) {
@@ -449,7 +458,10 @@ export const authService = {
       },
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Supabase Resend Verification Error]:', error);
+      throw new Error(`[${error.status || 'ERROR'}] ${error.message}`);
+    }
   },
 
   async signOut() {

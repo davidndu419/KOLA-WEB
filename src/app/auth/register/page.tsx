@@ -52,15 +52,15 @@ export default function RegisterPage() {
 
       const data = await authService.signUp(formData.email, formData.password, formData.fullName);
       
-      // If Supabase requires email confirmation, redirect to verification page
-      // data.user exists but data.session is null when email confirmation is required
-      if (data.user && !data.session) {
-        showToast('Verification email sent. Please check your inbox.');
-        router.push(`/auth/verify-email?email=${encodeURIComponent(formData.email)}`);
-      } else {
-        // If email confirmation is disabled in Supabase, proceed directly
-        router.push('/auth/business-setup');
-      }
+      // Temporarily disabled email verification redirect:
+      // if (data.user && !data.session) {
+      //   showToast('Verification email sent. Please check your inbox.');
+      //   router.push(`/auth/verify-email?email=${encodeURIComponent(formData.email)}`);
+      // } else {
+      //   router.push('/auth/business-setup');
+      // }
+      
+      router.push('/auth/login');
     } catch (err: any) {
       setError(err.message || 'An error occurred during registration');
       setIsLoading(false);

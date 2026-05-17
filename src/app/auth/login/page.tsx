@@ -67,12 +67,12 @@ export default function LoginPage() {
     try {
       const result = await authService.signIn(formData.email, formData.password);
       
-      // Check if email is verified
-      if (result.emailVerified === false) {
-        showToast('Please verify your email to continue.');
-        router.push(`/auth/verify-email?email=${encodeURIComponent(formData.email)}`);
-        return;
-      }
+      // Temporarily disabled email verification redirect
+      // if (result.emailVerified === false) {
+      //   showToast('Please verify your email to continue.');
+      //   router.push(`/auth/verify-email?email=${encodeURIComponent(formData.email)}`);
+      //   return;
+      // }
 
       // Check if business exists after sign in
       const business = useAuthStore.getState().business;
@@ -143,11 +143,13 @@ export default function LoginPage() {
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             error={error || undefined}
           />
+          {/* Temporarily disabled until stable 
           <div className="flex justify-end px-1">
             <Link href="/auth/forgot-password" className="text-[11px] font-bold text-emerald-500 hover:text-emerald-600 uppercase tracking-widest transition-colors">
               Forgot Password?
             </Link>
           </div>
+          */}
         </div>
 
         <div className="pt-2">

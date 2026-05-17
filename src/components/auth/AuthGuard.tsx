@@ -31,6 +31,20 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         });
       }
 
+      // Public auth routes that should NEVER be intercepted by AuthGuard
+      const publicAuthRoutes = [
+        '/auth/login',
+        '/auth/register',
+        '/auth/forgot-password',
+        '/auth/reset-password',
+        '/auth/callback',
+        '/auth/verify-email'
+      ];
+
+      if (publicAuthRoutes.some(route => pathname.startsWith(route))) {
+        return;
+      }
+
       if (!isAuthenticated) {
         // Preserve PWA source marker in the login redirect
         const loginUrl = mode === 'pwa' ? '/auth/login?source=pwa' : '/auth/login';
