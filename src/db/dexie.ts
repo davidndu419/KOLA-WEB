@@ -1,5 +1,6 @@
 // src/db/dexie.ts
 import Dexie, { type Table } from 'dexie';
+import { getDexieDbName, getStorageKeys, getRuntimeMode } from '@/lib/runtime-mode';
 import { 
   Product, 
   Transaction, 
@@ -44,8 +45,8 @@ export class KolaDatabase extends Dexie {
   receipts!: Table<Receipt>;
   audit_logs!: Table<AuditLog>;
 
-  constructor() {
-    super('KolaDB');
+  constructor(dbName: string) {
+    super(dbName);
 
     this.version(15).stores({
       businesses: '++id, local_id, business_id, user_id, sync_status, updated_at',
@@ -231,9 +232,12 @@ export class KolaDatabase extends Dexie {
   }
 }
 
-export const db = new KolaDatabase();
+const dbName = getDexieDbName();
+export const db = new KolaDatabase(dbName);
 
 if (typeof window !== 'undefined') {
+  console.log(`[Dexie] Using database: ${dbName} (mode: ${getRuntimeMode()})`);
+
   db.on('blocked', () => {
     console.warn('[Dexie] Database upgrade blocked by another open Kola window.');
     window.dispatchEvent(new CustomEvent('kola:db-blocked'));
@@ -242,7 +246,8 @@ if (typeof window !== 'undefined') {
   db.on('versionchange', () => {
     console.warn('[Dexie] Database version changed in another Kola window. Closing this connection.');
     db.close();
-    window.localStorage.setItem('kola-db-versionchange-at', new Date().toISOString());
+    const keys = getStorageKeys();
+    window.localStorage.setItem(keys.dbVersionChangeAt, new Date().toISOString());
     window.dispatchEvent(new CustomEvent('kola:db-versionchange'));
   });
 }
@@ -255,6 +260,6 @@ export function createBaseEntity(business_id: string): Omit<BaseEntity, 'id'> {
     updated_at: new Date(),
     sync_status: 'pending',
     version: 1,
-    device_id: 'web-browser', 
+    device_id: `web-${getRuntimeMode()}`, 
   };
 }

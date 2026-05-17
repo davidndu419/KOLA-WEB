@@ -2,7 +2,7 @@
   "name": "Kola Business Companion",
   "short_name": "Kola",
   "description": "Smart offline-first business manager for African entrepreneurs.",
-  "start_url": "/dashboard",
+  "start_url": "/auth/login?source=pwa",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],

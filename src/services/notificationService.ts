@@ -1,6 +1,7 @@
 // src/services/notificationService.ts
 
 import type { Product } from '@/db/schema';
+import { getStorageKeys } from '@/lib/runtime-mode';
 
 type TransactionType = 'sale' | 'expense' | 'service';
 type LocalNotificationOptions = NotificationOptions & {
@@ -34,7 +35,8 @@ export class NotificationService {
     if (typeof window === 'undefined') return false;
 
     try {
-      const raw = window.localStorage.getItem('kola-app-storage');
+      const keys = getStorageKeys();
+      const raw = window.localStorage.getItem(keys.appStorage);
       if (!raw) return false;
       const parsed = JSON.parse(raw);
       return parsed?.state?.notificationsEnabled === true;

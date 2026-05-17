@@ -18,6 +18,7 @@ import { Touchable } from '@/components/touchable';
 import { cn } from '@/lib/utils';
 import { KOLA_APP_BUILD_VERSION } from '@/components/pwa-registration';
 import { db } from '@/db/dexie';
+import { getStorageKeys, getRuntimeMode } from '@/lib/runtime-mode';
 
 export default function PWACachePage() {
   const router = useRouter();
@@ -66,13 +67,14 @@ export default function PWACachePage() {
 
   const checkStatus = async () => {
     setIsOnline(navigator.onLine);
-    const cachedBuildVersion = localStorage.getItem('kola-app-build-version') || '';
+    const keys = getStorageKeys();
+    const cachedBuildVersion = localStorage.getItem(keys.appBuildVersion) || '';
     setVersionInfo({
       appBuildVersion: KOLA_APP_BUILD_VERSION,
       cachedBuildVersion,
       staleCache: !!cachedBuildVersion && cachedBuildVersion !== KOLA_APP_BUILD_VERSION,
       indexedDbVersion: db.verno,
-      dbVersionChangeAt: localStorage.getItem('kola-db-versionchange-at') || '',
+      dbVersionChangeAt: localStorage.getItem(keys.dbVersionChangeAt) || '',
     });
     
     if ('serviceWorker' in navigator) {

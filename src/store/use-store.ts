@@ -1,6 +1,7 @@
 // src/store/use-store.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { getStorageKeys } from '@/lib/runtime-mode';
 
 interface Business {
   id: string;
@@ -36,6 +37,11 @@ interface AppState {
   logout: () => void;
 }
 
+// Resolve the storage key at module load time (client-side) or use a safe default (SSR)
+const storageKey = typeof window !== 'undefined'
+  ? getStorageKeys().appStorage
+  : 'kola-browser-app-storage';
+
 export const useStore = create<AppState>()(
   persist(
     (set) => ({
@@ -57,7 +63,7 @@ export const useStore = create<AppState>()(
       logout: () => set({ business: null, user: null }),
     }),
     {
-      name: 'kola-app-storage',
+      name: storageKey,
     }
   )
 );

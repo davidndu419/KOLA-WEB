@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { getRuntimeMode } from '@/lib/runtime-mode';
 
 export type PWAInstallStatus = 'installed' | 'can-install' | 'manual-install' | 'browser' | 'loading';
 export type PWADisplayMode = 'standalone' | 'browser';
@@ -13,12 +14,8 @@ export function usePWAInstall() {
   const checkStatus = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    const isFullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
-    const isAndroidTrustedWebActivity = document.referrer.startsWith('android-app://');
-    const isIOSStandalone = (window.navigator as any).standalone === true;
-    const isPwaSource = new URLSearchParams(window.location.search).get('source') === 'pwa';
-    const isInstalledContext = isStandalone || isFullscreen || isAndroidTrustedWebActivity || isIOSStandalone || isPwaSource;
+    const runtimeMode = getRuntimeMode();
+    const isInstalledContext = runtimeMode === 'pwa';
     const wasInstalled = localStorage.getItem('kola-pwa-installed') === 'true';
 
     setMode(isInstalledContext ? 'standalone' : 'browser');

@@ -3,12 +3,15 @@ import { supabase } from '@/lib/supabase';
 import { SyncQueue } from '@/db/schema';
 import { onlineStatusService } from './onlineStatusService';
 import { conflictResolver } from './conflictResolver';
+import { getStorageKeys } from '@/lib/runtime-mode';
 
 const MAX_RETRIES = 5;
 const BATCH_SIZE = 20;
 const STALE_SYNC_MS = 60_000;
-const SYNC_LOCK_KEY = 'kola-sync-lock';
-const INSTANCE_ID_KEY = 'kola-sync-instance-id';
+
+// Mode-specific sync lock and instance keys
+const getSyncLockKey = () => getStorageKeys().syncLock;
+const getInstanceIdKey = () => getStorageKeys().syncInstanceId;
 
 type SyncLock = {
   owner: string;
@@ -22,11 +25,12 @@ const isBrowser = () => typeof window !== 'undefined';
 const getInstanceId = () => {
   if (!isBrowser()) return 'server';
 
-  const existing = window.sessionStorage.getItem(INSTANCE_ID_KEY);
+  const key = getInstanceIdKey();
+  const existing = window.sessionStorage.getItem(key);
   if (existing) return existing;
 
   const next = crypto.randomUUID();
-  window.sessionStorage.setItem(INSTANCE_ID_KEY, next);
+  window.sessionStorage.setItem(key, next);
   return next;
 };
 
@@ -34,7 +38,7 @@ const readSyncLock = (): SyncLock | null => {
   if (!isBrowser()) return null;
 
   try {
-    const raw = window.localStorage.getItem(SYNC_LOCK_KEY);
+    const raw = window.localStorage.getItem(getSyncLockKey());
     return raw ? JSON.parse(raw) as SyncLock : null;
   } catch {
     return null;
@@ -58,7 +62,7 @@ const writeSyncLock = (business_id: string) => {
     started_at: now,
     heartbeat_at: now,
   };
-  window.localStorage.setItem(SYNC_LOCK_KEY, JSON.stringify(lock));
+  window.localStorage.setItem(getSyncLockKey(), JSON.stringify(lock));
   return lock;
 };
 
@@ -67,7 +71,7 @@ const clearSyncLock = (owner?: string) => {
 
   const current = readSyncLock();
   if (!current || !owner || current.owner === owner || isStaleLock(current)) {
-    window.localStorage.removeItem(SYNC_LOCK_KEY);
+    window.localStorage.removeItem(getSyncLockKey());
   }
 };
 
@@ -76,7 +80,7 @@ const heartbeatSyncLock = async (business_id: string, owner: string) => {
   if (!current || current.owner !== owner) return;
 
   const heartbeat = new Date().toISOString();
-  window.localStorage.setItem(SYNC_LOCK_KEY, JSON.stringify({ ...current, heartbeat_at: heartbeat }));
+  window.localStorage.setItem(getSyncLockKey(), JSON.stringify({ ...current, heartbeat_at: heartbeat }));
   try {
     await syncService.updateMetadata(business_id, 'last_sync_heartbeat_at', heartbeat);
   } catch (error) {

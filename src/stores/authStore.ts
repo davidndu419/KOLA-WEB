@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { getStorageKeys } from '@/lib/runtime-mode';
 
 interface UserProfile {
   id: string;
@@ -40,6 +41,11 @@ interface AuthState {
   clearAuth: () => void;
   setInitialized: (value: boolean) => void;
 }
+
+// Resolve the storage key at module load time (client-side) or use a safe default (SSR)
+const storageKey = typeof window !== 'undefined' 
+  ? getStorageKeys().authStorage 
+  : 'kola-browser-auth-storage';
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -83,7 +89,7 @@ export const useAuthStore = create<AuthState>()(
       setInitialized: (isInitialized) => set({ isInitialized }),
     }),
     {
-      name: 'kola-auth-storage',
+      name: storageKey,
       storage: createJSONStorage(() => localStorage),
     }
   )
