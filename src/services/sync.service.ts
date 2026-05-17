@@ -8,7 +8,10 @@ import { getStorageKeys } from '@/lib/runtime-mode';
 const MAX_RETRIES = 5;
 const BATCH_SIZE = 20;
 const STALE_SYNC_MS = 60_000;
+const LOCKED_SYNC_RETRY_MS = 750;
 const autoRetriedBusinesses = new Set<string>();
+const requestedSyncBusinesses = new Set<string>();
+const requestedSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 // Mode-specific sync lock and instance keys
 const getSyncLockKey = () => getStorageKeys().syncLock;
@@ -445,6 +448,68 @@ export const syncService = {
   isFullSyncing: false,
   fullSyncStartedAt: null as number | null,
 
+  requestImmediateSync(business_id: string) {
+    if (!business_id) return false;
+
+    if (!onlineStatusService.getOnlineStatus()) {
+      this.recoverStaleSyncState(business_id).catch((error) => {
+        console.warn('[SyncService] Offline stale sync recovery failed:', error);
+      });
+      return false;
+    }
+
+    requestedSyncBusinesses.add(business_id);
+    const requestedAt = new Date().toISOString();
+    this.updateMetadata(business_id, 'last_sync_attempt_at', requestedAt).catch(() => {});
+    this.updateMetadata(business_id, 'last_sync_status', 'pending').catch(() => {});
+    this.scheduleRequestedSync(business_id);
+    return true;
+  },
+
+  scheduleRequestedSync(business_id: string, delay = 0) {
+    if (!business_id) return;
+
+    const existing = requestedSyncTimers.get(business_id);
+    if (existing) {
+      if (delay > 0) return;
+      clearTimeout(existing);
+      requestedSyncTimers.delete(business_id);
+    }
+
+    const timer = setTimeout(() => {
+      requestedSyncTimers.delete(business_id);
+      this.runRequestedSyncIfNeeded(business_id).catch((error) => {
+        console.warn('[SyncService] Requested background sync failed:', error);
+      });
+    }, delay);
+
+    requestedSyncTimers.set(business_id, timer);
+  },
+
+  async runRequestedSyncIfNeeded(business_id: string) {
+    if (!business_id || !requestedSyncBusinesses.has(business_id)) return false;
+    if (!onlineStatusService.getOnlineStatus()) return false;
+
+    if (this.isProcessing || this.isFullSyncing) {
+      this.scheduleRequestedSync(business_id, LOCKED_SYNC_RETRY_MS);
+      return false;
+    }
+
+    const pendingCount = await db.sync_queue
+      .where('business_id')
+      .equals(business_id)
+      .filter((item) => item.status === 'pending')
+      .count();
+
+    if (pendingCount === 0) {
+      requestedSyncBusinesses.delete(business_id);
+      return false;
+    }
+
+    requestedSyncBusinesses.delete(business_id);
+    return this.runFullSync(business_id);
+  },
+
   async updateMetadata(business_id: string, key: string, value: any) {
     const matches = await db.app_settings
       .where('[business_id+key]')
@@ -617,7 +682,10 @@ export const syncService = {
 
   async processQueue(business_id?: string, lockAlreadyHeld = false) {
     if (!onlineStatusService.getOnlineStatus()) return false;
-    if (this.isProcessing) return false;
+    if (this.isProcessing) {
+      if (business_id) requestedSyncBusinesses.add(business_id);
+      return false;
+    }
 
     let activeBusinessId = business_id;
     let lockOwner: string | null = null;
@@ -634,7 +702,11 @@ export const syncService = {
 
       if (!lockAlreadyHeld) {
         const lock = acquireSyncLock(activeBusinessId);
-        if (!lock.acquired) return false;
+        if (!lock.acquired) {
+          requestedSyncBusinesses.add(activeBusinessId);
+          this.scheduleRequestedSync(activeBusinessId, LOCKED_SYNC_RETRY_MS);
+          return false;
+        }
         lockOwner = lock.owner;
         lockAcquiredHere = true;
       } else {
@@ -730,6 +802,9 @@ export const syncService = {
     } finally {
       this.isProcessing = false;
       if (lockAcquiredHere) clearSyncLock(lockOwner || undefined);
+      if (activeBusinessId && requestedSyncBusinesses.has(activeBusinessId)) {
+        this.scheduleRequestedSync(activeBusinessId);
+      }
     }
     return true;
   },
@@ -912,6 +987,7 @@ export const syncService = {
         this.isFullSyncing = false;
         this.fullSyncStartedAt = null;
       } else {
+        requestedSyncBusinesses.add(business_id);
         return false;
       }
     }
@@ -928,6 +1004,8 @@ export const syncService = {
     const lock = acquireSyncLock(business_id);
     if (!lock.acquired) {
       await this.updateMetadata(business_id, 'sync_lock_owner', lock.owner);
+      requestedSyncBusinesses.add(business_id);
+      this.scheduleRequestedSync(business_id, LOCKED_SYNC_RETRY_MS);
       return false;
     }
 
@@ -958,6 +1036,7 @@ export const syncService = {
         .count();
 
       if (pendingCount > 0) {
+        requestedSyncBusinesses.add(business_id);
         await this.updateMetadata(business_id, 'last_sync_status', 'pending');
         return false;
       }
@@ -979,6 +1058,9 @@ export const syncService = {
       this.isFullSyncing = false;
       this.fullSyncStartedAt = null;
       clearSyncLock(lock.owner);
+      if (requestedSyncBusinesses.has(business_id)) {
+        this.scheduleRequestedSync(business_id);
+      }
     }
   }
 

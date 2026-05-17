@@ -13,9 +13,9 @@ function scheduleImmediatePush(business_id: string) {
   const timer = setTimeout(() => {
     pushTimers.delete(business_id);
     import('@/services/sync.service')
-      .then(({ syncService }) => syncService.runFullSync(business_id))
+      .then(({ syncService }) => syncService.requestImmediateSync(business_id))
       .catch((error) => console.warn('[SyncQueue] Immediate background push failed:', error));
-  }, 250);
+  }, 0);
 
   pushTimers.set(business_id, timer);
 }
@@ -58,4 +58,3 @@ export const syncQueueService = {
     return ids;
   },
 };
-

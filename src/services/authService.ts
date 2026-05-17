@@ -3,6 +3,7 @@ import { db } from '@/db/dexie';
 import { useAuthStore } from '@/stores/authStore';
 import { useStore } from '@/store/use-store';
 import { syncService } from './sync.service';
+import { syncQueueService } from './syncQueueService';
 import { getRuntimeMode, getStorageKeys, clearRuntimeModeMarker } from '@/lib/runtime-mode';
 
 type UserProfile = {
@@ -258,16 +259,7 @@ export const authService = {
 
     await saveBusinessLocally(businessData);
 
-    await db.sync_queue.add({
-      business_id,
-      entity: 'businesses',
-      entity_id: business_id,
-      action: 'create',
-      payload: businessData,
-      status: 'pending',
-      retry_count: 0,
-      created_at: new Date()
-    });
+    await syncQueueService.enqueue('businesses', 'create', businessData, business_id);
 
     const user = useAuthStore.getState().user;
     if (user) {
