@@ -89,6 +89,10 @@ export default function SettingsPage() {
         address: businessSource.physical_address || businessSource.address || '',
       }
     : null;
+  const accountDetails = {
+    username: authUser?.full_name || authUser?.email?.split('@')[0] || 'Account user',
+    email: authUser?.email || 'Email unavailable',
+  };
 
   const [activeSheet, setActiveSheet] = useState<'profile' | 'notifications' | 'clear-data' | 'logout' | null>(null);
   const [profileForm, setProfileForm] = useState({ name: business?.name || '', address: business?.address || '' });
@@ -225,6 +229,16 @@ export default function SettingsPage() {
     }
   };
 
+  const copyEmail = async () => {
+    if (!authUser?.email || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(authUser.email);
+      showToast('Email copied');
+    } catch {
+      showToast('Unable to copy email');
+    }
+  };
+
   return (
     <div className="px-6 space-y-8">
       <header className="py-4">
@@ -332,7 +346,16 @@ export default function SettingsPage() {
         dismissible={false}
       >
         <div className="space-y-6 py-6 pb-2">
+          <div className="space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2">Account Details</p>
+            <div className="rounded-[24px] bg-secondary/50 border border-border/40 overflow-hidden">
+              <AccountDetailRow label="Username" value={accountDetails.username} />
+              <AccountDetailRow label="Email Address" value={accountDetails.email} copyable={Boolean(authUser?.email)} onCopy={copyEmail} />
+            </div>
+          </div>
+
           <div className="space-y-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2">Business Details</p>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2">Store Name</label>
               <input 
@@ -408,6 +431,35 @@ export default function SettingsPage() {
         onCancel={() => setActiveSheet(null)}
         onConfirm={confirmLogout}
       />
+    </div>
+  );
+}
+
+function AccountDetailRow({
+  label,
+  value,
+  copyable = false,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  copyable?: boolean;
+  onCopy?: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/40 last:border-b-0">
+      <div className="min-w-0">
+        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
+        <p className="text-sm font-bold text-foreground truncate select-text">{value}</p>
+      </div>
+      {copyable && (
+        <Touchable
+          onPress={onCopy}
+          className="shrink-0 px-3 py-2 rounded-xl bg-background text-primary text-[10px] font-black uppercase tracking-widest border border-border/40"
+        >
+          Copy
+        </Touchable>
+      )}
     </div>
   );
 }
