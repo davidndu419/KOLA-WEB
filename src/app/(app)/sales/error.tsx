@@ -15,6 +15,8 @@ export default function SalesError({
     console.error('[Sales] Route failed to render', error);
   }, [error]);
 
+  const showStack = process.env.NODE_ENV !== 'production' && error.stack;
+
   return (
     <div className="px-6 py-12 min-h-[60vh] flex items-center justify-center">
       <div className="w-full max-w-sm text-center space-y-5">
@@ -26,6 +28,18 @@ export default function SalesError({
           <p className="text-sm font-medium text-muted-foreground">
             Refresh this screen to reconnect to the latest app files.
           </p>
+        </div>
+        <div className="text-left rounded-2xl bg-secondary/60 border border-border p-3 space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Error</p>
+          <p className="text-xs font-bold break-words">{error.message || 'Unknown sales route error'}</p>
+          {error.digest && (
+            <p className="text-[10px] font-mono text-muted-foreground break-all">Digest: {error.digest}</p>
+          )}
+          {showStack && (
+            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words text-[10px] text-muted-foreground">
+              {error.stack}
+            </pre>
+          )}
         </div>
         <Touchable
           onPress={reset}

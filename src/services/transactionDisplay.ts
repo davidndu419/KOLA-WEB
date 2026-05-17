@@ -94,10 +94,11 @@ export function filterTransactionsForSearch<T extends DisplayTransaction>(transa
 }
 
 export async function enrichTransactionsForDisplay(transactions: Transaction[]): Promise<DisplayTransaction[]> {
-  if (transactions.length === 0) return [];
+  const safeTransactions = (transactions || []).filter(Boolean);
+  if (safeTransactions.length === 0) return [];
 
-  const transactionIds = unique(transactions.map((transaction) => transaction.local_id));
-  const saleReferenceIds = unique(transactions.filter((transaction) => transaction.type === 'sale').map((transaction) => transaction.reference_id));
+  const transactionIds = unique(safeTransactions.map((transaction) => transaction.local_id));
+  const saleReferenceIds = unique(safeTransactions.filter((transaction) => transaction.type === 'sale').map((transaction) => transaction.reference_id));
   const serviceTransactionIds = transactionIds;
 
   const [salesByTransaction, salesByReference, services, customers] = await Promise.all([
@@ -134,7 +135,7 @@ export async function enrichTransactionsForDisplay(transactions: Transaction[]):
     saleItemMap.set(item.sale_id, existing);
   }
 
-  return transactions.map((transaction) => {
+  return safeTransactions.map((transaction) => {
     const sale = saleByLocalId.get(transaction.reference_id) || saleByTransactionId.get(transaction.local_id);
     const service = serviceMap.get(transaction.local_id);
     const customer = transaction.customer_id ? customerMap.get(transaction.customer_id) : undefined;

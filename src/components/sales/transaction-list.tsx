@@ -62,13 +62,13 @@ export function TransactionList({ startDate, endDate, type = 'all', limit, trans
   const transactionsQuery = useStableLiveQuery(async () => {
     if (!businessId && !transactions) return undefined;
 
-    const applyTypeFilter = (items: Transaction[]) => (
-      type === 'all' ? items : items.filter((tx) => tx.type === type)
+    const applyTypeFilter = (items: Transaction[] = []) => (
+      type === 'all' ? items : items.filter((tx) => tx?.type === type)
     );
 
     let source: Transaction[];
     if (transactions) {
-      source = transactions;
+      source = transactions || [];
     } else {
       let query: any;
 
@@ -84,9 +84,9 @@ export function TransactionList({ startDate, endDate, type = 'all', limit, trans
       source = await query.toArray();
     }
 
-    const filtered = applyTypeFilter(source.filter((tx: Transaction) => (!businessId || tx.business_id === businessId) && !tx.deleted_at));
+    const filtered = applyTypeFilter((source || []).filter((tx: Transaction) => tx && (!businessId || tx.business_id === businessId) && !tx.deleted_at));
     const enriched = await enrichTransactionsForDisplay(filtered);
-    const searched = filterTransactionsForSearch(enriched, searchQuery);
+    const searched = filterTransactionsForSearch(enriched || [], searchQuery);
     
     return limit ? searched.slice(0, limit) : searched;
   }, [businessId, startDate, endDate, type, limit, transactions, searchQuery]);

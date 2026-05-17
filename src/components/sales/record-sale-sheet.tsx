@@ -41,6 +41,11 @@ type CartItem = {
   unit_type: string;
 };
 
+function dateTime(value: Date | string | number | null | undefined) {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 export function RecordSaleSheet({ 
   isOpen, 
   onClose 
@@ -96,7 +101,7 @@ export function RecordSaleSheet({
       .where('business_id')
       .equals(business.id)
       .toArray())
-      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+      .sort((a, b) => dateTime(b.created_at) - dateTime(a.created_at))
       .slice(0, 10);
     const recentSaleIds = recentSales.map(s => s.local_id);
     const recentItems = recentSaleIds.length > 0

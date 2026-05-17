@@ -16,6 +16,11 @@ import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { TransactionSearchBar } from '@/components/transactions/transaction-search-bar';
 
+function dateTime(value: Date | string | number | null | undefined) {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 export default function SalesPage() {
   const router = useRouter();
   const [isRecordSheetOpen, setIsRecordSheetOpen] = useState(false);
@@ -37,7 +42,9 @@ export default function SalesPage() {
       .between(startDate, endDate)
       .toArray();
 
-    const businessTransactions = transactions.filter((tx) => tx.business_id === businessId && !tx.deleted_at);
+    const businessTransactions = (transactions || [])
+      .filter((tx) => tx && tx.business_id === businessId && !tx.deleted_at)
+      .sort((a, b) => dateTime(b.created_at) - dateTime(a.created_at));
       
     const totalSales = businessTransactions
       .filter(tx => tx.type === 'sale')

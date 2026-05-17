@@ -20,6 +20,8 @@ import { getTransactionCustomerLabel, getTransactionTitle, type DisplayTransacti
 
 export function formatTransactionListStamp(date: Date) {
   const value = new Date(date);
+  if (!Number.isFinite(value.getTime())) return 'Date unavailable';
+
   const now = new Date();
   const isToday = value.toDateString() === now.toDateString();
 
@@ -192,6 +194,9 @@ function TransactionRowComponent({
 }
 
 export const TransactionRow = memo(TransactionRowComponent, (prev, next) => {
+  const prevUpdatedAt = new Date(prev.transaction.updated_at || 0).getTime();
+  const nextUpdatedAt = new Date(next.transaction.updated_at || 0).getTime();
+
   return (
     prev.transaction.local_id === next.transaction.local_id &&
     prev.transaction.status === next.transaction.status &&
@@ -199,7 +204,7 @@ export const TransactionRow = memo(TransactionRowComponent, (prev, next) => {
     prev.transaction.category_name === next.transaction.category_name &&
     prev.transaction.display_title === next.transaction.display_title &&
     prev.transaction.customer_name === next.transaction.customer_name &&
-    prev.transaction.updated_at?.getTime() === next.transaction.updated_at?.getTime() &&
+    prevUpdatedAt === nextUpdatedAt &&
     prev.transaction.sync_status === next.transaction.sync_status
   );
 });
