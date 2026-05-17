@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { ExpenseCategory } from '@/db/schema';
 import { syncQueueService } from '@/services/syncQueueService';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
+import { showToast } from '@/lib/toast';
 
 export default function ExpenseCategoriesPage() {
   const router = useRouter();
@@ -107,7 +108,7 @@ export default function ExpenseCategoriesPage() {
       resetForm();
     } catch (error) {
       console.error('Failed to save expense category:', error);
-      alert('Failed to save expense category');
+      showToast('Failed to save expense category');
     }
   };
 
@@ -127,7 +128,7 @@ export default function ExpenseCategoriesPage() {
       resetForm();
     } catch (error) {
       console.error('Failed to update expense category status:', error);
-      alert('Failed to update category status');
+      showToast('Failed to update category status');
     }
   };
 

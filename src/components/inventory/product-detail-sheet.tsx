@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
 import { BottomSheet } from '@/components/bottom-sheet';
+import { ConfirmSheet } from '@/components/confirm-sheet';
 import { Touchable } from '@/components/touchable';
 import { useRouter } from 'next/navigation';
 import { 
@@ -24,6 +25,7 @@ import {
 import { Product, ProductWithCategory, InventoryMovement } from '@/db/schema';
 import { inventoryService } from '@/services/inventory.service';
 import { cn, safeTime } from '@/lib/utils';
+import { showToast } from '@/lib/toast';
 import { RestockSheet } from './restock-sheet';
 
 export function ProductDetailSheet({ 
@@ -38,6 +40,7 @@ export function ProductDetailSheet({
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'info' | 'history'>('info');
   const [isRestockOpen, setIsRestockOpen] = useState(false);
+  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false);
 
   // Re-fetch product and category for reactivity
   const product = useLiveQuery(async () => {
@@ -96,9 +99,18 @@ export function ProductDetailSheet({
   const totalValue = displayProduct.stock * currentWac;
 
   const handleArchive = async () => {
-    if (confirm(`Archived products will be hidden from sales and inventory but preserved in history. Archive ${displayProduct.name}?`)) {
+    setIsArchiveConfirmOpen(true);
+  };
+
+  const confirmArchive = async () => {
+    try {
       await inventoryService.deleteProduct(displayProduct.local_id);
+      showToast('Product archived');
+      setIsArchiveConfirmOpen(false);
       onClose();
+    } catch (error) {
+      console.error('Failed to archive product:', error);
+      showToast('Failed to archive product');
     }
   };
 
@@ -321,6 +333,15 @@ export function ProductDetailSheet({
         product={displayProduct} 
         isOpen={isRestockOpen} 
         onClose={() => setIsRestockOpen(false)} 
+      />
+      <ConfirmSheet
+        isOpen={isArchiveConfirmOpen}
+        title="Archive Product"
+        message={`Archived products will be hidden from sales and inventory but preserved in history. Archive ${displayProduct.name}?`}
+        confirmLabel="Archive"
+        destructive
+        onCancel={() => setIsArchiveConfirmOpen(false)}
+        onConfirm={confirmArchive}
       />
     </>
   );

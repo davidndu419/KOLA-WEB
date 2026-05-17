@@ -12,6 +12,7 @@ import { ServiceCategory } from '@/db/schema';
 import { syncQueueService } from '@/services/syncQueueService';
 import { notificationService } from '@/services/notificationService';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
+import { showToast } from '@/lib/toast';
 
 export function RecordServiceSheet({ 
   isOpen, 
@@ -85,7 +86,7 @@ export function RecordServiceSheet({
         notificationService.notifyTransaction('service', amount);
       }, 0);
     } catch (err: any) {
-      alert(err.message || 'Failed to record service');
+      showToast(err.message || 'Failed to record service');
     } finally {
       setIsSubmitting(false);
     }

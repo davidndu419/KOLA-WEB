@@ -10,6 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
 import { correctionService } from '@/services/correctionService';
 import { cn } from '@/lib/utils';
+import { showToast } from '@/lib/toast';
 
 
 export function CorrectionSheet({
@@ -93,7 +94,7 @@ export function CorrectionSheet({
       onSuccess();
       onClose();
     } catch (error: any) {
-      alert(error.message || 'Failed to correct transaction');
+      showToast(error.message || 'Failed to correct transaction');
     } finally {
       setIsCorrecting(false);
     }

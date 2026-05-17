@@ -14,12 +14,14 @@ import {
   Info
 } from 'lucide-react';
 import { Touchable } from '@/components/touchable';
+import { ConfirmSheet } from '@/components/confirm-sheet';
 import { db } from '@/db/dexie';
 import { useAuthStore } from '@/stores/authStore';
 import { syncService } from '@/services/sync.service';
 import { onlineStatusService } from '@/services/onlineStatusService';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { cn, safeTime } from '@/lib/utils';
+import { showToast } from '@/lib/toast';
 import { formatDistanceToNow } from 'date-fns';
 
 function useOnlineStatus() {
@@ -55,6 +57,7 @@ export default function SyncSettingsPage() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncTick, setSyncTick] = useState(0);
   const [hasSwController, setHasSwController] = useState(false);
+  const [clearFailedItemId, setClearFailedItemId] = useState<number | null>(null);
   const businessId = business?.id || business?.business_id;
 
   const metadata = useLiveQuery(async () => {
@@ -105,7 +108,7 @@ export default function SyncSettingsPage() {
       setSyncTick((value) => value + 1);
 
       if (success) {
-        window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Changes synced successfully' } }));
+        showToast('Changes synced successfully');
         setSyncMessage('Changes synced successfully');
       } else {
         const latestDiagnostics = await syncService.getQueueDiagnostics(businessId);
@@ -114,13 +117,13 @@ export default function SyncSettingsPage() {
           ? `${item.entity} ${item.action} is ${item.status}${item.error ? `: ${item.error}` : ''}`
           : 'Pending or failed changes remain in the local queue';
         setSyncMessage(detail);
-        window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message: 'Sync needs attention' } }));
+        showToast('Sync needs attention');
       }
     } catch (err: any) {
       console.error(err);
       const message = err?.message || 'Sync failed';
       setSyncMessage(message);
-      window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message } }));
+      showToast(message);
     } finally {
       setIsManualSyncing(false);
     }
@@ -149,9 +152,15 @@ export default function SyncSettingsPage() {
 
   const handleClearFailedItem = async (id?: number) => {
     if (!id) return;
-    if (!confirm('Clear this failed sync item? Local data will stay on this device, but this queued cloud sync attempt will be removed.')) return;
-    await syncService.clearFailedItem(id);
+    setClearFailedItemId(id);
+  };
+
+  const confirmClearFailedItem = async () => {
+    if (!clearFailedItemId) return;
+    await syncService.clearFailedItem(clearFailedItemId);
     setSyncMessage('Failed sync item cleared');
+    showToast('Failed sync item cleared');
+    setClearFailedItemId(null);
     setSyncTick((value) => value + 1);
   };
 
@@ -420,6 +429,15 @@ export default function SyncSettingsPage() {
           </div>
         </section>
       </main>
+      <ConfirmSheet
+        isOpen={clearFailedItemId !== null}
+        title="Clear Failed Sync"
+        message="Local data will stay on this device, but this queued cloud sync attempt will be removed."
+        confirmLabel="Clear Item"
+        destructive
+        onCancel={() => setClearFailedItemId(null)}
+        onConfirm={confirmClearFailedItem}
+      />
     </div>
   );
 }

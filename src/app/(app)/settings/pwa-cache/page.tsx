@@ -18,6 +18,7 @@ import { Touchable } from '@/components/touchable';
 import { cn } from '@/lib/utils';
 import { KOLA_APP_BUILD_VERSION } from '@/components/pwa-registration';
 import { db } from '@/db/dexie';
+import { showToast } from '@/lib/toast';
 import { getStorageKeys, getRuntimeMode } from '@/lib/runtime-mode';
 
 export default function PWACachePage() {
@@ -139,7 +140,7 @@ export default function PWACachePage() {
       setIsCaching(false);
       await checkStatus();
     } else {
-      alert('Manual cache utility not found. Service worker might not be ready.');
+      showToast('Manual cache utility not found. Service worker might not be ready.');
     }
   };
 

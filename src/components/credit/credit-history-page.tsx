@@ -18,6 +18,7 @@ import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import { TransactionDetailSheet } from '@/components/transactions/transaction-detail-sheet';
 import { cn } from '@/lib/utils';
+import { showToast } from '@/lib/toast';
 import {
   creditService,
   type CreditFilter,
@@ -383,10 +384,10 @@ function CreditPaymentSheet({
       } else {
         await creditService.recordPartialCreditPayment(payload);
       }
-      alert('Credit payment recorded');
+      showToast('Credit payment recorded');
       close();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to record payment');
+      showToast(error instanceof Error ? error.message : 'Failed to record payment');
     } finally {
       setIsSubmitting(false);
     }

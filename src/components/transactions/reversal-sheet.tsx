@@ -7,6 +7,7 @@ import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import type { Transaction } from '@/db/schema';
 import { reversalService } from '@/services/reversalService';
+import { showToast } from '@/lib/toast';
 
 export function ReversalSheet({
   transaction,
@@ -33,7 +34,7 @@ export function ReversalSheet({
       onClose();
       setReason('');
     } catch (error: any) {
-      alert(error.message || 'Failed to reverse transaction');
+      showToast(error.message || 'Failed to reverse transaction');
     } finally {
       setIsReversing(false);
     }

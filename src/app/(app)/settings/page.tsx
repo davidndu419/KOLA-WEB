@@ -24,7 +24,9 @@ import { db } from '@/db/dexie';
 import { useStore } from '@/store/use-store';
 import { useAuthStore } from '@/stores/authStore';
 import { BottomSheet } from '@/components/bottom-sheet';
+import { ConfirmSheet } from '@/components/confirm-sheet';
 import { cn, safeTime } from '@/lib/utils';
+import { showToast } from '@/lib/toast';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { syncService } from '@/services/sync.service';
@@ -55,11 +57,6 @@ function latestSettingValue(settings: { key: string; value: any; updated_at: Dat
       const right = safeTime(b.updated_at);
       return right - left;
     })[0]?.value;
-}
-
-function showToast(message: string) {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message } }));
 }
 
 export default function SettingsPage() {
@@ -93,7 +90,7 @@ export default function SettingsPage() {
       }
     : null;
 
-  const [activeSheet, setActiveSheet] = useState<'profile' | 'notifications' | null>(null);
+  const [activeSheet, setActiveSheet] = useState<'profile' | 'notifications' | 'clear-data' | 'logout' | null>(null);
   const [profileForm, setProfileForm] = useState({ name: business?.name || '', address: business?.address || '' });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
@@ -110,18 +107,22 @@ export default function SettingsPage() {
   }, [notificationsEnabled, setNotificationsEnabled]);
 
   const handleClearData = async () => {
-    if (confirm('Are you sure? This will delete all local data!')) {
-      await db.delete();
-      localStorage.clear();
-      window.location.href = '/';
-    }
+    setActiveSheet('clear-data');
   };
 
   const handleLogout = async () => {
-    if (confirm('Logout from this device?')) {
-      await authService.signOut();
-      window.location.href = '/';
-    }
+    setActiveSheet('logout');
+  };
+
+  const confirmClearData = async () => {
+    await db.delete();
+    localStorage.clear();
+    window.location.href = '/';
+  };
+
+  const confirmLogout = async () => {
+    await authService.signOut();
+    window.location.href = '/';
   };
 
   const toggleTheme = () => {
@@ -387,6 +388,26 @@ export default function SettingsPage() {
           )}
         </div>
       </BottomSheet>
+
+      <ConfirmSheet
+        isOpen={activeSheet === 'clear-data'}
+        title="Clear Local Data"
+        message="This will delete all local data on this device. Synced cloud data is not removed."
+        confirmLabel="Clear Data"
+        destructive
+        onCancel={() => setActiveSheet(null)}
+        onConfirm={confirmClearData}
+      />
+
+      <ConfirmSheet
+        isOpen={activeSheet === 'logout'}
+        title="Logout"
+        message="Logout from this device? Unsynced local changes will remain on this device."
+        confirmLabel="Logout"
+        destructive
+        onCancel={() => setActiveSheet(null)}
+        onConfirm={confirmLogout}
+      />
     </div>
   );
 }

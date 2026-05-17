@@ -7,6 +7,7 @@ import { Package, Coins, Hash, FileText, Check } from 'lucide-react';
 import { Product } from '@/db/schema';
 import { inventoryService } from '@/services/inventory.service';
 import { cn } from '@/lib/utils';
+import { showToast } from '@/lib/toast';
 
 export function RestockSheet({ 
   product,
@@ -40,7 +41,7 @@ export function RestockSheet({
       setNote('');
       onClose();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to restock product');
     } finally {
       setIsSubmitting(false);
     }

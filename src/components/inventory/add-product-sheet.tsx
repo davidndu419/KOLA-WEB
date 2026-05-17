@@ -8,6 +8,7 @@ import { useStore } from '@/store/use-store';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import { Package, Hash, Tag, Coins, Layers, User } from 'lucide-react';
+import { showToast } from '@/lib/toast';
 
 const productSchema = z.object({
   name: z.string().min(2, 'Name too short'),
@@ -56,7 +57,7 @@ export function AddProductSheet({
       onClose();
     } catch (err: any) {
       console.error('Failed to add product:', err);
-      alert('Error adding product: ' + err.message);
+      showToast('Error adding product: ' + (err.message || 'Unknown error'));
     }
   };
 

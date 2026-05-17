@@ -9,6 +9,7 @@ import { Touchable } from '@/components/touchable';
 import { Package, Hash, Tag, Coins, Layers, User, Check } from 'lucide-react';
 import { Product } from '@/db/schema';
 import { useState, useEffect } from 'react';
+import { showToast } from '@/lib/toast';
 
 const productSchema = z.object({
   name: z.string().min(2, 'Name too short'),
@@ -59,7 +60,7 @@ export function EditProductSheet({
       await inventoryService.updateProduct(product.local_id, data);
       onClose();
     } catch (err: any) {
-      alert('Error updating product: ' + err.message);
+      showToast('Error updating product: ' + (err.message || 'Unknown error'));
     } finally {
       setIsSubmitting(false);
     }

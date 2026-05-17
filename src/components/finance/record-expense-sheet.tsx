@@ -13,6 +13,7 @@ import { db, createBaseEntity } from '@/db/dexie';
 import { ExpenseCategory } from '@/db/schema';
 import { syncQueueService } from '@/services/syncQueueService';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
+import { showToast } from '@/lib/toast';
 
 export function RecordExpenseSheet({
   isOpen,
@@ -83,7 +84,7 @@ export function RecordExpenseSheet({
         notificationService.notifyTransaction('expense', recordedAmount);
       }, 0);
     } catch (err: any) {
-      alert(err.message || 'Failed to record expense');
+      showToast(err.message || 'Failed to record expense');
     } finally {
       setIsSubmitting(false);
     }
@@ -112,7 +113,7 @@ export function RecordExpenseSheet({
       setIsQuickCreateOpen(false);
     } catch (error) {
       console.error('Failed to quick-create expense category:', error);
-      alert('Failed to create expense category');
+      showToast('Failed to create expense category');
     }
   };
 

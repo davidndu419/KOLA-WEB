@@ -21,6 +21,7 @@ import {
   FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { showToast } from '@/lib/toast';
 import { motion } from 'framer-motion';
 import { useUIStore } from '@/store/use-ui-store';
 import { useEffect, useState } from 'react';
@@ -117,7 +118,7 @@ export default function AddProductPage() {
       }
     } catch (err: any) {
       console.error('Failed to save product:', err);
-      alert('Error saving product: ' + err.message);
+      showToast('Error saving product: ' + (err.message || 'Unknown error'));
     }
   };
 
