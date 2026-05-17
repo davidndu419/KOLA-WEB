@@ -7,7 +7,6 @@ import type { Transaction } from '@/db/schema';
 import { cn } from '@/lib/utils';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 import { enrichTransactionsForDisplay, getTransactionTitle, type DisplayTransaction } from '@/services/transactionDisplay';
-import { exportService } from '@/services/exportService';
 import { useAuthStore } from '@/stores/authStore';
 
 const currency = new Intl.NumberFormat('en-NG', {
@@ -70,15 +69,17 @@ export function TransactionDetailSheet({
   const handleShare = async () => {
     if (!displayTransaction) return;
     try {
+      const { exportService } = await import('@/services/exportService');
       await exportService.shareTransactionDetailImage(displayTransaction, businessInfo);
     } catch {
       showExportError();
     }
   };
 
-  const handlePdf = () => {
+  const handlePdf = async () => {
     if (!displayTransaction) return;
     try {
+      const { exportService } = await import('@/services/exportService');
       exportService.downloadTransactionDetailPdf(displayTransaction, businessInfo);
     } catch {
       showExportError();

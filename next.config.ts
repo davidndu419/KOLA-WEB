@@ -3,6 +3,8 @@ import withPWAInit from 'next-pwa';
 // @ts-ignore
 import defaultRuntimeCaching from 'next-pwa/cache';
 
+const APP_SHELL_REVISION = 'kola-app-shell-v2';
+
 const appShellRoutes = [
   '/',
   '/dashboard',
@@ -45,7 +47,7 @@ const withPWA = withPWAInit({
   },
   additionalManifestEntries: appShellRoutes.map((url) => ({
     url,
-    revision: 'kola-app-shell-v1',
+    revision: APP_SHELL_REVISION,
   })),
   runtimeCaching: [
     {
@@ -92,9 +94,10 @@ const withPWA = withPWAInit({
           cacheFirstRoutes.includes(pathname)
         );
       },
-      handler: 'CacheFirst',
+      handler: 'NetworkFirst',
       options: {
         cacheName: 'kola-app-shell',
+        networkTimeoutSeconds: 3,
         expiration: {
           maxEntries: 48,
           maxAgeSeconds: 30 * 24 * 60 * 60,

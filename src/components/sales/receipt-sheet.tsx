@@ -6,7 +6,6 @@ import { Touchable } from '@/components/touchable';
 import { FileText, Share2, CheckCircle2 } from 'lucide-react';
 import type { TransactionWithItems } from '@/db/schema';
 import { useStore } from '@/store/use-store';
-import { exportService } from '@/services/exportService';
 
 export function ReceiptSheet({ 
   transaction,
@@ -30,8 +29,9 @@ export function ReceiptSheet({
     businessAddress: business?.address,
   };
 
-  const handlePdf = () => {
+  const handlePdf = async () => {
     try {
+      const { exportService } = await import('@/services/exportService');
       exportService.downloadReceiptPdf(transaction, businessInfo);
     } catch {
       showExportError();
@@ -40,6 +40,7 @@ export function ReceiptSheet({
 
   const handleShare = async () => {
     try {
+      const { exportService } = await import('@/services/exportService');
       await exportService.shareReceiptImage(transaction, businessInfo);
     } catch {
       showExportError();

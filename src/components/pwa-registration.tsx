@@ -3,7 +3,23 @@
 import { useEffect } from 'react';
 import { getStorageKeys, getRuntimeMode } from '@/lib/runtime-mode';
 
-export const KOLA_APP_BUILD_VERSION = 'kola-offline-stability-v1';
+export const KOLA_APP_BUILD_VERSION = 'kola-offline-stability-v2';
+
+function isChunkLoadFailure(reason: unknown) {
+  const target = reason instanceof Event ? reason.target as HTMLElement | null : null;
+  const targetUrl = target && 'src' in target ? String((target as HTMLScriptElement).src || '') : '';
+  const value = reason instanceof PromiseRejectionEvent ? reason.reason : reason;
+  const name = value && typeof value === 'object' && 'name' in value ? String((value as { name?: unknown }).name) : '';
+  const message = value && typeof value === 'object' && 'message' in value
+    ? String((value as { message?: unknown }).message)
+    : String(value || '');
+
+  return (
+    name === 'ChunkLoadError' ||
+    /ChunkLoadError|Loading chunk \d+ failed|Loading CSS chunk \d+ failed|failed to fetch dynamically imported module|Importing a module script failed/i.test(message) ||
+    /\/_next\/static\/chunks\//.test(targetUrl)
+  );
+}
 
 export function PWARegistration() {
   useEffect(() => {
@@ -15,6 +31,42 @@ export function PWARegistration() {
       const keys = getStorageKeys();
       const mode = getRuntimeMode();
       console.log(`[PWA] Runtime mode: ${mode}`);
+      const chunkReloadKey = `${keys.appBuildVersion}:chunk-reload:${KOLA_APP_BUILD_VERSION}`;
+
+      const recoverFromChunkLoadFailure = async (reason: unknown) => {
+        if (!isChunkLoadFailure(reason)) return;
+        if (window.sessionStorage.getItem(chunkReloadKey) === '1') return;
+
+        window.sessionStorage.setItem(chunkReloadKey, '1');
+        console.warn('[PWA] Chunk load failed, refreshing app shell once.', reason);
+
+        if ('caches' in window) {
+          await Promise.all([
+            caches.delete('kola-app-shell'),
+            caches.delete('kola-navigation'),
+            caches.delete('kola-static-assets'),
+            caches.delete('static-js-assets'),
+            caches.delete('static-style-assets'),
+            caches.delete('next-data'),
+            caches.delete('others'),
+          ]);
+        }
+
+        const registration = await navigator.serviceWorker.getRegistration('/');
+        await registration?.update();
+        window.location.reload();
+      };
+
+      const handleWindowError = (event: ErrorEvent) => {
+        void recoverFromChunkLoadFailure(event);
+      };
+
+      const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+        void recoverFromChunkLoadFailure(event);
+      };
+
+      window.addEventListener('error', handleWindowError);
+      window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
       let refreshing = false;
       const handleControllerChange = () => {
@@ -117,6 +169,8 @@ export function PWARegistration() {
 
       return () => {
         navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+        window.removeEventListener('error', handleWindowError);
+        window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       };
     }
   }, []);

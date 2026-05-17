@@ -7,7 +7,6 @@ import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-ran
 import { TransactionList } from '@/components/sales/transaction-list';
 import { HeroSummaryCard } from '@/components/dashboard/hero-summary-card';
 import { Touchable } from '@/components/touchable';
-import { exportService } from '@/services/exportService';
 import { reportsService } from '@/services/reportsService';
 import { useAuthStore } from '@/stores/authStore';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
@@ -33,10 +32,11 @@ export default function ReportTransactionsPage() {
     window.dispatchEvent(new CustomEvent('kola:toast', { detail: { message } }));
   };
 
-  const handlePdf = () => {
+  const handlePdf = async () => {
     if (!reportsData) return;
 
     try {
+      const { exportService } = await import('@/services/exportService');
       exportService.downloadTransactionHistoryPdf(reportsData, {
         businessId,
         businessName: business?.name || business?.business_name || 'Kola Business',

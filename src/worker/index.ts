@@ -54,8 +54,9 @@ registerRoute(
     url.origin === self.location.origin &&
     appShellRoutes.includes(url.pathname) &&
     !url.href.includes('supabase.co'),
-  new CacheFirst({
+  new NetworkFirst({
     cacheName: "kola-app-shell",
+    networkTimeoutSeconds: 3,
     plugins: [
       new ExpirationPlugin({
         maxEntries: 48,
