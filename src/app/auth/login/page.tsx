@@ -5,14 +5,18 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthCard } from '@/components/auth/AuthCard';
 import { AuthInput } from '@/components/auth/AuthInput';
+import { AuthDivider } from '@/components/auth/AuthDivider';
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { Touchable } from '@/components/touchable';
 import { authService } from '@/services/authService';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { showToast } from '@/lib/toast';
 
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [formData, setFormData] = useState({
@@ -61,8 +65,15 @@ export default function LoginPage() {
     }
 
     try {
-      await authService.signIn(formData.email, formData.password);
+      const result = await authService.signIn(formData.email, formData.password);
       
+      // Check if email is verified
+      if (result.emailVerified === false) {
+        showToast('Please verify your email to continue.');
+        router.push(`/auth/verify-email?email=${encodeURIComponent(formData.email)}`);
+        return;
+      }
+
       // Check if business exists after sign in
       const business = useAuthStore.getState().business;
       if (business) {
@@ -73,6 +84,26 @@ export default function LoginPage() {
     } catch (err: any) {
       setError(err.message || 'Invalid email or password');
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (isGoogleLoading) return;
+    setError(null);
+    setIsGoogleLoading(true);
+
+    if (!navigator.onLine) {
+      setError('You are offline. Please connect to the internet to sign in.');
+      setIsGoogleLoading(false);
+      return;
+    }
+
+    try {
+      await authService.signInWithGoogle();
+      // OAuth will redirect — no need to handle navigation here
+    } catch (err: any) {
+      setError(err.message || 'Google sign-in failed');
+      setIsGoogleLoading(false);
     }
   };
 
@@ -113,7 +144,7 @@ export default function LoginPage() {
             error={error || undefined}
           />
           <div className="flex justify-end px-1">
-            <Link href="/auth/forgot-password" hidden className="text-[11px] font-bold text-emerald-500 hover:text-emerald-600 uppercase tracking-widest">
+            <Link href="/auth/forgot-password" className="text-[11px] font-bold text-emerald-500 hover:text-emerald-600 uppercase tracking-widest transition-colors">
               Forgot Password?
             </Link>
           </div>
@@ -127,6 +158,10 @@ export default function LoginPage() {
             {isLoading ? <Loader2 className="animate-spin" /> : 'Login'}
           </Touchable>
         </div>
+
+        <AuthDivider />
+
+        <GoogleSignInButton onClick={handleGoogleSignIn} isLoading={isGoogleLoading} />
 
         <div className="text-center space-y-4 pt-2">
           <p className="text-sm text-muted-foreground font-medium">

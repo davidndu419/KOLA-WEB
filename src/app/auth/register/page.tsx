@@ -5,13 +5,17 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthCard } from '@/components/auth/AuthCard';
 import { AuthInput } from '@/components/auth/AuthInput';
+import { AuthDivider } from '@/components/auth/AuthDivider';
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { Touchable } from '@/components/touchable';
 import { authService } from '@/services/authService';
 import { Loader2 } from 'lucide-react';
+import { showToast } from '@/lib/toast';
 
 export default function RegisterPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
@@ -38,11 +42,40 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
-      await authService.signUp(formData.email, formData.password, formData.fullName);
-      router.push('/auth/business-setup');
+      const data = await authService.signUp(formData.email, formData.password, formData.fullName);
+      
+      // If Supabase requires email confirmation, redirect to verification page
+      // data.user exists but data.session is null when email confirmation is required
+      if (data.user && !data.session) {
+        showToast('Verification email sent. Please check your inbox.');
+        router.push(`/auth/verify-email?email=${encodeURIComponent(formData.email)}`);
+      } else {
+        // If email confirmation is disabled in Supabase, proceed directly
+        router.push('/auth/business-setup');
+      }
     } catch (err: any) {
       setError(err.message || 'An error occurred during registration');
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (isGoogleLoading) return;
+    setError(null);
+    setIsGoogleLoading(true);
+
+    if (!navigator.onLine) {
+      setError('You are offline. Please connect to the internet to sign in.');
+      setIsGoogleLoading(false);
+      return;
+    }
+
+    try {
+      await authService.signInWithGoogle();
+      // OAuth will redirect — no need to handle navigation here
+    } catch (err: any) {
+      setError(err.message || 'Google sign-in failed');
+      setIsGoogleLoading(false);
     }
   };
 
@@ -93,6 +126,10 @@ export default function RegisterPage() {
             {isLoading ? <Loader2 className="animate-spin" /> : 'Create Account'}
           </Touchable>
         </div>
+
+        <AuthDivider />
+
+        <GoogleSignInButton onClick={handleGoogleSignIn} isLoading={isGoogleLoading} />
 
         <p className="text-center text-sm text-muted-foreground font-medium pt-2">
           Already have an account?{' '}

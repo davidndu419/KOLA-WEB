@@ -6,7 +6,8 @@ import { AuthCard } from '@/components/auth/AuthCard';
 import { AuthInput } from '@/components/auth/AuthInput';
 import { Touchable } from '@/components/touchable';
 import { Loader2, CheckCircle2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { authService } from '@/services/authService';
+import { showToast } from '@/lib/toast';
 
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -21,11 +22,9 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
-      if (error) throw error;
+      await authService.sendPasswordResetEmail(email);
       setIsSuccess(true);
+      showToast('Password reset link sent. Please check your email.');
     } catch (err: any) {
       setError(err.message || 'Failed to send reset link');
     } finally {
@@ -41,7 +40,7 @@ export default function ForgotPasswordPage() {
             <CheckCircle2 size={64} className="text-emerald-500 animate-in zoom-in duration-300" />
           </div>
           <p className="text-sm text-muted-foreground font-medium leading-relaxed">
-            Click the link in the email to reset your password. If you don't see it, check your spam folder.
+            Click the link in the email to reset your password. If you don&apos;t see it, check your spam folder.
           </p>
           <div className="pt-4">
             <Link href="/auth/login">

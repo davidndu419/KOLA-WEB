@@ -6,6 +6,18 @@ import { syncService } from './sync.service';
 import { syncQueueService } from './syncQueueService';
 import { getRuntimeMode, getStorageKeys, clearRuntimeModeMarker } from '@/lib/runtime-mode';
 
+/**
+ * Returns the base URL for auth redirect links (email verification, password reset, OAuth).
+ * Uses the live browser origin when available, falls back to NEXT_PUBLIC_APP_URL for SSR.
+ * This ensures production emails always point to the production domain.
+ */
+function getAuthRedirectBase(): string {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://kola-web-ten.vercel.app';
+}
+
 type UserProfile = {
   id: string;
   email: string;
@@ -165,6 +177,8 @@ async function pullBusinessFromCloud(userId: string): Promise<BusinessProfile | 
 export const authService = {
   async signUp(email: string, password: string, fullName: string) {
     try {
+      const redirectUrl = `${getAuthRedirectBase()}/auth/callback`;
+
       const { data, error } = await Promise.race([
         supabase.auth.signUp({
           email,
@@ -173,6 +187,7 @@ export const authService = {
             data: {
               full_name: fullName,
             },
+            emailRedirectTo: redirectUrl,
           },
         }),
         new Promise<any>((_, reject) => 
@@ -205,6 +220,12 @@ export const authService = {
 
       if (error) throw error;
 
+      // Check email verification
+      if (data.user && !data.user.email_confirmed_at) {
+        // User exists but email not verified — let the caller handle redirect
+        return { ...data, emailVerified: false };
+      }
+
       if (data.user) {
         const userProfile = {
           id: data.user.id,
@@ -221,13 +242,75 @@ export const authService = {
         }
       }
 
-      return data;
+      return { ...data, emailVerified: true };
     } catch (err: any) {
       if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
         throw new Error('Connection failed. Please check your internet and try again.');
       }
       throw err;
     }
+  },
+
+  async signInWithGoogle() {
+    if (!isBrowserOnline()) {
+      throw new Error('You are offline. Please connect to the internet to sign in.');
+    }
+
+    const redirectUrl = `${getAuthRedirectBase()}/auth/callback`;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async sendPasswordResetEmail(email: string) {
+    if (!isBrowserOnline()) {
+      throw new Error('You are offline. Please connect to the internet.');
+    }
+
+    const redirectUrl = `${getAuthRedirectBase()}/auth/reset-password`;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    });
+
+    if (error) throw error;
+  },
+
+  async updatePassword(newPassword: string) {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) throw error;
+  },
+
+  async resendVerificationEmail(email: string) {
+    if (!isBrowserOnline()) {
+      throw new Error('You are offline. Please connect to the internet.');
+    }
+
+    const redirectUrl = `${getAuthRedirectBase()}/auth/callback`;
+
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: redirectUrl,
+      },
+    });
+
+    if (error) throw error;
   },
 
   async signOut() {
