@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -42,8 +42,18 @@ export function DateRangePickerSheet({
   onSelectCustomEndDate
 }: DateRangePickerSheetProps) {
   const [viewDate, setViewDate] = useState(new Date(customDate));
-  const selectedEndDate = customEndDate || customDate;
-  const hasSelectedRange = Boolean(customEndDate && customEndDate.toDateString() !== customDate.toDateString());
+  
+  // Local state for custom range picking before apply
+  const [tempStart, setTempStart] = useState<Date | null>(customDate);
+  const [tempEnd, setTempEnd] = useState<Date | null>(customEndDate || customDate);
+
+  useEffect(() => {
+    if (isOpen) {
+      setViewDate(new Date(customDate));
+      setTempStart(customDate);
+      setTempEnd(customEndDate || customDate);
+    }
+  }, [isOpen, customDate, customEndDate]);
   
   const calendarDays = useMemo(() => {
     const year = viewDate.getFullYear();
@@ -67,14 +77,14 @@ export function DateRangePickerSheet({
   const monthName = viewDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const isSelected = (date: Date | null) => {
-    if (!date || selectedRange !== 'custom') return false;
-    return date.toDateString() === customDate.toDateString() || date.toDateString() === selectedEndDate.toDateString();
+    if (!date) return false;
+    return date.toDateString() === tempStart?.toDateString() || date.toDateString() === tempEnd?.toDateString();
   };
 
   const isInSelectedRange = (date: Date | null) => {
-    if (!date || selectedRange !== 'custom' || !customEndDate) return false;
-    const start = customDate <= customEndDate ? customDate : customEndDate;
-    const end = customDate <= customEndDate ? customEndDate : customDate;
+    if (!date || !tempStart || !tempEnd) return false;
+    const start = tempStart <= tempEnd ? tempStart : tempEnd;
+    const end = tempStart <= tempEnd ? tempEnd : tempStart;
     return date > start && date < end;
   };
 
@@ -138,21 +148,17 @@ export function DateRangePickerSheet({
                 {date && (
                   <Touchable
                     onPress={() => {
-                      if (!onSelectCustomEndDate) {
-                        onSelectCustomDate?.(date);
-                        onSelectRange('custom');
-                        onClose();
-                        return;
-                      }
-
-                      if (selectedRange !== 'custom' || hasSelectedRange) {
-                        onSelectCustomDate?.(date);
-                        onSelectCustomEndDate?.(date);
+                      if (!tempStart || (tempStart && tempEnd)) {
+                        setTempStart(date);
+                        setTempEnd(null);
                       } else {
-                        onSelectCustomEndDate(date);
-                        onClose();
+                        if (date < tempStart) {
+                          setTempEnd(tempStart);
+                          setTempStart(date);
+                        } else {
+                          setTempEnd(date);
+                        }
                       }
-                      onSelectRange('custom');
                     }}
                     className={cn(
                       "w-full h-full rounded-xl flex items-center justify-center text-xs font-bold transition-all",
@@ -169,12 +175,30 @@ export function DateRangePickerSheet({
           </div>
         </div>
 
-        <div className="px-4">
-          <p className="text-[10px] text-center text-muted-foreground font-bold uppercase tracking-widest">
-            {selectedRange === 'custom' 
-              ? `Selected: ${customDate.toLocaleDateString()}${customEndDate && customEndDate.toDateString() !== customDate.toDateString() ? ` - ${customEndDate.toLocaleDateString()}` : ''}` 
-              : `Preset: ${presets.find(p => p.id === selectedRange)?.label || 'All Time'}`}
-          </p>
+        <div className="px-4 pb-2 space-y-4">
+          <div className="flex justify-between items-center bg-secondary/50 rounded-xl p-3 text-xs font-bold text-muted-foreground">
+            <div>START: {tempStart ? tempStart.toLocaleDateString() : '--'}</div>
+            <div>END: {tempEnd ? tempEnd.toLocaleDateString() : '--'}</div>
+          </div>
+          <Touchable
+            onPress={() => {
+              if (tempStart) {
+                onSelectCustomDate?.(tempStart);
+                onSelectCustomEndDate?.(tempEnd || tempStart);
+                onSelectRange('custom');
+                onClose();
+              }
+            }}
+            className={cn(
+              "w-full h-12 rounded-xl flex items-center justify-center font-bold text-sm transition-all",
+              tempStart 
+                ? "bg-primary text-white shadow-lg shadow-primary/20" 
+                : "bg-secondary text-muted-foreground opacity-50"
+            )}
+            disabled={!tempStart}
+          >
+            Apply Custom Range
+          </Touchable>
         </div>
       </div>
     </BottomSheet>

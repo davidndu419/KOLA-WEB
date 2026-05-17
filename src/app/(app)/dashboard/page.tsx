@@ -22,6 +22,8 @@ import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 
 import type { Transaction, LedgerEntry } from '@/db/schema';
 
+import { resolveReportDateRange } from '@/services/reportSelectors';
+
 export default function DashboardPage() {
   const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
   const [isExpenseSheetOpen, setIsExpenseSheetOpen] = useState(false);
@@ -30,11 +32,12 @@ export default function DashboardPage() {
   const [selectedRange, setSelectedRange] = useState<DateRange>('today');
   const router = useRouter();
   const [customDate, setCustomDate] = useState<Date>(new Date());
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
   const businessId = useAuthStore((state) => state.activeBusinessId);
 
   const reportsSnapshot = useStableLiveQuery(
-    () => businessId ? reportsService.getSnapshot(selectedRange, customDate) : undefined,
-    [businessId, selectedRange, customDate]
+    () => businessId ? reportsService.getSnapshot(selectedRange, customDate, customEndDate) : undefined,
+    [businessId, selectedRange, customDate, customEndDate]
   );
 
   const stats = useStableLiveQuery(async () => {
@@ -42,10 +45,18 @@ export default function DashboardPage() {
 
     // ... (rest of the stats logic remains the same)
     const accounts = ['Cash', 'Bank', 'Receivables'];
+    const { startDate, endDate } = resolveReportDateRange(selectedRange, customDate, customEndDate);
+
     const relevantEntries = await db.ledger_entries
       .where('business_id')
       .equals(businessId)
-      .filter((entry) => accounts.includes(entry.debit_account) || accounts.includes(entry.credit_account))
+      .filter((entry) => {
+        const d = new Date(entry.created_at);
+        return (
+          (accounts.includes(entry.debit_account) || accounts.includes(entry.credit_account)) &&
+          d >= startDate && d <= endDate
+        );
+      })
       .toArray();
 
     let totalBalance = 0;
@@ -135,6 +146,8 @@ export default function DashboardPage() {
         onSelectRange={setSelectedRange}
         customDate={customDate}
         onSelectCustomDate={setCustomDate}
+        customEndDate={customEndDate}
+        onSelectCustomEndDate={setCustomEndDate}
       />
     </div>
   );
