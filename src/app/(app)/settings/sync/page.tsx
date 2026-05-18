@@ -54,6 +54,7 @@ export default function SyncSettingsPage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isOnline = useOnlineStatus();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [isRepairing, setIsRepairing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncTick, setSyncTick] = useState(0);
   const [hasSwController, setHasSwController] = useState(false);
@@ -126,6 +127,29 @@ export default function SyncSettingsPage() {
       showToast(message);
     } finally {
       setIsManualSyncing(false);
+    }
+  };
+
+  const handleRepairSyncState = async () => {
+    if (!isOnline || !businessId) return;
+    setIsRepairing(true);
+    setSyncMessage(null);
+    try {
+      const result = await syncService.repairSyncState(businessId, { runSync: true, reason: 'manual-repair-button' });
+      const message = [
+        'Sync state repaired',
+        `${result.quarantinedCount} stale item(s) blocked`,
+        `${result.retriedCount} retryable item(s) reset`,
+      ].join(' | ');
+      setSyncMessage(message);
+      showToast('Sync state repaired');
+      setSyncTick((value) => value + 1);
+    } catch (err: any) {
+      const message = err?.message || 'Repair failed';
+      setSyncMessage(message);
+      showToast(message);
+    } finally {
+      setIsRepairing(false);
     }
   };
 
@@ -276,14 +300,28 @@ export default function SyncSettingsPage() {
           <div className="space-y-3">
             <Touchable 
               onPress={handleForceSync}
-              disabled={!isOnline || isManualSyncing || !businessId}
+              disabled={!isOnline || isManualSyncing || isRepairing || !businessId}
               className={cn(
                 "w-full h-14 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/10",
-                isOnline && !isManualSyncing ? "bg-primary text-white" : "bg-secondary text-muted-foreground"
+                isOnline && !isManualSyncing && !isRepairing ? "bg-primary text-white" : "bg-secondary text-muted-foreground"
               )}
             >
               <RefreshCw size={18} className={cn(isManualSyncing && "animate-spin")} />
               {isManualSyncing ? 'Processing...' : 'Force Manual Sync'}
+            </Touchable>
+
+            <Touchable
+              onPress={handleRepairSyncState}
+              disabled={!isOnline || isManualSyncing || isRepairing || !businessId}
+              className={cn(
+                "w-full h-14 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all border",
+                isOnline && !isManualSyncing && !isRepairing
+                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                  : "bg-secondary text-muted-foreground border-transparent"
+              )}
+            >
+              <RefreshCw size={18} className={cn(isRepairing && "animate-spin")} />
+              {isRepairing ? 'Repairing...' : 'Repair Sync State'}
             </Touchable>
 
             {failedCount > 0 && (
@@ -365,6 +403,10 @@ export default function SyncSettingsPage() {
                     <div className="space-y-0.5">
                       <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Retries</p>
                       <p className="text-[11px] font-bold">{item.retry_count} / 5</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Business</p>
+                      <p className="text-[11px] font-bold break-all">{item.business_id?.slice(0, 8) || 'Missing'}...</p>
                     </div>
                     <div className="space-y-0.5">
                       <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Created</p>

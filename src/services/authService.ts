@@ -646,6 +646,12 @@ export const authService = {
 
       let session = null;
       try {
+        try {
+          await supabase.auth.refreshSession();
+        } catch (refreshError) {
+          console.warn('[Auth] Supabase session refresh failed, checking existing session:', refreshError);
+        }
+
         const result = await supabase.auth.getSession();
         session = result.data.session;
       } catch (error) {

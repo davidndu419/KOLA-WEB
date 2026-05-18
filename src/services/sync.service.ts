@@ -5,14 +5,18 @@ import { onlineStatusService } from './onlineStatusService';
 import { conflictResolver } from './conflictResolver';
 import { getStorageKeys } from '@/lib/runtime-mode';
 import { safeTime } from '@/lib/utils';
+import { useAuthStore } from '@/stores/authStore';
 
 const MAX_RETRIES = 5;
 const BATCH_SIZE = 20;
 const STALE_SYNC_MS = 60_000;
 const LOCKED_SYNC_RETRY_MS = 750;
+const RLS_SELF_HEAL_THRESHOLD = 2;
+const STALE_USER_DATA_PREFIX = 'blocked/stale-user-data';
 const autoRetriedBusinesses = new Set<string>();
 const requestedSyncBusinesses = new Set<string>();
 const requestedSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const autoHealedRlsBusinesses = new Set<string>();
 
 // Mode-specific sync lock and instance keys
 const getSyncLockKey = () => getStorageKeys().syncLock;
@@ -23,6 +27,17 @@ type SyncLock = {
   business_id: string;
   started_at: string;
   heartbeat_at: string;
+};
+
+type SyncPreflightContext = {
+  currentUserId: string | null;
+  activeBusinessId: string | null;
+  queueBusinessId: string | null;
+  entity: string;
+  ownershipMismatch: boolean;
+  localBusinessUserId?: string | null;
+  cloudBusinessOwnerId?: string | null;
+  reason?: string;
 };
 
 const isBrowser = () => typeof window !== 'undefined';
@@ -188,6 +203,20 @@ const roundTo = (value: any, decimals: number) => {
 const roundMoney = (value: any) => roundTo(value, 2);
 const roundCost = (value: any) => roundTo(value, 4);
 
+const formatSyncContext = (context: SyncPreflightContext) => [
+  `currentUserId=${context.currentUserId || 'missing'}`,
+  `activeBusinessId=${context.activeBusinessId || 'missing'}`,
+  `queueItemBusinessId=${context.queueBusinessId || 'missing'}`,
+  `entity=${context.entity || 'unknown'}`,
+  `ownershipMismatch=${context.ownershipMismatch ? 'yes' : 'no'}`,
+  `localBusinessUserId=${context.localBusinessUserId || 'missing'}`,
+  `cloudBusinessOwnerId=${context.cloudBusinessOwnerId || 'missing'}`,
+  context.reason ? `reason=${context.reason}` : null,
+].filter(Boolean).join(' | ');
+
+const buildStaleUserDataError = (context: SyncPreflightContext) =>
+  `${STALE_USER_DATA_PREFIX}: ${formatSyncContext(context)}`;
+
 const getSyncFailureInfo = (error?: string) => {
   const message = error || '';
   const lower = message.toLowerCase();
@@ -204,11 +233,22 @@ const getSyncFailureInfo = (error?: string) => {
   const columnMatch = message.match(/'([^']+)' column|column ['"]?([a-zA-Z0-9_]+)['"]?|Could not find the '([^']+)'/i);
   const column = columnMatch?.[1] || columnMatch?.[2] || columnMatch?.[3];
 
+  if (lower.includes(STALE_USER_DATA_PREFIX)) {
+    return {
+      type: 'stale_user_data',
+      label: 'Stale user/business data',
+      detail: message,
+      retryable: false,
+    };
+  }
+
   if (lower.includes('row-level security') || lower.includes('rls') || lower.includes('42501')) {
     return {
       type: 'rls_violation',
       label: 'RLS violation',
-      detail: 'Supabase rejected this row through row-level security. Run the RLS parity migration, then retry.',
+      detail: message.includes('SyncContext:')
+        ? message
+        : 'Supabase rejected this row through row-level security. Repair Sync State refreshes the session and validates business ownership.',
       retryable: true,
     };
   }
@@ -444,6 +484,143 @@ const serializeForSync = (entity: string, payload: any) => {
   }
 };
 
+async function getCurrentSupabaseUser(refreshSession = false) {
+  if (refreshSession) {
+    try {
+      await supabase.auth.refreshSession();
+    } catch (error) {
+      console.warn('[SyncService] Unable to refresh Supabase session:', error);
+    }
+  }
+
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    console.warn('[SyncService] Unable to read current Supabase user:', error.message);
+  }
+  return data.user || null;
+}
+
+async function fetchOwnedCloudBusinesses(userId: string) {
+  const rows: any[] = [];
+
+  const collect = async (field: 'owner_id' | 'user_id') => {
+    try {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq(field, userId)
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (error) return;
+      rows.push(...(data || []));
+    } catch {
+      // Some schemas do not have user_id in cloud businesses; owner_id is canonical.
+    }
+  };
+
+  await collect('owner_id');
+  await collect('user_id');
+
+  return Array.from(
+    new Map(rows.map((row) => [row.local_id || row.business_id || row.id, row])).values()
+  );
+}
+
+async function fetchOwnedCloudBusiness(userId: string, businessId: string) {
+  const businesses = await fetchOwnedCloudBusinesses(userId);
+  return businesses.find((business) => (
+    business.local_id === businessId ||
+    business.business_id === businessId ||
+    business.id === businessId
+  )) || null;
+}
+
+function normalizeRemoteBusiness(raw: any, userId: string) {
+  const businessId = raw?.business_id || raw?.local_id || raw?.id;
+  if (!businessId) return null;
+
+  const name = raw?.business_name || raw?.name || 'Kola Business';
+  const type = raw?.business_type || raw?.type || 'retail';
+  const address = raw?.physical_address || raw?.address || '';
+
+  return {
+    local_id: raw?.local_id || businessId,
+    business_id: businessId,
+    user_id: raw?.owner_id || raw?.user_id || userId,
+    business_name: name,
+    business_type: type,
+    name,
+    type,
+    currency: raw?.currency || 'NGN',
+    address,
+    physical_address: address,
+    created_at: raw?.created_at ? new Date(raw.created_at) : new Date(),
+    updated_at: raw?.updated_at ? new Date(raw.updated_at) : new Date(),
+    sync_status: 'synced' as const,
+    version: raw?.version || 1,
+    device_id: raw?.device_id || 'web-pwa',
+  };
+}
+
+async function saveRemoteBusinessLocally(raw: any, userId: string) {
+  const business = normalizeRemoteBusiness(raw, userId);
+  if (!business) return null;
+
+  const existing = await db.businesses.where('business_id').equals(business.business_id).first();
+  if (existing?.id) {
+    await db.businesses.update(existing.id, business);
+  } else {
+    await db.businesses.add(business);
+  }
+
+  useAuthStore.getState().updateBusiness({
+    id: business.business_id,
+    local_id: business.local_id,
+    business_id: business.business_id,
+    user_id: business.user_id,
+    name: business.name,
+    type: business.type,
+    business_name: business.business_name,
+    business_type: business.business_type,
+    currency: business.currency,
+    address: business.address,
+    physical_address: business.physical_address,
+    sync_status: 'synced',
+  });
+
+  return business;
+}
+
+async function clearLocalBusinessScopedData(business_id: string) {
+  const tableNames = [
+    'businesses',
+    'products',
+    'categories',
+    'service_categories',
+    'expense_categories',
+    'transactions',
+    'sales',
+    'sale_items',
+    'services',
+    'expenses',
+    'ledger_entries',
+    'inventory_movements',
+    'customers',
+    'suppliers',
+    'receivables',
+    'app_settings',
+    'receipts',
+    'audit_logs',
+  ];
+
+  for (const tableName of tableNames) {
+    const table = (db as any)[tableName];
+    if (!table) continue;
+    await table.where('business_id').equals(business_id).delete();
+  }
+}
+
 
 
 export const syncService = {
@@ -533,6 +710,86 @@ export const syncService = {
     if (duplicates.length > 0) {
       await db.app_settings.bulkDelete(duplicates.map((setting) => setting.id!).filter(Boolean));
     }
+  },
+
+  getActiveBusinessId() {
+    const authState = useAuthStore.getState();
+    return authState.activeBusinessId || authState.business?.business_id || authState.business?.id || null;
+  },
+
+  async markQueueItemBlocked(item: SyncQueue, context: SyncPreflightContext) {
+    if (item.id === undefined) return;
+
+    await db.sync_queue.update(item.id, {
+      status: 'failed',
+      retry_count: MAX_RETRIES,
+      error: buildStaleUserDataError(context),
+      sync_started_at: null,
+      sync_lock_owner: null,
+      last_sync_heartbeat_at: null,
+    });
+
+    if (item.business_id) {
+      await this.updateMetadata(item.business_id, 'last_sync_status', 'failed');
+      await this.updateMetadata(item.business_id, 'last_sync_error', buildStaleUserDataError(context));
+    }
+  },
+
+  async validateQueueItemOwnership(item: SyncQueue): Promise<SyncPreflightContext> {
+    const user = await getCurrentSupabaseUser();
+    const activeBusinessId = this.getActiveBusinessId();
+    const context: SyncPreflightContext = {
+      currentUserId: user?.id || null,
+      activeBusinessId,
+      queueBusinessId: item.business_id || null,
+      entity: item.entity,
+      ownershipMismatch: false,
+    };
+
+    if (!user?.id) {
+      return { ...context, ownershipMismatch: true, reason: 'No current Supabase user session' };
+    }
+
+    if (!activeBusinessId) {
+      return { ...context, ownershipMismatch: true, reason: 'Missing active business in auth store' };
+    }
+
+    if (item.business_id !== activeBusinessId) {
+      return { ...context, ownershipMismatch: true, reason: 'Queue item business does not match active business' };
+    }
+
+    const localBusiness = await db.businesses.where('business_id').equals(activeBusinessId).first();
+    const localBusinessUserId = (localBusiness as any)?.user_id || (localBusiness as any)?.owner_id || null;
+    context.localBusinessUserId = localBusinessUserId;
+
+    if (!localBusiness) {
+      return { ...context, ownershipMismatch: true, reason: 'Active business is missing from local Dexie' };
+    }
+
+    if (!localBusinessUserId) {
+      return { ...context, ownershipMismatch: true, reason: 'Local business owner is missing and cannot be validated' };
+    }
+
+    if (localBusinessUserId !== user.id) {
+      return { ...context, ownershipMismatch: true, reason: 'Local business owner does not match current Supabase user' };
+    }
+
+    const payloadOwnerId = item.entity === 'businesses'
+      ? (item.payload?.user_id || item.payload?.owner_id || null)
+      : null;
+
+    if (payloadOwnerId && payloadOwnerId !== user.id) {
+      return { ...context, ownershipMismatch: true, reason: 'Business queue payload owner does not match current Supabase user' };
+    }
+
+    const cloudBusiness = await fetchOwnedCloudBusiness(user.id, activeBusinessId);
+    context.cloudBusinessOwnerId = cloudBusiness?.owner_id || cloudBusiness?.user_id || null;
+
+    if (!cloudBusiness && item.entity !== 'businesses') {
+      return { ...context, ownershipMismatch: true, reason: 'Active business is not owned by current Supabase user in cloud' };
+    }
+
+    return context;
   },
 
   async getQueueDiagnostics(business_id: string) {
@@ -675,6 +932,148 @@ export const syncService = {
     }
   },
 
+  async repairSyncState(business_id?: string, options: { runSync?: boolean; reason?: string } = {}) {
+    if (!onlineStatusService.getOnlineStatus()) {
+      throw new Error('Repair requires an internet connection.');
+    }
+
+    const user = await getCurrentSupabaseUser(true);
+    if (!user?.id) {
+      throw new Error('Repair failed: no active Supabase user session.');
+    }
+
+    const activeBusinessId = business_id || this.getActiveBusinessId();
+    if (!activeBusinessId) {
+      throw new Error('Repair failed: no active business is selected.');
+    }
+
+    clearSyncLock();
+    await this.updateMetadata(activeBusinessId, 'last_sync_status', 'repairing');
+    await this.updateMetadata(activeBusinessId, 'last_sync_repair_started_at', new Date().toISOString());
+
+    const localBusiness = await db.businesses.where('business_id').equals(activeBusinessId).first();
+    const localBusinessUserId = (localBusiness as any)?.user_id || (localBusiness as any)?.owner_id || null;
+    const cloudBusiness = await fetchOwnedCloudBusiness(user.id, activeBusinessId);
+    const ownershipMismatch = !localBusinessUserId || localBusinessUserId !== user.id;
+
+    let quarantinedCount = 0;
+    const allQueueItems = await db.sync_queue.toArray();
+    const staleItems = allQueueItems.filter((item) => (
+      item.business_id !== activeBusinessId ||
+      ownershipMismatch ||
+      (item.entity === 'businesses' && item.payload && (item.payload.user_id || item.payload.owner_id) && (item.payload.user_id || item.payload.owner_id) !== user.id)
+    ));
+
+    for (const item of staleItems) {
+      await this.markQueueItemBlocked(item, {
+        currentUserId: user.id,
+        activeBusinessId,
+        queueBusinessId: item.business_id || null,
+        entity: item.entity,
+        ownershipMismatch: true,
+        localBusinessUserId,
+        cloudBusinessOwnerId: cloudBusiness?.owner_id || cloudBusiness?.user_id || null,
+        reason: item.business_id !== activeBusinessId
+          ? 'Queue item belongs to a different business than the active business'
+          : 'Queue item belongs to a stale or mismatched user/business state',
+      });
+      quarantinedCount += 1;
+    }
+
+    if (ownershipMismatch && cloudBusiness) {
+      await clearLocalBusinessScopedData(activeBusinessId);
+    }
+
+    if (cloudBusiness) {
+      await saveRemoteBusinessLocally(cloudBusiness, user.id);
+      await this.pullFromCloudBatched(activeBusinessId);
+    } else if (ownershipMismatch) {
+      await this.updateMetadata(
+        activeBusinessId,
+        'last_sync_error',
+        buildStaleUserDataError({
+          currentUserId: user.id,
+          activeBusinessId,
+          queueBusinessId: activeBusinessId,
+          entity: 'businesses',
+          ownershipMismatch: true,
+          localBusinessUserId,
+          cloudBusinessOwnerId: null,
+          reason: 'Active business is not owned by current Supabase user in cloud',
+        }),
+      );
+    }
+
+    await this.recoverStaleSyncState(activeBusinessId);
+    const retriedCount = await this.retryFailedQueueItems(activeBusinessId);
+
+    if (options.runSync) {
+      requestedSyncBusinesses.delete(activeBusinessId);
+      await this.runFullSync(activeBusinessId);
+    }
+
+    await this.updateMetadata(activeBusinessId, 'last_sync_repair_completed_at', new Date().toISOString());
+    await this.updateMetadata(activeBusinessId, 'last_sync_repair_summary', {
+      reason: options.reason || 'manual',
+      currentUserId: user.id,
+      activeBusinessId,
+      localBusinessUserId,
+      cloudBusinessOwnerId: cloudBusiness?.owner_id || cloudBusiness?.user_id || null,
+      ownershipMismatch,
+      quarantinedCount,
+      retriedCount,
+    });
+
+    return {
+      currentUserId: user.id,
+      activeBusinessId,
+      localBusinessUserId,
+      cloudBusinessOwnerId: cloudBusiness?.owner_id || cloudBusiness?.user_id || null,
+      ownershipMismatch,
+      quarantinedCount,
+      retriedCount,
+      pulledFreshCloudData: !!cloudBusiness,
+    };
+  },
+
+  async maybeSelfHealRlsFailures(business_id: string) {
+    if (autoHealedRlsBusinesses.has(business_id)) return false;
+
+    const failedItems = await db.sync_queue
+      .where('business_id')
+      .equals(business_id)
+      .filter((item) => item.status === 'failed' && getSyncFailureInfo(item.error).type === 'rls_violation')
+      .toArray();
+
+    if (failedItems.length < RLS_SELF_HEAL_THRESHOLD) return false;
+
+    autoHealedRlsBusinesses.add(business_id);
+    await this.updateMetadata(business_id, 'last_sync_status', 'repairing');
+    await this.updateMetadata(business_id, 'last_sync_error', `Detected ${failedItems.length} RLS sync failures. Refreshing auth and validating business ownership.`);
+
+    try {
+      await this.repairSyncState(business_id, { runSync: false, reason: 'auto-rls-failure' });
+      await db.sync_queue.bulkUpdate(failedItems
+        .filter((item) => item.id !== undefined && getSyncFailureInfo(item.error).retryable)
+        .map((item) => ({
+          key: item.id!,
+          changes: {
+            status: 'pending',
+            retry_count: 0,
+            error: undefined,
+            sync_started_at: null,
+            sync_lock_owner: null,
+            last_sync_heartbeat_at: null,
+          },
+        })));
+      return true;
+    } catch (error: any) {
+      await this.updateMetadata(business_id, 'last_sync_status', 'failed');
+      await this.updateMetadata(business_id, 'last_sync_error', error.message || 'RLS self-heal failed');
+      return false;
+    }
+  },
+
   async clearFailedItem(id: number) {
     const item = await db.sync_queue.get(id);
     if (!item || item.status !== 'failed') {
@@ -774,6 +1173,7 @@ export const syncService = {
         await this.syncItem(item);
       }
       await this.updateMetadata(activeBusinessId, 'last_push_at', new Date().toISOString());
+      await this.maybeSelfHealRlsFailures(activeBusinessId);
 
       const remainingPending = await db.sync_queue
         .where('status')
@@ -814,6 +1214,7 @@ export const syncService = {
 
   async syncItem(item: SyncQueue) {
     const { entity, action, payload, id, retry_count } = item;
+    let preflightContext: SyncPreflightContext | null = null;
     
     try {
       if (!item.business_id || !entity || !action || !payload || !item.entity_id) {
@@ -823,6 +1224,12 @@ export const syncService = {
       const localTable = syncTables[entity as keyof typeof syncTables] as any;
       if (!localTable) {
         throw new Error(`Unsupported sync entity: ${entity}`);
+      }
+
+      preflightContext = await this.validateQueueItemOwnership(item);
+      if (preflightContext.ownershipMismatch) {
+        await this.markQueueItemBlocked(item, preflightContext);
+        return;
       }
 
       const lock = readSyncLock();
@@ -854,7 +1261,8 @@ export const syncService = {
           result.error.hint,
           result.error.code,
         ].filter(Boolean).join(' | ');
-        throw new Error(details || 'Supabase sync failed');
+        const context = preflightContext ? ` | SyncContext: ${formatSyncContext(preflightContext)}` : '';
+        throw new Error(`${details || 'Supabase sync failed'}${context}`);
       }
 
       // Success: Remove from queue and mark local as synced
@@ -867,11 +1275,12 @@ export const syncService = {
 
     } catch (error: any) {
 
+      const failure = getSyncFailureInfo(error.message || error.details);
       const newRetryCount = (retry_count || 0) + 1;
       const status = newRetryCount >= MAX_RETRIES ? 'failed' : 'pending';
       await db.sync_queue.update(id!, { 
-        status,
-        retry_count: newRetryCount,
+        status: failure.type === 'stale_user_data' ? 'failed' : status,
+        retry_count: failure.type === 'stale_user_data' ? MAX_RETRIES : newRetryCount,
         error: error.message || error.details || 'Unknown error',
         sync_started_at: null,
         sync_lock_owner: null,
@@ -1129,6 +1538,13 @@ export const syncService = {
   async runFullSync(business_id: string) {
     if (!onlineStatusService.getOnlineStatus()) {
       await this.recoverStaleSyncState(business_id);
+      return false;
+    }
+
+    const currentUser = await getCurrentSupabaseUser(true);
+    if (!currentUser?.id) {
+      await this.updateMetadata(business_id, 'last_sync_status', 'failed');
+      await this.updateMetadata(business_id, 'last_sync_error', 'No current Supabase user session. Use Repair Sync State to refresh auth.');
       return false;
     }
 
