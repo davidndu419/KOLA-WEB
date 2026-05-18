@@ -54,6 +54,15 @@ export default function AuthCallbackPage() {
         }
 
         const user = sessionData.session.user;
+        const provider = user.app_metadata?.provider || 'unknown';
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[AuthCallback] Supabase user:', {
+            provider,
+            userId: user.id,
+            email: user.email,
+          });
+        }
 
         // Temporarily disabled email verification check
         // if (!user.email_confirmed_at) {
@@ -75,21 +84,33 @@ export default function AuthCallbackPage() {
         // 1. Detect user switch and clear stale Dexie data if needed
         // 2. Load or pull the correct business for THIS user
         // 3. Hydrate Zustand stores with the correct user/business
-        await authService.checkSession();
+        const hydration = await authService.checkSession({
+          preferCloudBusiness: true,
+          source: 'oauth-callback',
+        });
 
         showToast('Successfully signed in!');
 
         // Determine where to redirect — re-read store AFTER checkSession
         const store = useAuthStore.getState();
+        const business = hydration.business || store.business;
+        const redirectTo = business ? '/dashboard' : '/auth/business-setup';
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[AuthCallback] Business redirect decision:', {
+            provider,
+            userId: user.id,
+            email: user.email,
+            selectedBusinessId: business?.business_id || business?.id || null,
+            selectedLocalId: business?.local_id || null,
+            redirectTo,
+          });
+        }
         
         // Small delay for toast visibility
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        if (store.business) {
-          router.replace('/dashboard');
-        } else {
-          router.replace('/auth/business-setup');
-        }
+        router.replace(redirectTo);
       } catch (err: any) {
         console.error('[AuthCallback] Error:', err);
         setErrorMessage(err.message || 'An unexpected error occurred');

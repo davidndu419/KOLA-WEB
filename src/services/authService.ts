@@ -44,6 +44,23 @@ type BusinessProfile = {
   device_id: string;
 };
 
+type BusinessCloudLookup = {
+  business: BusinessProfile | null;
+  foundCount: number;
+  source: 'owner_id' | 'user_id' | 'email' | 'none';
+};
+
+type SessionHydrationOptions = {
+  preferCloudBusiness?: boolean;
+  source?: string;
+};
+
+function devLog(message: string, payload?: Record<string, unknown>) {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(message, payload || '');
+  }
+}
+
 function isBrowserOnline() {
   return typeof navigator === 'undefined' || navigator.onLine;
 }
@@ -147,12 +164,13 @@ function normalizeBusiness(raw: any, userId: string): BusinessProfile {
   const name = raw?.business_name || raw?.name || 'Kola Business';
   const type = raw?.business_type || raw?.type || 'retail';
   const address = raw?.physical_address || raw?.address || '';
+  const ownerId = raw?.owner_id || raw?.user_id || userId;
 
   return {
     local_id: businessId,
     id: businessId,
     business_id: businessId,
-    user_id: raw?.owner_id || raw?.user_id || userId,
+    user_id: ownerId,
     business_name: name,
     business_type: type,
     name,
@@ -166,6 +184,10 @@ function normalizeBusiness(raw: any, userId: string): BusinessProfile {
     version: raw?.version || 1,
     device_id: raw?.device_id || 'web-pwa',
   };
+}
+
+function businessBelongsToUser(raw: any, userId: string) {
+  return raw?.user_id === userId || raw?.owner_id === userId;
 }
 
 async function upsertSetting(business_id: string, key: string, value: any) {
@@ -232,7 +254,7 @@ async function loadLocalBusiness(userId: string): Promise<BusinessProfile | null
   if (activeBusinessId) {
     const active = await db.businesses.where('business_id').equals(activeBusinessId).first();
     // CRITICAL: Only return if this business belongs to the current user
-    if (active && active.user_id === userId) {
+    if (active && businessBelongsToUser(active, userId)) {
       return normalizeBusiness(active, userId);
     }
   }
@@ -241,8 +263,8 @@ async function loadLocalBusiness(userId: string): Promise<BusinessProfile | null
   const profileSetting = await db.app_settings.where('key').equals('business_profile').first();
   if (profileSetting?.value) {
     const profileUserId = profileSetting.value.user_id || profileSetting.value.owner_id;
-    // Only use if it belongs to this user or has no user_id set
-    if (!profileUserId || profileUserId === userId) {
+    // Only use local profile data when ownership matches the current auth user.
+    if (profileUserId === userId) {
       const normalized = normalizeBusiness(profileSetting.value, userId);
       await saveBusinessLocally(normalized);
       return normalized;
@@ -252,26 +274,92 @@ async function loadLocalBusiness(userId: string): Promise<BusinessProfile | null
   return null;
 }
 
-async function pullBusinessFromCloud(userId: string): Promise<BusinessProfile | null> {
-  if (!isBrowserOnline()) return null;
+async function loadBusinessFromCloud(user: UserProfile): Promise<BusinessCloudLookup> {
+  if (!isBrowserOnline()) {
+    return { business: null, foundCount: 0, source: 'none' };
+  }
 
-  try {
-    const { data, error } = await supabase
+  const safeRows: any[] = [];
+  let source: BusinessCloudLookup['source'] = 'none';
+
+  const collectRows = async (
+    field: 'owner_id' | 'user_id' | 'email',
+    value: string | undefined,
+  ) => {
+    if (!value) return;
+
+    try {
+      const { data, error } = await supabase
       .from('businesses')
       .select('*')
-      .eq('owner_id', userId)
-      .limit(1)
-      .maybeSingle();
+        .eq(field, value)
+        .order('created_at', { ascending: true })
+        .limit(10);
 
-    if (error || !data) return null;
+      if (error) {
+        devLog('[Auth] Business cloud lookup skipped:', {
+          field,
+          code: error.code,
+          message: error.message,
+        });
+        return;
+      }
 
-    const business = normalizeBusiness(data, userId);
-    await saveBusinessLocally(business);
-    return business;
-  } catch (error) {
-    console.warn('[Auth] Unable to pull business profile from cloud:', error);
-    return null;
+      const ownedRows = (data || []).filter((row) => businessBelongsToUser(row, user.id));
+      if (ownedRows.length > 0 && source === 'none') source = field;
+      safeRows.push(...ownedRows);
+    } catch (error) {
+      console.warn(`[Auth] Unable to query businesses by ${field}:`, error);
+    }
+  };
+
+  await collectRows('owner_id', user.id);
+  await collectRows('user_id', user.id);
+  await collectRows('email', user.email?.toLowerCase().trim());
+
+  const uniqueRows = Array.from(
+    new Map(safeRows.map((row) => [row.local_id || row.business_id || row.id, row])).values()
+  );
+
+  const selected = uniqueRows[0] || null;
+
+  devLog('[Auth] Business cloud lookup result:', {
+    userId: user.id,
+    email: user.email,
+    foundCount: uniqueRows.length,
+    source,
+    selectedBusinessId: selected?.business_id || selected?.id || null,
+    selectedLocalId: selected?.local_id || null,
+  });
+
+  if (!selected) {
+    return { business: null, foundCount: 0, source: 'none' };
   }
+
+  try {
+    const business = normalizeBusiness(selected, user.id);
+    await saveBusinessLocally(business);
+    return { business, foundCount: uniqueRows.length, source };
+  } catch (error) {
+    console.warn('[Auth] Unable to save cloud business profile locally:', error);
+    return { business: null, foundCount: uniqueRows.length, source };
+  }
+}
+
+async function resolveBusinessForUser(
+  user: UserProfile,
+  options: SessionHydrationOptions = {}
+): Promise<BusinessProfile | null> {
+  if (options.preferCloudBusiness) {
+    const cloudLookup = await loadBusinessFromCloud(user);
+    if (cloudLookup.business) return cloudLookup.business;
+  }
+
+  const localBusiness = await loadLocalBusiness(user.id);
+  if (localBusiness) return localBusiness;
+
+  const cloudLookup = await loadBusinessFromCloud(user);
+  return cloudLookup.business;
 }
 
 export const authService = {
@@ -364,7 +452,7 @@ export const authService = {
           full_name: data.user.user_metadata?.full_name,
         };
 
-        const business = (await loadLocalBusiness(data.user.id)) || (await pullBusinessFromCloud(data.user.id));
+        const business = await resolveBusinessForUser(userProfile);
         hydrateStores(userProfile, business);
 
         if (business && isBrowserOnline()) {
@@ -512,6 +600,14 @@ export const authService = {
 
     await syncQueueService.enqueue('businesses', 'create', businessData, business_id);
 
+    if (isBrowserOnline()) {
+      try {
+        await syncService.runFullSync(business_id);
+      } catch (error) {
+        console.warn('[Auth] Initial business cloud push failed; queued sync remains pending:', error);
+      }
+    }
+
     const user = useAuthStore.getState().user;
     if (user) {
       hydrateStores({ ...user, business_id }, businessData);
@@ -520,7 +616,7 @@ export const authService = {
     return businessData;
   },
 
-  async checkSession() {
+  async checkSession(options: SessionHydrationOptions = {}) {
     try {
       const store = useAuthStore.getState();
       const mode = getRuntimeMode();
@@ -528,6 +624,7 @@ export const authService = {
 
       if (process.env.NODE_ENV !== 'production') {
         console.log('[Auth] checkSession starting:', {
+          source: options.source || 'checkSession',
           mode,
           authStorageKey: keys.authStorage,
           supabaseKey: keys.supabaseAuth,
@@ -542,8 +639,9 @@ export const authService = {
         if (store.isAuthenticated && store.user) {
           const business = store.business || await loadLocalBusiness(store.user.id);
           hydrateStores(store.user, business as BusinessProfile | null);
+          return { user: store.user, business: business as BusinessProfile | null };
         }
-        return;
+        return { user: null, business: null };
       }
 
       let session = null;
@@ -556,6 +654,7 @@ export const authService = {
 
       if (process.env.NODE_ENV !== 'production') {
         console.log('[Auth] Session check results:', {
+          source: options.source || 'checkSession',
           supabaseSessionFound: !!session?.user,
           localAuthExists: store.isAuthenticated && !!store.user,
         });
@@ -571,7 +670,7 @@ export const authService = {
           full_name: session.user.user_metadata?.full_name,
         };
 
-        const business = (await loadLocalBusiness(session.user.id)) || (await pullBusinessFromCloud(session.user.id));
+        const business = await resolveBusinessForUser(userProfile, options);
         hydrateStores(userProfile, business);
 
         // Run batched initial sync for new/switched users
@@ -587,24 +686,29 @@ export const authService = {
         } else {
           useAuthStore.getState().setHydrationStatus('complete');
         }
+        return { user: userProfile, business };
       } else if (store.isAuthenticated && store.user) {
         // No Supabase session but we have local auth — use it (critical for offline/PWA)
         console.log('[Auth] Using local persistent session (no Supabase session)');
         const business = store.business || await loadLocalBusiness(store.user.id);
         hydrateStores(store.user, business as BusinessProfile | null);
         useAuthStore.getState().setHydrationStatus('complete');
+        return { user: store.user, business: business as BusinessProfile | null };
       } else {
         // No session anywhere — clear auth
         console.log('[Auth] No session found, clearing auth');
         store.clearAuth();
         useStore.getState().logout();
+        return { user: null, business: null };
       }
     } catch (error) {
       console.warn('[Auth] Session check failed, preserving local session if present:', error);
       const store = useAuthStore.getState();
       if (store.isAuthenticated && store.user) {
         hydrateStores(store.user, store.business as BusinessProfile | null);
+        return { user: store.user, business: store.business as BusinessProfile | null };
       }
+      return { user: null, business: null };
     } finally {
       useAuthStore.getState().setInitialized(true);
     }
