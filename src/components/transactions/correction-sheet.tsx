@@ -86,6 +86,11 @@ export function CorrectionSheet({
 
       if (transaction.type === 'sale') {
         updatedData.amount = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+        (updatedData as any).items = cart.map((item) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.price,
+        }));
       } else {
         updatedData.amount = amount;
       }

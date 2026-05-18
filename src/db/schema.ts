@@ -145,6 +145,7 @@ export interface Transaction extends BaseEntity {
   note?: string;
   is_reversed?: boolean;
   is_edited?: boolean;
+  reversed_at?: Date;
   reversal_reason?: string;
   original_transaction_id?: string;
   source_type?: string;

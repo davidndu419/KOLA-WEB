@@ -87,7 +87,7 @@ export function TransactionDetailSheet({
   };
 
   const isRecent = displayTransaction ? (Date.now() - safeTime(displayTransaction.created_at)) < 24 * 60 * 60 * 1000 : false;
-  const canModify = displayTransaction && !displayTransaction.is_reversed && isRecent;
+  const canModify = displayTransaction && displayTransaction.status !== 'reversed' && !displayTransaction.is_reversed && isRecent;
 
 
   return (

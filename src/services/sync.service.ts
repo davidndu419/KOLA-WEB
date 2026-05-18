@@ -344,6 +344,7 @@ const serializeTransactionForSync = (payload: any) => ({
   note: payload.note,
   is_reversed: !!payload.is_reversed,
   is_edited: !!payload.is_edited,
+  reversed_at: payload.reversed_at,
   reversal_reason: payload.reversal_reason,
   original_transaction_id: payload.original_transaction_id,
   source_type: payload.source_type,

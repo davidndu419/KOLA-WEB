@@ -17,7 +17,8 @@ export class StockGuardError extends Error {
  */
 export async function processAccounting(
   transaction: Transaction, 
-  items?: SaleItem[]
+  items?: SaleItem[],
+  options: { isCorrection?: boolean; correctionGroupId?: string } = {}
 ) {
   const entries: Omit<LedgerEntry, 'id'>[] = [];
   const movements: Omit<InventoryMovement, 'id'>[] = [];
@@ -69,7 +70,8 @@ export async function processAccounting(
       credit_account: 'Revenue',
       amount: transaction.amount,
       is_reversal: false,
-      is_correction: false,
+      is_correction: !!options.isCorrection,
+      correction_group_id: options.correctionGroupId,
       description: `Sale: ${transaction.local_id}`
     });
 
@@ -99,7 +101,8 @@ export async function processAccounting(
           credit_account: 'Inventory',
           amount: costValue,
           is_reversal: false,
-          is_correction: false,
+          is_correction: !!options.isCorrection,
+          correction_group_id: options.correctionGroupId,
           description: `COGS for ${product.name}`
         });
 
@@ -126,7 +129,7 @@ export async function processAccounting(
           quantity: requestedQuantity,
           previous_stock: product.stock || 0,
           new_stock: newStock,
-          note: `Sale: ${transaction.local_id}`,
+          note: `${options.isCorrection ? 'Correction sale' : 'Sale'}: ${transaction.local_id}`,
           status: 'active'
         });
       }
@@ -145,7 +148,8 @@ export async function processAccounting(
       credit_account: 'Service Revenue',
       amount: transaction.amount,
       is_reversal: false,
-      is_correction: false,
+      is_correction: !!options.isCorrection,
+      correction_group_id: options.correctionGroupId,
       description: `Service: ${transaction.local_id}`
     });
 
@@ -165,7 +169,8 @@ export async function processAccounting(
       credit_account: settlementAccount,
       amount: transaction.amount,
       is_reversal: false,
-      is_correction: false,
+      is_correction: !!options.isCorrection,
+      correction_group_id: options.correctionGroupId,
       description: isRestock ? `Restock Purchase: ${transaction.note}` : `Expense: ${transaction.local_id}`
     });
 
@@ -183,7 +188,8 @@ export async function processAccounting(
       credit_account: 'Receivables',
       amount: transaction.amount,
       is_reversal: false,
-      is_correction: false,
+      is_correction: !!options.isCorrection,
+      correction_group_id: options.correctionGroupId,
       description: `Credit Payment: ${transaction.local_id}`
     });
 
