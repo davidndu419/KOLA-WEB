@@ -302,7 +302,7 @@ const getSyncFailureInfo = (error?: string) => {
 
 const serializeBusinessForSync = (payload: any) => ({
   ...serializeBase(payload),
-  owner_id: payload.user_id,
+  owner_id: payload.owner_id || payload.user_id,
   name: payload.business_name || payload.name,
   business_name: payload.business_name || payload.name,
   business_type: payload.business_type || payload.type,
@@ -501,34 +501,26 @@ async function getCurrentSupabaseUser(refreshSession = false) {
   return data.user || null;
 }
 
-async function fetchOwnedCloudBusinesses(userId: string) {
-  const rows: any[] = [];
+async function fetchOwnedCloudBusinesses(userId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('businesses')
+    .select('*')
+    .eq('owner_id', userId)
+    .order('created_at', { ascending: true })
+    .limit(50);
 
-  const collect = async (field: 'owner_id' | 'user_id') => {
-    try {
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq(field, userId)
-        .order('created_at', { ascending: true })
-        .limit(50);
+  if (error) {
+    console.warn('[SyncService] Unable to fetch owned businesses by owner_id:', error.message);
+    return [];
+  }
 
-      if (error) return;
-      rows.push(...(data || []));
-    } catch {
-      // Some schemas do not have user_id in cloud businesses; owner_id is canonical.
-    }
-  };
-
-  await collect('owner_id');
-  await collect('user_id');
-
+  const rows = (data || []) as any[];
   return Array.from(
     new Map(rows.map((row) => [row.local_id || row.business_id || row.id, row])).values()
   );
 }
 
-async function fetchOwnedCloudBusiness(userId: string, businessId: string) {
+async function fetchOwnedCloudBusiness(userId: string, businessId: string): Promise<any | null> {
   const businesses = await fetchOwnedCloudBusinesses(userId);
   return businesses.find((business) => (
     business.local_id === businessId ||
@@ -548,7 +540,8 @@ function normalizeRemoteBusiness(raw: any, userId: string) {
   return {
     local_id: raw?.local_id || businessId,
     business_id: businessId,
-    user_id: raw?.owner_id || raw?.user_id || userId,
+    owner_id: raw?.owner_id || userId,
+    user_id: raw?.owner_id || userId,
     business_name: name,
     business_type: type,
     name,
@@ -579,6 +572,7 @@ async function saveRemoteBusinessLocally(raw: any, userId: string) {
     id: business.business_id,
     local_id: business.local_id,
     business_id: business.business_id,
+    owner_id: business.owner_id,
     user_id: business.user_id,
     name: business.name,
     type: business.type,
@@ -784,7 +778,7 @@ export const syncService = {
     }
 
     const localBusiness = await db.businesses.where('business_id').equals(activeBusinessId).first();
-    const localBusinessUserId = (localBusiness as any)?.user_id || (localBusiness as any)?.owner_id || null;
+    const localBusinessUserId = (localBusiness as any)?.owner_id || (localBusiness as any)?.user_id || null;
     context.localBusinessUserId = localBusinessUserId;
 
     if (!localBusiness) {
@@ -800,7 +794,7 @@ export const syncService = {
     }
 
     const payloadOwnerId = item.entity === 'businesses'
-      ? (item.payload?.user_id || item.payload?.owner_id || null)
+      ? (item.payload?.owner_id || item.payload?.user_id || null)
       : null;
 
     if (payloadOwnerId && payloadOwnerId !== user.id) {
@@ -808,7 +802,7 @@ export const syncService = {
     }
 
     const cloudBusiness = await fetchOwnedCloudBusiness(user.id, activeBusinessId);
-    context.cloudBusinessOwnerId = cloudBusiness?.owner_id || cloudBusiness?.user_id || null;
+    context.cloudBusinessOwnerId = cloudBusiness?.owner_id || null;
 
     if (!cloudBusiness && item.entity !== 'businesses') {
       return { ...context, ownershipMismatch: true, reason: 'Active business is not owned by current Supabase user in cloud' };
@@ -978,7 +972,7 @@ export const syncService = {
     await this.updateMetadata(activeBusinessId, 'last_sync_repair_started_at', new Date().toISOString());
 
     const localBusiness = await db.businesses.where('business_id').equals(activeBusinessId).first();
-    const localBusinessUserId = (localBusiness as any)?.user_id || (localBusiness as any)?.owner_id || null;
+    const localBusinessUserId = (localBusiness as any)?.owner_id || (localBusiness as any)?.user_id || null;
     const cloudBusiness = await fetchOwnedCloudBusiness(user.id, activeBusinessId);
     const ownershipMismatch = !localBusinessUserId || localBusinessUserId !== user.id;
 
@@ -987,7 +981,7 @@ export const syncService = {
     const staleItems = allQueueItems.filter((item) => (
       item.business_id !== activeBusinessId ||
       ownershipMismatch ||
-      (item.entity === 'businesses' && item.payload && (item.payload.user_id || item.payload.owner_id) && (item.payload.user_id || item.payload.owner_id) !== user.id)
+      (item.entity === 'businesses' && item.payload && (item.payload.owner_id || item.payload.user_id) && (item.payload.owner_id || item.payload.user_id) !== user.id)
     ));
 
     for (const item of staleItems) {
@@ -998,7 +992,7 @@ export const syncService = {
         entity: item.entity,
         ownershipMismatch: true,
         localBusinessUserId,
-        cloudBusinessOwnerId: cloudBusiness?.owner_id || cloudBusiness?.user_id || null,
+        cloudBusinessOwnerId: cloudBusiness?.owner_id || null,
         reason: item.business_id !== activeBusinessId
           ? 'Queue item belongs to a different business than the active business'
           : 'Queue item belongs to a stale or mismatched user/business state',
@@ -1044,7 +1038,7 @@ export const syncService = {
       currentUserId: user.id,
       activeBusinessId,
       localBusinessUserId,
-      cloudBusinessOwnerId: cloudBusiness?.owner_id || cloudBusiness?.user_id || null,
+      cloudBusinessOwnerId: cloudBusiness?.owner_id || null,
       ownershipMismatch,
       quarantinedCount,
       retriedCount,
@@ -1054,7 +1048,7 @@ export const syncService = {
       currentUserId: user.id,
       activeBusinessId,
       localBusinessUserId,
-      cloudBusinessOwnerId: cloudBusiness?.owner_id || cloudBusiness?.user_id || null,
+      cloudBusinessOwnerId: cloudBusiness?.owner_id || null,
       ownershipMismatch,
       quarantinedCount,
       retriedCount,

@@ -13,6 +13,7 @@ interface BusinessProfile {
   id: string;
   local_id?: string;
   business_id?: string;
+  owner_id?: string;
   user_id?: string;
   name: string;
   type: string;

@@ -48,6 +48,34 @@ export class KolaDatabase extends Dexie {
   constructor(dbName: string) {
     super(dbName);
 
+    this.version(16).stores({
+      businesses: '++id, local_id, business_id, owner_id, sync_status, updated_at',
+      products: '++id, local_id, business_id, category_id, sync_status, is_archived, updated_at',
+      categories: '++id, local_id, business_id, name',
+      service_categories: '++id, local_id, business_id, name, status',
+      expense_categories: '++id, local_id, business_id, name, status',
+      transactions: '++id, local_id, business_id, type, payment_method, status, sync_status, created_at, updated_at, reference_id, customer_id, category_id',
+      sales: '++id, local_id, business_id, transaction_id, customer_id, sync_status, created_at, updated_at',
+      sale_items: '++id, local_id, business_id, sale_id, product_id, sync_status, created_at, updated_at',
+      services: '++id, local_id, business_id, transaction_id, category_id, customer_id, status, sync_status, created_at, updated_at',
+      expenses: '++id, local_id, business_id, transaction_id, category_id, status, sync_status, created_at, updated_at',
+      ledger_entries: '++id, local_id, business_id, transaction_id, source_type, source_id, debit_account, credit_account, amount, created_at, updated_at, sync_status',
+      sync_queue: '++id, business_id, entity, entity_id, status, created_at',
+      inventory_movements: '++id, local_id, business_id, product_id, type, created_at, updated_at, sync_status',
+      customers: '++id, local_id, business_id, sync_status, updated_at',
+      suppliers: '++id, local_id, business_id, sync_status, updated_at',
+      receivables: '++id, local_id, business_id, transaction_id, customer_id, status, sync_status, created_at, updated_at',
+      app_settings: '++id, business_id, key, [business_id+key], updated_at',
+      receipts: '++id, local_id, business_id, transaction_id, sync_status, updated_at',
+      audit_logs: '++id, local_id, business_id, user_id, action, entity_id, created_at, sync_status'
+    }).upgrade(async tx => {
+      await tx.table('businesses').toCollection().modify((business: any) => {
+        if (!business.owner_id && business.user_id) {
+          business.owner_id = business.user_id;
+        }
+      });
+    });
+
     this.version(15).stores({
       businesses: '++id, local_id, business_id, user_id, sync_status, updated_at',
       products: '++id, local_id, business_id, category_id, sync_status, is_archived, updated_at',

@@ -14,6 +14,7 @@ export interface BaseEntity {
 }
 
 export interface Business extends BaseEntity {
+  owner_id: string;
   user_id: string;
   business_name: string;
   business_type: string;

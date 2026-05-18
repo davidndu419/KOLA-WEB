@@ -30,6 +30,7 @@ type BusinessProfile = {
   id: string;
   local_id: string;
   business_id: string;
+  owner_id: string;
   user_id: string;
   name: string;
   type: string;
@@ -48,7 +49,7 @@ type BusinessProfile = {
 type BusinessCloudLookup = {
   business: BusinessProfile | null;
   foundCount: number;
-  source: 'owner_id' | 'user_id' | 'email' | 'none';
+  source: 'owner_id' | 'none';
 };
 
 type SessionHydrationOptions = {
@@ -165,12 +166,13 @@ function normalizeBusiness(raw: any, userId: string): BusinessProfile {
   const name = raw?.business_name || raw?.name || 'Kola Business';
   const type = raw?.business_type || raw?.type || 'retail';
   const address = raw?.physical_address || raw?.address || '';
-  const ownerId = raw?.owner_id || raw?.user_id || userId;
+  const ownerId = raw?.owner_id || userId;
 
   return {
     local_id: businessId,
     id: businessId,
     business_id: businessId,
+    owner_id: ownerId,
     user_id: ownerId,
     business_name: name,
     business_type: type,
@@ -188,7 +190,11 @@ function normalizeBusiness(raw: any, userId: string): BusinessProfile {
 }
 
 function businessBelongsToUser(raw: any, userId: string) {
-  return raw?.user_id === userId || raw?.owner_id === userId;
+  return (raw?.owner_id || raw?.user_id) === userId;
+}
+
+function remoteBusinessBelongsToUser(raw: any, userId: string) {
+  return raw?.owner_id === userId;
 }
 
 async function upsertSetting(business_id: string, key: string, value: any) {
@@ -245,8 +251,8 @@ function hydrateStores(user: UserProfile, business: BusinessProfile | null) {
 
 async function loadLocalBusiness(userId: string): Promise<BusinessProfile | null> {
   // First try to find a business that belongs to this specific user
-  const byUser = await db.businesses.where('user_id').equals(userId).first();
-  if (byUser) return normalizeBusiness(byUser, userId);
+  const byOwner = await db.businesses.where('owner_id').equals(userId).first();
+  if (byOwner) return normalizeBusiness(byOwner, userId);
 
   // Check active_business_id setting, but ONLY use it if the business belongs to this user
   const activeSetting = await db.app_settings.where('key').equals('active_business_id').first();
@@ -263,7 +269,7 @@ async function loadLocalBusiness(userId: string): Promise<BusinessProfile | null
   // Check business_profile setting, but validate ownership
   const profileSetting = await db.app_settings.where('key').equals('business_profile').first();
   if (profileSetting?.value) {
-    const profileUserId = profileSetting.value.user_id || profileSetting.value.owner_id;
+    const profileUserId = profileSetting.value.owner_id || profileSetting.value.user_id;
     // Only use local profile data when ownership matches the current auth user.
     if (profileUserId === userId) {
       const normalized = normalizeBusiness(profileSetting.value, userId);
@@ -280,70 +286,52 @@ async function loadBusinessFromCloud(user: UserProfile): Promise<BusinessCloudLo
     return { business: null, foundCount: 0, source: 'none' };
   }
 
-  const safeRows: any[] = [];
-  let source: BusinessCloudLookup['source'] = 'none';
-
-  const collectRows = async (
-    field: 'owner_id' | 'user_id' | 'email',
-    value: string | undefined,
-  ) => {
-    if (!value) return;
-
-    try {
-      const { data, error } = await supabase
+  try {
+    const { data, error } = await supabase
       .from('businesses')
       .select('*')
-        .eq(field, value)
-        .order('created_at', { ascending: true })
-        .limit(10);
+      .eq('owner_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(10);
 
-      if (error) {
-        devLog('[Auth] Business cloud lookup skipped:', {
-          field,
-          code: error.code,
-          message: error.message,
-        });
-        return;
-      }
-
-      const ownedRows = (data || []).filter((row) => businessBelongsToUser(row, user.id));
-      if (ownedRows.length > 0 && source === 'none') source = field;
-      safeRows.push(...ownedRows);
-    } catch (error) {
-      console.warn(`[Auth] Unable to query businesses by ${field}:`, error);
+    if (error) {
+      devLog('[Auth] Business cloud lookup skipped:', {
+        field: 'owner_id',
+        code: error.code,
+        message: error.message,
+      });
+      return { business: null, foundCount: 0, source: 'none' };
     }
-  };
 
-  await collectRows('owner_id', user.id);
-  await collectRows('user_id', user.id);
-  await collectRows('email', user.email?.toLowerCase().trim());
+    const rows = (data || []) as any[];
+    const uniqueRows: any[] = Array.from(
+      new Map(rows
+        .filter((row) => remoteBusinessBelongsToUser(row, user.id))
+        .map((row) => [row.local_id || row.business_id || row.id, row]))
+        .values()
+    );
 
-  const uniqueRows = Array.from(
-    new Map(safeRows.map((row) => [row.local_id || row.business_id || row.id, row])).values()
-  );
+    const selected = uniqueRows[0] || null;
 
-  const selected = uniqueRows[0] || null;
+    devLog('[Auth] Business cloud lookup result:', {
+      userId: user.id,
+      email: user.email,
+      foundCount: uniqueRows.length,
+      source: selected ? 'owner_id' : 'none',
+      selectedBusinessId: selected?.business_id || selected?.id || null,
+      selectedLocalId: selected?.local_id || null,
+    });
 
-  devLog('[Auth] Business cloud lookup result:', {
-    userId: user.id,
-    email: user.email,
-    foundCount: uniqueRows.length,
-    source,
-    selectedBusinessId: selected?.business_id || selected?.id || null,
-    selectedLocalId: selected?.local_id || null,
-  });
+    if (!selected) {
+      return { business: null, foundCount: 0, source: 'none' };
+    }
 
-  if (!selected) {
-    return { business: null, foundCount: 0, source: 'none' };
-  }
-
-  try {
     const business = normalizeBusiness(selected, user.id);
     await saveBusinessLocally(business);
-    return { business, foundCount: uniqueRows.length, source };
+    return { business, foundCount: uniqueRows.length, source: 'owner_id' };
   } catch (error) {
-    console.warn('[Auth] Unable to save cloud business profile locally:', error);
-    return { business: null, foundCount: uniqueRows.length, source };
+    console.warn('[Auth] Unable to load cloud business profile:', error);
+    return { business: null, foundCount: 0, source: 'none' };
   }
 }
 
@@ -582,6 +570,7 @@ export const authService = {
       id: business_id,
       local_id: business_id,
       business_id,
+      owner_id: userId,
       user_id: userId,
       business_name: details.name,
       business_type: details.type,

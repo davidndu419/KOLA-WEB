@@ -188,6 +188,7 @@ export default function SettingsPage() {
       const businessRecord = {
         local_id: (source as any).local_id || businessId,
         business_id: businessId,
+        owner_id: (source as any).owner_id || (source as any).user_id || authUser?.id || '',
         user_id: (source as any).user_id || authUser?.id || '',
         business_name: name,
         business_type: (source as any).business_type || (source as any).type || business.type || 'retail',
@@ -626,8 +627,22 @@ function ToggleSettingItem({
   checked: boolean;
   onToggle: () => void;
 }) {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onToggle();
+    }
+  };
+
   return (
-    <Touchable onPress={onToggle} className="w-full text-left">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={handleKeyDown}
+      className="w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-2xl"
+      aria-label={`${label}: ${checked ? 'on' : 'off'}`}
+    >
       <div className="flex items-center gap-4 p-4 glass-card rounded-2xl border-border/40">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-secondary">
           {icon}
@@ -656,7 +671,7 @@ function ToggleSettingItem({
           />
         </button>
       </div>
-    </Touchable>
+    </div>
   );
 }
 
