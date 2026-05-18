@@ -20,7 +20,7 @@ import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 export default function ExpensesPage() {
   const [isExpenseSheetOpen, setIsExpenseSheetOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const [selectedRange, setSelectedRange] = useState<DateRange>('thisMonth');
+  const [selectedRange, setSelectedRange] = useState<DateRange>('today');
   const [customDate, setCustomDate] = useState<Date>(new Date());
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
