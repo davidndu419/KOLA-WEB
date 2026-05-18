@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthStore } from '@/stores/authStore';
 import { getRuntimeMode } from '@/lib/runtime-mode';
+import { startSupabaseAuthStateListener } from '@/services/sessionRecovery';
 import { Loader2, WifiOff, CloudDownload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,6 +14,20 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const initialHydrationStatus = useAuthStore((s) => s.initialHydrationStatus);
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    const stopAuthListener = startSupabaseAuthStateListener();
+    const handleSessionExpired = () => {
+      const mode = getRuntimeMode();
+      router.push(mode === 'pwa' ? '/auth/login?source=pwa' : '/auth/login');
+    };
+
+    window.addEventListener('kola:session-expired', handleSessionExpired);
+    return () => {
+      stopAuthListener();
+      window.removeEventListener('kola:session-expired', handleSessionExpired);
+    };
+  }, [router]);
 
   useEffect(() => {
     if (isInitialized) {

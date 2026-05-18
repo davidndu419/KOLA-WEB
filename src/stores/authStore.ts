@@ -37,12 +37,15 @@ interface AuthState {
   isAuthenticated: boolean;
   isInitialized: boolean;
   initialHydrationStatus: 'idle' | 'hydrating' | 'complete' | 'failed';
+  authRecoveryStatus: 'idle' | 'recovering' | 'recovered' | 'failed';
+  authRecoveryError: string | null;
   
   setAuth: (user: UserProfile, business: BusinessProfile | null) => void;
   updateBusiness: (business: BusinessProfile) => void;
   clearAuth: () => void;
   setInitialized: (value: boolean) => void;
   setHydrationStatus: (status: 'idle' | 'hydrating' | 'complete' | 'failed') => void;
+  setAuthRecoveryStatus: (status: 'idle' | 'recovering' | 'recovered' | 'failed', error?: string | null) => void;
 }
 
 // Resolve the storage key at module load time (client-side) or use a safe default (SSR)
@@ -62,6 +65,8 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isInitialized: false,
       initialHydrationStatus: 'idle' as const,
+      authRecoveryStatus: 'idle' as const,
+      authRecoveryError: null,
 
       setAuth: (user, business) => set({ 
         user, 
@@ -70,7 +75,9 @@ export const useAuthStore = create<AuthState>()(
         activeBusinessId: business?.id || business?.business_id || null,
         businessName: business?.name || business?.business_name || null,
         businessType: business?.type || business?.business_type || null,
-        isAuthenticated: true 
+        isAuthenticated: true,
+        authRecoveryStatus: 'recovered',
+        authRecoveryError: null,
       }),
 
       updateBusiness: (business) => set({
@@ -94,10 +101,29 @@ export const useAuthStore = create<AuthState>()(
       setInitialized: (isInitialized) => set({ isInitialized }),
 
       setHydrationStatus: (initialHydrationStatus) => set({ initialHydrationStatus }),
+
+      setAuthRecoveryStatus: (authRecoveryStatus, authRecoveryError = null) => set({
+        authRecoveryStatus,
+        authRecoveryError,
+      }),
     }),
     {
       name: storageKey,
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        user: state.user,
+        business: state.business,
+        userId: state.userId,
+        activeBusinessId: state.activeBusinessId,
+        businessName: state.businessName,
+        businessType: state.businessType,
+        isAuthenticated: state.isAuthenticated,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.setInitialized(false);
+        state?.setHydrationStatus('idle');
+        state?.setAuthRecoveryStatus('idle', null);
+      },
     }
   )
 );

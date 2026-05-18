@@ -5,6 +5,7 @@ import { useStore } from '@/store/use-store';
 import { syncService } from './sync.service';
 import { syncQueueService } from './syncQueueService';
 import { getRuntimeMode, getStorageKeys, clearRuntimeModeMarker } from '@/lib/runtime-mode';
+import { clearGhostAuthState } from './sessionRecovery';
 
 /**
  * Returns the base URL for auth redirect links (email verification, password reset, OAuth).
@@ -694,12 +695,10 @@ export const authService = {
         }
         return { user: userProfile, business };
       } else if (store.isAuthenticated && store.user) {
-        // No Supabase session but we have local auth — use it (critical for offline/PWA)
-        console.log('[Auth] Using local persistent session (no Supabase session)');
-        const business = store.business || await loadLocalBusiness(store.user.id);
-        hydrateStores(store.user, business as BusinessProfile | null);
-        useAuthStore.getState().setHydrationStatus('complete');
-        return { user: store.user, business: business as BusinessProfile | null };
+        // Online ghost login: local auth cannot be trusted without a Supabase session.
+        console.warn('[Auth] Local auth exists but Supabase session is missing while online; clearing stale local auth.');
+        clearGhostAuthState('Session expired. Please login again.');
+        return { user: null, business: null };
       } else {
         // No session anywhere — clear auth
         console.log('[Auth] No session found, clearing auth');
@@ -708,11 +707,14 @@ export const authService = {
         return { user: null, business: null };
       }
     } catch (error) {
-      console.warn('[Auth] Session check failed, preserving local session if present:', error);
+      console.warn('[Auth] Session check failed:', error);
       const store = useAuthStore.getState();
-      if (store.isAuthenticated && store.user) {
+      if (!isBrowserOnline() && store.isAuthenticated && store.user) {
         hydrateStores(store.user, store.business as BusinessProfile | null);
         return { user: store.user, business: store.business as BusinessProfile | null };
+      }
+      if (isBrowserOnline() && store.isAuthenticated && store.user) {
+        clearGhostAuthState('Session expired. Please login again.');
       }
       return { user: null, business: null };
     } finally {

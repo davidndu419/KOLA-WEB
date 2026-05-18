@@ -18,7 +18,9 @@ import { ConfirmSheet } from '@/components/confirm-sheet';
 import { db } from '@/db/dexie';
 import { useAuthStore } from '@/stores/authStore';
 import { syncService } from '@/services/sync.service';
+import { ensureSupabaseSession, clearGhostAuthState } from '@/services/sessionRecovery';
 import { onlineStatusService } from '@/services/onlineStatusService';
+import { supabase } from '@/lib/supabase';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { cn, safeTime } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
@@ -52,6 +54,9 @@ export default function SyncSettingsPage() {
   const business = useAuthStore((state) => state.business);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const activeBusinessId = useAuthStore((state) => state.activeBusinessId);
+  const authRecoveryStatus = useAuthStore((state) => state.authRecoveryStatus);
+  const authRecoveryError = useAuthStore((state) => state.authRecoveryError);
   const isOnline = useOnlineStatus();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [isRepairing, setIsRepairing] = useState(false);
@@ -59,6 +64,10 @@ export default function SyncSettingsPage() {
   const [syncTick, setSyncTick] = useState(0);
   const [hasSwController, setHasSwController] = useState(false);
   const [clearFailedItemId, setClearFailedItemId] = useState<number | null>(null);
+  const [supabaseAuth, setSupabaseAuth] = useState<{ sessionPresent: boolean; userId: string | null }>({
+    sessionPresent: false,
+    userId: null,
+  });
   const businessId = business?.id || business?.business_id;
 
   const metadata = useLiveQuery(async () => {
@@ -86,6 +95,8 @@ export default function SyncSettingsPage() {
   const failedCount = diagnostics?.failedCount || 0;
   const firstProblem = diagnostics?.firstProblem;
   const syncLock = diagnostics?.lock;
+  const queueBusinessId = firstProblem?.business_id || diagnostics?.items.find((item) => item.business_id)?.business_id || null;
+  const hasStaleLocalSession = isAuthenticated && !!user && !supabaseAuth.sessionPresent;
 
   // Run stale sync recovery on mount (write operation — must be outside liveQuery)
   useEffect(() => {
@@ -99,6 +110,28 @@ export default function SyncSettingsPage() {
   useEffect(() => {
     setHasSwController(typeof navigator !== 'undefined' && !!navigator.serviceWorker?.controller);
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshSupabaseAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setSupabaseAuth({
+        sessionPresent: !!data.session?.user,
+        userId: data.session?.user?.id || null,
+      });
+    };
+
+    refreshSupabaseAuth();
+    const { data } = supabase.auth.onAuthStateChange(() => {
+      refreshSupabaseAuth();
+    });
+
+    return () => {
+      mounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, [syncTick]);
 
   const handleForceSync = async () => {
     if (!isOnline || !businessId) return;
@@ -148,9 +181,32 @@ export default function SyncSettingsPage() {
       const message = err?.message || 'Repair failed';
       setSyncMessage(message);
       showToast(message);
+      if (message.includes('Session expired')) {
+        router.push('/auth/login');
+      }
     } finally {
       setIsRepairing(false);
     }
+  };
+
+  const handleReconnectSession = async () => {
+    if (!isOnline) return;
+    setSyncMessage(null);
+    const result = await ensureSupabaseSession('sync-settings-reconnect');
+    if (result.ok) {
+      setSupabaseAuth({ sessionPresent: true, userId: result.user.id });
+      setSyncMessage('Session reconnected. Retrying sync...');
+      showToast('Session reconnected');
+      if (businessId) {
+        await syncService.runFullSync(businessId);
+        setSyncTick((value) => value + 1);
+      }
+      return;
+    }
+
+    clearGhostAuthState(result.error);
+    setSyncMessage(result.error);
+    router.push('/auth/login');
   };
 
   const handleRetryFailed = async () => {
@@ -278,10 +334,40 @@ export default function SyncSettingsPage() {
             />
             <StatusRow label="Lock Owner" value={syncLock?.owner ? `${syncLock.owner.slice(0, 8)}...` : 'None'} />
             <StatusRow label="Online Status" value={isOnline ? 'Online' : 'Offline'} color={isOnline ? "text-emerald-500" : "text-slate-500"} />
-            <StatusRow label="Local Session" value={isAuthenticated && user ? 'Present' : 'Missing'} color={isAuthenticated && user ? "text-emerald-500" : "text-red-500"} />
+            <StatusRow label="Local auth store" value={isAuthenticated && user ? 'Present' : 'Missing'} color={isAuthenticated && user ? "text-emerald-500" : "text-red-500"} />
+            <StatusRow label="Supabase session" value={supabaseAuth.sessionPresent ? 'Present' : 'Missing'} color={supabaseAuth.sessionPresent ? "text-emerald-500" : "text-red-500"} />
+            <StatusRow label="Supabase user id" value={supabaseAuth.userId ? `${supabaseAuth.userId.slice(0, 8)}...` : 'Missing'} color={supabaseAuth.userId ? "text-emerald-500" : "text-red-500"} />
+            <StatusRow label="Active business id" value={activeBusinessId ? `${activeBusinessId.slice(0, 8)}...` : 'Missing'} color={activeBusinessId ? "text-emerald-500" : "text-red-500"} />
+            <StatusRow label="Queue business id" value={queueBusinessId ? `${queueBusinessId.slice(0, 8)}...` : 'Missing'} color={queueBusinessId ? "text-emerald-500" : "text-muted-foreground"} />
+            <StatusRow label="Auth recovery" value={authRecoveryStatus} color={authRecoveryStatus === 'failed' ? "text-red-500" : authRecoveryStatus === 'recovered' ? "text-emerald-500" : "text-amber-500"} />
             <StatusRow label="Business ID" value={businessId ? 'Present' : 'Missing'} color={businessId ? "text-emerald-500" : "text-red-500"} />
             <StatusRow label="SW Controller" value={hasSwController ? 'Present' : 'Missing'} color={hasSwController ? "text-emerald-500" : "text-amber-500"} />
             <StatusRow label="IndexedDB Version" value={db.verno.toString()} />
+
+            {hasStaleLocalSession && (
+              <div className="rounded-2xl bg-amber-500/10 p-4 space-y-3 border border-amber-500/20">
+                <div className="flex gap-3 items-start">
+                  <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-xs font-black text-amber-700">Your local session is stale. Please reconnect.</p>
+                    {authRecoveryError && (
+                      <p className="text-[10px] font-bold text-amber-700/80 leading-relaxed">{authRecoveryError}</p>
+                    )}
+                  </div>
+                </div>
+                <Touchable
+                  onPress={handleReconnectSession}
+                  disabled={!isOnline || isManualSyncing || isRepairing}
+                  className={cn(
+                    "h-11 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 border",
+                    isOnline ? "bg-amber-500/10 text-amber-700 border-amber-500/30" : "bg-secondary text-muted-foreground border-transparent"
+                  )}
+                >
+                  <RefreshCw size={14} />
+                  Reconnect Session
+                </Touchable>
+              </div>
+            )}
 
             {metadata?.error && (
               <div className="rounded-2xl bg-red-500/10 p-4 flex gap-3 items-start border border-red-500/20">

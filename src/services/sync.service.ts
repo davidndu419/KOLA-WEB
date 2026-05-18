@@ -6,6 +6,7 @@ import { conflictResolver } from './conflictResolver';
 import { getStorageKeys } from '@/lib/runtime-mode';
 import { safeTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
+import { clearGhostAuthState, ensureSupabaseSession, SESSION_EXPIRED_MESSAGE } from './sessionRecovery';
 
 const MAX_RETRIES = 5;
 const BATCH_SIZE = 20;
@@ -628,6 +629,30 @@ export const syncService = {
   isFullSyncing: false,
   fullSyncStartedAt: null as number | null,
 
+  async pauseSyncForAuthFailure(business_id?: string, error = SESSION_EXPIRED_MESSAGE) {
+    if (business_id) {
+      requestedSyncBusinesses.delete(business_id);
+      const existingTimer = requestedSyncTimers.get(business_id);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        requestedSyncTimers.delete(business_id);
+      }
+      await this.updateMetadata(business_id, 'last_sync_status', 'auth_required');
+      await this.updateMetadata(business_id, 'last_sync_error', error);
+    }
+
+    clearSyncLock();
+    clearGhostAuthState(error);
+  },
+
+  async ensureSyncPreflight(source: string, business_id?: string) {
+    const result = await ensureSupabaseSession(source);
+    if (result.ok) return result;
+
+    await this.pauseSyncForAuthFailure(business_id, result.error || SESSION_EXPIRED_MESSAGE);
+    return null;
+  },
+
   requestImmediateSync(business_id: string) {
     if (!business_id) return false;
 
@@ -937,9 +962,10 @@ export const syncService = {
       throw new Error('Repair requires an internet connection.');
     }
 
-    const user = await getCurrentSupabaseUser(true);
+    const session = await this.ensureSyncPreflight('sync-repair', business_id || this.getActiveBusinessId() || undefined);
+    const user = session?.user;
     if (!user?.id) {
-      throw new Error('Repair failed: no active Supabase user session.');
+      throw new Error(SESSION_EXPIRED_MESSAGE);
     }
 
     const activeBusinessId = business_id || this.getActiveBusinessId();
@@ -1100,6 +1126,9 @@ export const syncService = {
       activeBusinessId = business_id || firstItem?.business_id;
       if (!activeBusinessId) return false;
 
+      const session = await this.ensureSyncPreflight('sync-preflight', activeBusinessId);
+      if (!session) return false;
+
       await this.recoverStaleSyncState(activeBusinessId);
 
       if (!lockAlreadyHeld) {
@@ -1228,6 +1257,10 @@ export const syncService = {
 
       preflightContext = await this.validateQueueItemOwnership(item);
       if (preflightContext.ownershipMismatch) {
+        if (preflightContext.reason === 'No current Supabase user session') {
+          await this.pauseSyncForAuthFailure(item.business_id, SESSION_EXPIRED_MESSAGE);
+          return;
+        }
         await this.markQueueItemBlocked(item, preflightContext);
         return;
       }
@@ -1291,6 +1324,8 @@ export const syncService = {
 
   async pullFromCloud(business_id: string) {
     if (!onlineStatusService.getOnlineStatus()) return;
+    const session = await this.ensureSyncPreflight('sync-preflight', business_id);
+    if (!session) return false;
 
     const tables = Object.keys(ENTITY_PRIORITY).sort((a, b) => ENTITY_PRIORITY[a] - ENTITY_PRIORITY[b]);
 
@@ -1373,6 +1408,8 @@ export const syncService = {
    */
   async pullFromCloudBatched(business_id: string): Promise<boolean> {
     if (!onlineStatusService.getOnlineStatus()) return false;
+    const session = await this.ensureSyncPreflight('sync-preflight', business_id);
+    if (!session) return false;
 
     const tables = Object.keys(ENTITY_PRIORITY).sort(
       (a, b) => ENTITY_PRIORITY[a] - ENTITY_PRIORITY[b]
@@ -1513,6 +1550,8 @@ export const syncService = {
   async pullLatestFromCloud(business_id: string) {
     if (!onlineStatusService.getOnlineStatus()) return false;
     if (this.isProcessing || this.isFullSyncing) return false;
+    const session = await this.ensureSyncPreflight('sync-preflight', business_id);
+    if (!session) return false;
 
     await this.recoverStaleSyncState(business_id);
     const lock = acquireSyncLock(business_id);
@@ -1541,12 +1580,8 @@ export const syncService = {
       return false;
     }
 
-    const currentUser = await getCurrentSupabaseUser(true);
-    if (!currentUser?.id) {
-      await this.updateMetadata(business_id, 'last_sync_status', 'failed');
-      await this.updateMetadata(business_id, 'last_sync_error', 'No current Supabase user session. Use Repair Sync State to refresh auth.');
-      return false;
-    }
+    const session = await this.ensureSyncPreflight('sync-preflight', business_id);
+    if (!session) return false;
 
     if (this.isFullSyncing) {
       if (this.fullSyncStartedAt && Date.now() - this.fullSyncStartedAt > STALE_SYNC_MS) {

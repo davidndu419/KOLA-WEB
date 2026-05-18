@@ -27,6 +27,9 @@ const REALTIME_TABLES = [
 
 export function useSync() {
   const business = useAuthStore((state) => state.business);
+  const user = useAuthStore((state) => state.user);
+  const activeBusinessId = useAuthStore((state) => state.activeBusinessId);
+  const hydrationStatus = useAuthStore((state) => state.initialHydrationStatus);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const realtimeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const wasOfflineRef = useRef(false);
@@ -34,7 +37,7 @@ export function useSync() {
   const realtimePullRequestedRef = useRef(false);
 
   const triggerSync = async (allowHidden = false) => {
-    const businessId = business?.id || business?.business_id;
+    const businessId = activeBusinessId || business?.id || business?.business_id;
     if (!businessId) return;
     if (!allowHidden && typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     if (!onlineStatusService.getOnlineStatus()) {
@@ -62,7 +65,7 @@ export function useSync() {
   };
 
   const triggerRealtimePull = async () => {
-    const businessId = business?.id || business?.business_id;
+    const businessId = activeBusinessId || business?.id || business?.business_id;
     if (!businessId) return;
     if (!onlineStatusService.getOnlineStatus()) return;
     if (runningRef.current) {
@@ -89,74 +92,91 @@ export function useSync() {
   };
 
   useEffect(() => {
-    const businessId = business?.id || business?.business_id;
-    if (!businessId) return;
+    const businessId = activeBusinessId || business?.id || business?.business_id;
+    if (!user?.id || !businessId || hydrationStatus !== 'complete') return;
 
-    syncService.recoverStaleSyncState(businessId).catch((error) => {
-      console.warn('[useSync] Stale sync recovery failed:', error);
-    });
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    if (onlineStatusService.getOnlineStatus()) {
-      triggerSync(true);
-    } else {
-      wasOfflineRef.current = true;
-    }
+    const startSyncLifecycle = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled || !data.session?.user) return;
 
-    // Set up interval
-    timerRef.current = setInterval(() => triggerSync(false), SYNC_INTERVAL);
+      syncService.recoverStaleSyncState(businessId).catch((error) => {
+        console.warn('[useSync] Stale sync recovery failed:', error);
+      });
 
-    // Subscribe to online status
-    const unsubscribe = onlineStatusService.subscribe((isOnline) => {
-      if (isOnline) {
-        console.log('[useSync] Connection restored, triggering sync...');
+      if (onlineStatusService.getOnlineStatus()) {
         triggerSync(true);
       } else {
         wasOfflineRef.current = true;
       }
-    });
-    const handleOnline = () => triggerSync(true);
-    const handleFocus = () => triggerSync(true);
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && onlineStatusService.getOnlineStatus()) {
-        triggerSync(true);
-      }
+
+      // Set up interval
+      timerRef.current = setInterval(() => triggerSync(false), SYNC_INTERVAL);
+
+      // Subscribe to online status
+      unsubscribe = onlineStatusService.subscribe((isOnline) => {
+        if (isOnline) {
+          console.log('[useSync] Connection restored, triggering sync...');
+          triggerSync(true);
+        } else {
+          wasOfflineRef.current = true;
+        }
+      });
+      const handleOnline = () => triggerSync(true);
+      const handleFocus = () => triggerSync(true);
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible' && onlineStatusService.getOnlineStatus()) {
+          triggerSync(true);
+        }
+      };
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibility);
+
+      channel = supabase.channel(`kola-sync-${businessId}`);
+      REALTIME_TABLES.forEach((table) => {
+        channel?.on(
+          'postgres_changes' as any,
+          {
+            event: '*',
+            schema: 'public',
+            table,
+            filter: `business_id=eq.${businessId}`,
+          },
+          () => {
+            syncService.updateMetadata(businessId, 'last_realtime_event_at', new Date().toISOString()).catch(() => {});
+            if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
+            realtimeTimerRef.current = setTimeout(triggerRealtimePull, REALTIME_DEBOUNCE_MS);
+          },
+        );
+      });
+
+      channel.subscribe((status) => {
+        syncService.updateMetadata(businessId, 'realtime_status', status).catch(() => {});
+      });
+
+      cleanupListeners = () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('focus', handleFocus);
+        document.removeEventListener('visibilitychange', handleVisibility);
+      };
     };
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibility);
 
-    const channel = supabase.channel(`kola-sync-${businessId}`);
-    REALTIME_TABLES.forEach((table) => {
-      channel.on(
-        'postgres_changes' as any,
-        {
-          event: '*',
-          schema: 'public',
-          table,
-          filter: `business_id=eq.${businessId}`,
-        },
-        () => {
-          syncService.updateMetadata(businessId, 'last_realtime_event_at', new Date().toISOString()).catch(() => {});
-          if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
-          realtimeTimerRef.current = setTimeout(triggerRealtimePull, REALTIME_DEBOUNCE_MS);
-        },
-      );
-    });
-
-    channel.subscribe((status) => {
-      syncService.updateMetadata(businessId, 'realtime_status', status).catch(() => {});
-    });
+    let cleanupListeners = () => {};
+    startSyncLifecycle();
 
     return () => {
+      cancelled = true;
       if (timerRef.current) clearInterval(timerRef.current);
       if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
-      unsubscribe();
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      supabase.removeChannel(channel);
+      unsubscribe?.();
+      cleanupListeners();
+      if (channel) supabase.removeChannel(channel);
     };
-  }, [business?.id, business?.business_id]);
+  }, [business?.id, business?.business_id, activeBusinessId, user?.id, hydrationStatus]);
 
   return {
     triggerSync,
