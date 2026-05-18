@@ -17,7 +17,8 @@ import {
   Sun,
   Info,
   Zap,
-  Receipt
+  Receipt,
+  Code2
 } from 'lucide-react';
 import { Touchable } from '@/components/touchable';
 import { db } from '@/db/dexie';
@@ -67,7 +68,9 @@ export default function SettingsPage() {
     theme, 
     setTheme, 
     notificationsEnabled, 
-    setNotificationsEnabled
+    setNotificationsEnabled,
+    developerMode,
+    setDeveloperMode
   } = useStore();
   const authBusiness = useAuthStore((state) => state.business);
   const authUser = useAuthStore((state) => state.user);
@@ -302,26 +305,9 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-3">
-          <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4">System</h3>
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4">App</h3>
           
           <PWASettingItem />
-          
-          <SyncSettingItem onOpenSheet={() => router.push('/settings/sync')} />
-          
-          <SettingItem 
-            icon={<Smartphone size={18} />} 
-            label="PWA Diagnostics" 
-            sub="Check offline cache status" 
-            onPress={() => router.push('/settings/pwa-cache')}
-          />
-          
-          <SettingItem 
-            icon={<Trash2 size={18} className="text-red-500" />} 
-            label="Clear Local Data" 
-            sub="Wipe all offline database records" 
-            onPress={handleClearData}
-            danger
-          />
         </div>
 
         <div className="space-y-3">
@@ -335,6 +321,39 @@ export default function SettingsPage() {
             <LogOut size={18} />
             <span className="font-bold text-sm">Logout from Device</span>
           </Touchable>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4">Advanced</h3>
+
+          <ToggleSettingItem
+            icon={<Code2 size={18} />}
+            label="Developer Mode"
+            sub="Show sync and diagnostic tools"
+            checked={developerMode}
+            onToggle={() => setDeveloperMode(!developerMode)}
+          />
+
+          {developerMode && (
+            <>
+              <SyncSettingItem onOpenSheet={() => router.push('/settings/sync')} />
+
+              <SettingItem
+                icon={<Smartphone size={18} />}
+                label="PWA Diagnostics"
+                sub="Check offline cache status"
+                onPress={() => router.push('/settings/pwa-cache')}
+              />
+
+              <SettingItem
+                icon={<Trash2 size={18} className="text-red-500" />}
+                label="Clear Local Data"
+                sub="Wipe all offline database records"
+                onPress={handleClearData}
+                danger
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -591,6 +610,53 @@ function PWASettingItem() {
       badge="Not Installed" 
       badgeColor="bg-red-500/10 text-red-600"
     />
+  );
+}
+
+function ToggleSettingItem({
+  icon,
+  label,
+  sub,
+  checked,
+  onToggle,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Touchable onPress={onToggle} className="w-full text-left">
+      <div className="flex items-center gap-4 p-4 glass-card rounded-2xl border-border/40">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-secondary">
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm tracking-tight truncate">{label}</p>
+          <p className="text-[10px] text-muted-foreground font-bold uppercase mt-0.5 truncate">{sub}</p>
+        </div>
+        <button
+          type="button"
+          aria-pressed={checked}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle();
+          }}
+          className={cn(
+            "relative h-7 w-12 rounded-full transition-colors",
+            checked ? "bg-primary" : "bg-muted"
+          )}
+        >
+          <span
+            className={cn(
+              "absolute left-0 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+              checked ? "translate-x-5" : "translate-x-1"
+            )}
+          />
+        </button>
+      </div>
+    </Touchable>
   );
 }
 

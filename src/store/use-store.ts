@@ -26,6 +26,7 @@ interface AppState {
   lastSyncTime: string | null;
   theme: 'light' | 'dark';
   notificationsEnabled: boolean;
+  developerMode: boolean;
 
   setBusiness: (business: Business) => void;
   setUser: (user: User) => void;
@@ -34,6 +35,7 @@ interface AppState {
   setLastSyncTime: (time: string) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  setDeveloperMode: (enabled: boolean) => void;
   logout: () => void;
 }
 
@@ -52,6 +54,7 @@ export const useStore = create<AppState>()(
       lastSyncTime: null,
       theme: 'light',
       notificationsEnabled: false,
+      developerMode: false,
 
       setBusiness: (business) => set({ business }),
       setUser: (user) => set({ user }),
@@ -60,6 +63,7 @@ export const useStore = create<AppState>()(
       setLastSyncTime: (lastSyncTime) => set({ lastSyncTime }),
       setTheme: (theme) => set({ theme }),
       setNotificationsEnabled: (notificationsEnabled) => set({ notificationsEnabled }),
+      setDeveloperMode: (developerMode) => set({ developerMode }),
       logout: () => set({ business: null, user: null }),
     }),
     {
