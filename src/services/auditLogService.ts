@@ -1,6 +1,8 @@
 import { createBaseEntity, db } from '@/db/dexie';
 import type { AuditLog } from '@/db/schema';
 import { syncQueueService } from './syncQueueService';
+import { getCurrentAuthenticatedUserId } from '@/lib/auth-user';
+import { isValidUUID } from '@/lib/uuid';
 
 export interface AuditLogInput {
   business_id: string;
@@ -13,10 +15,13 @@ export interface AuditLogInput {
   userId?: string;
 }
 
-export function buildAuditLog(input: AuditLogInput, created_at = new Date()): Omit<AuditLog, 'id'> {
+export function buildAuditLog(input: AuditLogInput, userId: string | null, created_at = new Date()): Omit<AuditLog, 'id'> {
+  const validUserId = isValidUUID(userId) ? userId : null;
+
   return {
     ...createBaseEntity(input.business_id),
-    user_id: input.userId || 'local-user',
+    sync_status: validUserId ? 'pending' : 'failed',
+    user_id: validUserId,
     action: input.action,
     entity_type: input.entity_type,
     entity_id: input.entity_id,
@@ -31,14 +36,18 @@ export function buildAuditLog(input: AuditLogInput, created_at = new Date()): Om
 
 export const auditLogService = {
   async createAuditLog(input: AuditLogInput) {
-    const log = buildAuditLog(input);
+    const userId = isValidUUID(input.userId)
+      ? input.userId
+      : await getCurrentAuthenticatedUserId();
+    const log = buildAuditLog(input, userId);
     
     // 1. Save to local Dexie DB
     await db.audit_logs.add(log as any);
     
-    // 2. Use the correct service method to enqueue for sync
-    // This replaces the broken createSyncQueueItem call
-    await syncQueueService.enqueue('audit_logs', 'create', log, input.business_id);
+    // 2. Only cloud-sync audit logs that have a real Supabase user UUID.
+    if (isValidUUID(log.user_id)) {
+      await syncQueueService.enqueue('audit_logs', 'create', log, input.business_id);
+    }
     
     return log;
   },

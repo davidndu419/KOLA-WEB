@@ -7,6 +7,7 @@ import { getStorageKeys } from '@/lib/runtime-mode';
 import { safeTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { clearGhostAuthState, ensureSupabaseSession, SESSION_EXPIRED_MESSAGE } from './sessionRecovery';
+import { INVALID_USER_IDENTIFIER_ERROR, isValidUUID } from '@/lib/uuid';
 
 const MAX_RETRIES = 5;
 const BATCH_SIZE = 20;
@@ -238,6 +239,15 @@ const getSyncFailureInfo = (error?: string) => {
     return {
       type: 'stale_user_data',
       label: 'Stale user/business data',
+      detail: message,
+      retryable: false,
+    };
+  }
+
+  if (lower.includes(INVALID_USER_IDENTIFIER_ERROR.toLowerCase())) {
+    return {
+      type: 'invalid_user_identifier',
+      label: INVALID_USER_IDENTIFIER_ERROR,
       detail: message,
       retryable: false,
     };
@@ -755,6 +765,49 @@ export const syncService = {
     }
   },
 
+  hasInvalidUserIdentifier(item: SyncQueue) {
+    if (item.action === 'delete') return false;
+
+    if (item.entity === 'audit_logs') {
+      return !isValidUUID(item.payload?.user_id);
+    }
+
+    if (item.entity === 'businesses') {
+      return !isValidUUID(item.payload?.owner_id || item.payload?.user_id);
+    }
+
+    return false;
+  },
+
+  async markQueueItemInvalidUserIdentifier(item: SyncQueue) {
+    if (item.id !== undefined) {
+      await db.sync_queue.update(item.id, {
+        status: 'failed',
+        retry_count: MAX_RETRIES,
+        error: INVALID_USER_IDENTIFIER_ERROR,
+        sync_started_at: null,
+        sync_lock_owner: null,
+        last_sync_heartbeat_at: null,
+      });
+    }
+
+    if (item.entity === 'audit_logs' && item.entity_id) {
+      const auditLog = await db.audit_logs.where('local_id').equals(item.entity_id).first();
+      if (auditLog?.id !== undefined) {
+        await db.audit_logs.update(auditLog.id, {
+          user_id: isValidUUID(auditLog.user_id) ? auditLog.user_id : null,
+          sync_status: 'failed',
+          updated_at: new Date(),
+        });
+      }
+    }
+
+    if (item.business_id) {
+      await this.updateMetadata(item.business_id, 'last_sync_status', 'failed');
+      await this.updateMetadata(item.business_id, 'last_sync_error', INVALID_USER_IDENTIFIER_ERROR);
+    }
+  },
+
   async validateQueueItemOwnership(item: SyncQueue): Promise<SyncPreflightContext> {
     const user = await getCurrentSupabaseUser();
     const activeBusinessId = this.getActiveBusinessId();
@@ -1248,6 +1301,11 @@ export const syncService = {
       const localTable = syncTables[entity as keyof typeof syncTables] as any;
       if (!localTable) {
         throw new Error(`Unsupported sync entity: ${entity}`);
+      }
+
+      if (this.hasInvalidUserIdentifier(item)) {
+        await this.markQueueItemInvalidUserIdentifier(item);
+        return;
       }
 
       preflightContext = await this.validateQueueItemOwnership(item);

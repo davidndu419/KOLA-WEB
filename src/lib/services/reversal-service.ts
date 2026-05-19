@@ -3,6 +3,7 @@ import { db } from '@/db/dexie';
 import { Transaction, LedgerEntry, InventoryMovement, AuditLog, TransactionWithItems } from '@/db/schema';
 
 import { createBaseEntity } from '@/db/dexie';
+import { getCurrentAuthenticatedUserId } from '@/lib/auth-user';
 
 export class ReversalService {
   /**
@@ -218,9 +219,12 @@ export class ReversalService {
   }
 
   private static async createAuditLog(entity: Transaction, action: string, reason: string, business_id: string) {
+    const userId = await getCurrentAuthenticatedUserId();
+
     await db.audit_logs.add({
       ...createBaseEntity(business_id),
-      user_id: 'offline_user',
+      sync_status: userId ? 'pending' : 'failed',
+      user_id: userId,
       entity_type: 'transaction',
       entity_id: entity.local_id,
       action: action,

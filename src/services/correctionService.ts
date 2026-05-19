@@ -4,6 +4,7 @@ import { syncQueueService } from './syncQueueService';
 import { processAccounting } from '@/accounting/engine';
 import { assertBalanced, assertCashSolvencyForEntries } from '@/accounting/guards';
 import { assertWithinModificationWindow } from './transactionModificationGuards';
+import { getCurrentAuthenticatedUserId } from '@/lib/auth-user';
 
 type CorrectedSaleItemInput = {
   product_id: string;
@@ -270,6 +271,7 @@ export const correctionService = {
     if (!original) throw new Error('Transaction not found');
     if (original.status === 'reversed' || original.is_reversed) throw new Error('Cannot correct a reversed transaction');
     assertWithinModificationWindow(original.created_at);
+    const userId = await getCurrentAuthenticatedUserId();
 
     return await db.transaction('rw', [
       db.transactions,
@@ -387,7 +389,8 @@ export const correctionService = {
 
       const auditLog = {
         ...createBaseEntity(business_id),
-        user_id: 'local_user',
+        sync_status: userId ? 'pending' as const : 'failed' as const,
+        user_id: userId,
         action: 'corrected',
         entity_type: 'transaction',
         entity_id: transaction_id,
@@ -398,7 +401,9 @@ export const correctionService = {
       await db.audit_logs.add(auditLog as any);
 
       await syncQueueService.enqueue('transactions', 'update', updatedTx, business_id);
-      await syncQueueService.enqueue('audit_logs', 'create', auditLog, business_id);
+      if (userId) {
+        await syncQueueService.enqueue('audit_logs', 'create', auditLog, business_id);
+      }
 
       return updatedTx;
     });

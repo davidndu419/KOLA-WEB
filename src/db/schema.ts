@@ -220,7 +220,7 @@ export interface AppSetting {
 }
 
 export interface AuditLog extends BaseEntity {
-  user_id: string;
+  user_id: string | null;
   action: string;
   entity_type: string;
   entity_id: string;

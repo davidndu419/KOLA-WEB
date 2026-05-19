@@ -3,6 +3,7 @@ import { LedgerEntry, InventoryMovement } from '@/db/schema';
 import { syncQueueService } from './syncQueueService';
 import { assertBalanced, assertCashSolvencyForEntries } from '@/accounting/guards';
 import { assertWithinModificationWindow } from './transactionModificationGuards';
+import { getCurrentAuthenticatedUserId } from '@/lib/auth-user';
 
 export const reversalService = {
   async reverseTransaction(transaction_id: string, reason: string, business_id: string) {
@@ -10,6 +11,7 @@ export const reversalService = {
     if (!transaction) throw new Error('Transaction not found');
     if (transaction.status === 'reversed' || transaction.is_reversed) throw new Error('Transaction already reversed');
     assertWithinModificationWindow(transaction.created_at);
+    const userId = await getCurrentAuthenticatedUserId();
 
     return await db.transaction('rw', [
       db.transactions,
@@ -165,7 +167,8 @@ export const reversalService = {
       // 5. Create Audit Log
       const auditLog = {
         ...createBaseEntity(business_id),
-        user_id: 'local_user',
+        sync_status: userId ? 'pending' as const : 'failed' as const,
+        user_id: userId,
         action: 'reversed',
         entity_type: 'transaction',
         entity_id: transaction_id,
@@ -173,7 +176,9 @@ export const reversalService = {
         old_value: transaction,
       };
       await db.audit_logs.add(auditLog as any);
-      await syncQueueService.enqueue('audit_logs', 'create', auditLog, business_id);
+      if (userId) {
+        await syncQueueService.enqueue('audit_logs', 'create', auditLog, business_id);
+      }
 
       return true;
     });

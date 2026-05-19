@@ -1,5 +1,7 @@
 import { db, createBaseEntity } from '@/db/dexie';
 import { Transaction, LedgerEntry, InventoryMovement, TransactionWithItems } from '@/db/schema';
+import { getCurrentAuthenticatedUserId } from '@/lib/auth-user';
+import { isValidUUID } from '@/lib/uuid';
 
 /**
  * FIXED: Standalone function for Sale Validation
@@ -199,9 +201,11 @@ export const CorrectionService = {
     await applyFinancialImpact(finalTransaction, business_id);
 
     // 6. Audit Log
+    const auditUserId = isValidUUID(userId) ? userId : await getCurrentAuthenticatedUserId();
     await db.audit_logs.add({
       ...createBaseEntity(business_id),
-      user_id: userId,
+      sync_status: auditUserId ? 'pending' : 'failed',
+      user_id: auditUserId,
       entity_type: 'transaction',
       entity_id: original.local_id,
       action: 'corrected',
