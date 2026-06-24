@@ -10,10 +10,11 @@ import { Check, Plus, Receipt, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { notificationService } from '@/services/notificationService';
 import { db, createBaseEntity } from '@/db/dexie';
-import { ExpenseCategory } from '@/db/schema';
+import { ExpenseCategory, Transaction } from '@/db/schema';
 import { syncQueueService } from '@/services/syncQueueService';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 import { showToast } from '@/lib/toast';
+import { QuickReceiptSheet } from '@/components/shared/quick-receipt-sheet';
 
 export function RecordExpenseSheet({
   isOpen,
@@ -34,6 +35,7 @@ export function RecordExpenseSheet({
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatAmount, setNewCatAmount] = useState('');
+  const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
 
   const categories = useStableLiveQuery<ExpenseCategory[]>(
     () => businessId
@@ -69,7 +71,7 @@ export function RecordExpenseSheet({
     setIsSubmitting(true);
 
     try {
-      await financeService.recordExpense({
+      const result = await financeService.recordExpense({
         amount,
         category_id: selectedCategoryId,
         category_name: selectedCategoryName,
@@ -77,11 +79,11 @@ export function RecordExpenseSheet({
         note,
       }, businessId);
 
-      const recordedAmount = amount;
+      setLastTransaction(result.transaction);
       resetForm();
       onClose();
       window.setTimeout(() => {
-        notificationService.notifyTransaction('expense', recordedAmount);
+        notificationService.notifyTransaction('expense', amount);
       }, 0);
     } catch (err: any) {
       showToast(err.message || 'Failed to record expense');
@@ -264,6 +266,18 @@ export function RecordExpenseSheet({
           </Touchable>
         </div>
       </BottomSheet>
+      <QuickReceiptSheet
+        isOpen={!!lastTransaction}
+        onClose={() => setLastTransaction(null)}
+        type="expense"
+        amount={lastTransaction?.amount || 0}
+        title="Expense Recorded"
+        subtitle={lastTransaction?.category_name || lastTransaction?.note || undefined}
+        businessName={business?.name || 'Kola Business'}
+        paymentMethod={lastTransaction?.payment_method}
+        createdAt={lastTransaction?.created_at}
+        referenceId={lastTransaction?.local_id}
+      />
     </>
   );
 }

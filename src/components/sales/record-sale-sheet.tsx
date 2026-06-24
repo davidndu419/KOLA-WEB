@@ -23,7 +23,7 @@ import {
   Trash2,
   Package
 } from 'lucide-react';
-import { ReceiptSheet } from './receipt-sheet';
+import { QuickReceiptSheet } from '@/components/shared/quick-receipt-sheet';
 import { cn } from '@/lib/utils';
 import { Transaction, Product, TransactionWithItems } from '@/db/schema';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -60,7 +60,7 @@ export function RecordSaleSheet({
   const [saleError, setSaleError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset state when sheet closes
+  // Reset sale sheet state when it closes (but NOT lastTransaction — receipt needs it)
   useEffect(() => {
     if (!isOpen) {
       const timer = setTimeout(() => {
@@ -72,6 +72,8 @@ export function RecordSaleSheet({
         setEditingPriceId(null);
         setSaleError(null);
         setIsSubmitting(false);
+        // Note: lastTransaction is intentionally NOT reset here.
+        // It is only cleared when the receipt sheet is closed.
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -291,13 +293,17 @@ export function RecordSaleSheet({
         items: cart.map(item => ({
           name: item.name,
           quantity: item.quantity,
-          price: item.price
+          price: item.price,
+          unit_price: item.price,
+          total_price: item.price * item.quantity,
         }))
       };
 
+      // Show receipt FIRST, then close the sale sheet after a short delay
+      // so the ReceiptSheet state is committed before the parent sheet unmounts
       setLastTransaction(transactionWithItems);
-      onClose();
       window.setTimeout(() => {
+        onClose();
         notificationService.notifyTransaction('sale', totalAmount);
         void (async () => {
           for (const item of result.saleItems) {
@@ -310,7 +316,7 @@ export function RecordSaleSheet({
             }
           }
         })();
-      }, 0);
+      }, 80);
     } catch (err: any) {
       setSaleError(err.message || 'Failed to record sale');
     } finally {
@@ -568,10 +574,18 @@ export function RecordSaleSheet({
         </div>
       </BottomSheet>
 
-      <ReceiptSheet 
-        transaction={lastTransaction}
+      <QuickReceiptSheet 
         isOpen={!!lastTransaction}
         onClose={() => setLastTransaction(null)}
+        type="sale"
+        amount={lastTransaction?.amount || 0}
+        title="Sale Recorded"
+        subtitle={lastTransaction?.items?.map(i => `${i.quantity}x ${i.name}`).join(', ')}
+        businessName={business?.name || 'Kola Business'}
+        customerName={lastTransaction?.customer_name || undefined}
+        paymentMethod={lastTransaction?.payment_method}
+        createdAt={lastTransaction?.created_at}
+        referenceId={lastTransaction?.local_id}
       />
     </>
   );

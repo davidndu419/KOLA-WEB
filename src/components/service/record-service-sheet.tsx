@@ -8,11 +8,12 @@ import { Touchable } from '@/components/touchable';
 import { Briefcase, User, Zap, Coins, Plus, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { db, createBaseEntity } from '@/db/dexie';
-import { ServiceCategory } from '@/db/schema';
-import { syncQueueService } from '@/services/syncQueueService';
+import { showToast } from '@/lib/toast';
+import { QuickReceiptSheet } from '@/components/shared/quick-receipt-sheet';
+import { ServiceCategory, Transaction } from '@/db/schema';
 import { notificationService } from '@/services/notificationService';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
-import { showToast } from '@/lib/toast';
+import { syncQueueService } from '@/services/syncQueueService';
 
 export function RecordServiceSheet({ 
   isOpen, 
@@ -32,6 +33,7 @@ export function RecordServiceSheet({
   const [payment_method, setPaymentMethod] = useState<'cash' | 'transfer' | 'credit'>('cash');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isManualAmount, setIsManualAmount] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
   
   // Quick Create State
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
@@ -69,7 +71,7 @@ export function RecordServiceSheet({
     setIsSubmitting(true);
     
     try {
-      await financeService.recordService({
+      const result = await financeService.recordService({
         name: serviceName,
         category_id: selectedCategoryId || undefined,
         category_name: selectedCategoryName || undefined,
@@ -80,6 +82,7 @@ export function RecordServiceSheet({
         note: serviceName,
       }, businessId);
 
+      setLastTransaction(result.transaction);
       resetForm();
       onClose();
       window.setTimeout(() => {
@@ -284,6 +287,19 @@ export function RecordServiceSheet({
           </Touchable>
         </div>
       </BottomSheet>
+      <QuickReceiptSheet
+        isOpen={!!lastTransaction}
+        onClose={() => setLastTransaction(null)}
+        type="service"
+        amount={lastTransaction?.amount || 0}
+        title="Service Recorded"
+        subtitle={lastTransaction?.service_name || lastTransaction?.display_title || undefined}
+        businessName={business?.name || 'Kola Business'}
+        customerName={lastTransaction?.customer_name || undefined}
+        paymentMethod={lastTransaction?.payment_method}
+        createdAt={lastTransaction?.created_at}
+        referenceId={lastTransaction?.local_id}
+      />
     </>
   );
 }

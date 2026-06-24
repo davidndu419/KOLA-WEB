@@ -8,6 +8,8 @@ import { Touchable } from '@/components/touchable';
 import type { Transaction } from '@/db/schema';
 import { reversalService } from '@/services/reversalService';
 import { showToast } from '@/lib/toast';
+import { useAuthStore } from '@/stores/authStore';
+import { QuickReceiptSheet } from '@/components/shared/quick-receipt-sheet';
 
 export function ReversalSheet({
   transaction,
@@ -22,6 +24,8 @@ export function ReversalSheet({
 }) {
   const [reason, setReason] = useState('');
   const [isReversing, setIsReversing] = useState(false);
+  const business = useAuthStore((state) => state.business);
+  const [lastReversal, setLastReversal] = useState<{ amount: number; local_id: string } | null>(null);
 
   const handleReverse = async () => {
     if (!transaction || !reason.trim()) return;
@@ -29,6 +33,10 @@ export function ReversalSheet({
     setIsReversing(true);
     try {
       await reversalService.reverseTransaction(transaction.local_id, reason, transaction.business_id);
+      setLastReversal({
+        amount: transaction.amount,
+        local_id: transaction.local_id
+      });
       onSuccess();
 
       onClose();
@@ -41,50 +49,62 @@ export function ReversalSheet({
   };
 
   return (
-    <BottomSheet 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title="Reverse Transaction" 
-      dismissible={false}
-    >
-      <div className="space-y-6 py-4 pb-2">
-        <div className="bg-red-500/10 border border-red-500/20 rounded-[24px] p-5 flex gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-red-500/20 flex items-center justify-center text-red-500 flex-shrink-0">
-            <AlertTriangle size={24} />
+    <>
+      <BottomSheet 
+        isOpen={isOpen} 
+        onClose={onClose} 
+        title="Reverse Transaction" 
+        dismissible={false}
+      >
+        <div className="space-y-6 py-4 pb-2">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-[24px] p-5 flex gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-red-500/20 flex items-center justify-center text-red-500 flex-shrink-0">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-red-600">This action cannot be undone.</p>
+              <p className="text-xs font-medium text-red-500/80 mt-1">
+                Reversing will cancel the financial impact and restore any inventory items.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-bold text-red-600">This action cannot be undone.</p>
-            <p className="text-xs font-medium text-red-500/80 mt-1">
-              Reversing will cancel the financial impact and restore any inventory items.
-            </p>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">
+              Reason for Reversal
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g., Wrong quantity entered, Customer returned items..."
+              className="w-full bg-secondary/50 border border-border rounded-2xl p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500/20 min-h-[100px]"
+            />
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">
-            Reason for Reversal
-          </label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g., Wrong quantity entered, Customer returned items..."
-            className="w-full bg-secondary/50 border border-border rounded-2xl p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500/20 min-h-[100px]"
-          />
+          <Touchable
+            onPress={handleReverse}
+            disabled={!reason.trim() || isReversing}
+            className={`w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold shadow-xl transition-all ${
+              reason.trim() && !isReversing 
+                ? 'bg-red-500 text-white shadow-red-500/20' 
+                : 'bg-secondary text-muted-foreground grayscale cursor-not-allowed'
+              }`}
+          >
+            <RotateCcw size={18} className={isReversing ? 'animate-spin' : ''} />
+            {isReversing ? 'Reversing...' : 'Confirm Reversal'}
+          </Touchable>
         </div>
+      </BottomSheet>
 
-        <Touchable
-          onPress={handleReverse}
-          disabled={!reason.trim() || isReversing}
-          className={`w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold shadow-xl transition-all ${
-            reason.trim() && !isReversing 
-              ? 'bg-red-500 text-white shadow-red-500/20' 
-              : 'bg-secondary text-muted-foreground grayscale cursor-not-allowed'
-          }`}
-        >
-          <RotateCcw size={18} className={isReversing ? 'animate-spin' : ''} />
-          {isReversing ? 'Reversing...' : 'Confirm Reversal'}
-        </Touchable>
-      </div>
-    </BottomSheet>
+      <QuickReceiptSheet
+        isOpen={!!lastReversal}
+        onClose={() => setLastReversal(null)}
+        type="reversal"
+        amount={lastReversal?.amount || 0}
+        title="Transaction Reversed"
+        subtitle={`Original transaction: #${lastReversal?.local_id.slice(0, 8).toUpperCase()}`}
+        businessName={business?.name || 'Kola Business'}
+      />
+    </>
   );
 }

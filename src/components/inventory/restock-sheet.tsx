@@ -8,6 +8,8 @@ import { Product } from '@/db/schema';
 import { inventoryService } from '@/services/inventory.service';
 import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
+import { useStore } from '@/store/use-store';
+import { QuickReceiptSheet } from '@/components/shared/quick-receipt-sheet';
 
 export function RestockSheet({ 
   product,
@@ -22,6 +24,8 @@ export function RestockSheet({
   const [cost, setCost] = useState<string>(product?.buying_price.toString() || '');
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { business } = useStore();
+  const [lastRestock, setLastRestock] = useState<{ amount: number; productName: string; quantity: number } | null>(null);
 
   if (!product) return null;
 
@@ -31,12 +35,20 @@ export function RestockSheet({
     
     setIsSubmitting(true);
     try {
+      const actualCost = cost ? Number(cost) : product.buying_price;
+      const totalCost = qty * actualCost;
+
       await inventoryService.restock(
         product.local_id, 
         qty, 
-        cost ? Number(cost) : undefined, 
+        actualCost, 
         note || 'Stock replenishment'
       );
+      setLastRestock({
+        amount: totalCost,
+        productName: product.name,
+        quantity: qty
+      });
       setQuantity('');
       setNote('');
       onClose();
@@ -48,9 +60,10 @@ export function RestockSheet({
   };
 
   return (
-    <BottomSheet 
-      isOpen={isOpen} 
-      onClose={onClose} 
+    <>
+      <BottomSheet 
+        isOpen={isOpen} 
+        onClose={onClose} 
       title={`Restock: ${product.name}`}
       dismissible={!isSubmitting}
     >
@@ -120,5 +133,16 @@ export function RestockSheet({
         </Touchable>
       </div>
     </BottomSheet>
+
+    <QuickReceiptSheet
+      isOpen={!!lastRestock}
+      onClose={() => setLastRestock(null)}
+      type="restock"
+      amount={lastRestock?.amount || 0}
+      title="Inventory Restocked"
+      subtitle={`${lastRestock?.quantity}x ${lastRestock?.productName}`}
+      businessName={business?.name || 'Kola Business'}
+    />
+  </>
   );
 }

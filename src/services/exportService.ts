@@ -114,155 +114,206 @@ function filename(snapshot: ReportsSnapshot, extension: string) {
   return `kola-report-${label || 'business'}-${date}.${extension}`;
 }
 
-function addPageIfNeeded(doc: jsPDF, y: number, needed = 28) {
-  if (y + needed <= PAGE.height - PAGE.margin) return y;
-  doc.addPage();
-  return PAGE.margin;
+function cleanUnicodeForPdf(text: unknown): string {
+  if (text === null || text === undefined) return '';
+  let str = String(text);
+  
+  // Replace Naira symbol
+  str = str.replace(/₦/g, 'NGN ');
+  
+  // Replace Unicode dashes (em dash, en dash, figure dash, horizontal bar)
+  str = str.replace(/[\u2014\u2013\u2012\u2015]/g, '-');
+  
+  // Replace smart/curly quotes
+  str = str.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+  
+  // Replace other common unicode signs
+  str = str.replace(/✓/g, '');
+  
+  // Strip Accents and Accented character mappings
+  let cleanStr = '';
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (code >= 32 && code <= 126) {
+      cleanStr += str[i];
+    } else if (code === 10 || code === 13) {
+      cleanStr += str[i];
+    } else {
+      const char = str[i];
+      if ('áàâäãå'.includes(char)) cleanStr += 'a';
+      else if ('éèêë'.includes(char)) cleanStr += 'e';
+      else if ('íìîï'.includes(char)) cleanStr += 'i';
+      else if ('óòôöõ'.includes(char)) cleanStr += 'o';
+      else if ('úùûü'.includes(char)) cleanStr += 'u';
+      else if ('ç'.includes(char)) cleanStr += 'c';
+      else if ('ñ'.includes(char)) cleanStr += 'n';
+      else cleanStr += ' ';
+    }
+  }
+  
+  return cleanStr.replace(/\s+/g, ' ').trim();
 }
 
 function addWrappedText(doc: jsPDF, text: string, x: number, y: number, maxWidth: number, lineHeight = 13) {
-  const lines = doc.splitTextToSize(text || '-', maxWidth) as string[];
+  const clean = cleanUnicodeForPdf(text);
+  const lines = doc.splitTextToSize(clean || '-', maxWidth) as string[];
   lines.forEach((line, index) => {
     doc.text(line, x, y + index * lineHeight);
   });
-  return y + Math.max(lines.length, 1) * lineHeight;
+  return y + Math.max(lines.length - 1, 0) * lineHeight;
 }
 
-function drawPdfHeader(doc: jsPDF, title: string, businessName: string, subtitle?: string) {
-  doc.setTextColor(17, 24, 39);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(19);
-  doc.text(title, PAGE.margin, PAGE.margin);
+// ─── BRANDED EXPORT HELPERS ──────────────────────────────────────────────
 
-  doc.setFontSize(11);
-  doc.text(businessName, PAGE.margin, PAGE.margin + 20);
+async function getLogoImage(): Promise<HTMLImageElement | null> {
+  if (typeof window === 'undefined') return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = '/logo/kola-logo.png';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+  });
+}
 
-  if (subtitle) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(107, 114, 128);
-    doc.text(subtitle, PAGE.margin, PAGE.margin + 36);
+function drawPdfBrandedHeader(
+  doc: jsPDF,
+  title: string,
+  businessName: string,
+  subtitle: string,
+  logoImg: HTMLImageElement | null
+) {
+  const startY = PAGE.margin;
+
+  // Draw Logo (30x30)
+  if (logoImg) {
+    try {
+      doc.addImage(logoImg, 'PNG', PAGE.margin, startY, 30, 30);
+    } catch {
+      drawFallbackLogo(doc, PAGE.margin, startY);
+    }
+  } else {
+    drawFallbackLogo(doc, PAGE.margin, startY);
   }
 
-  doc.setDrawColor(17, 24, 39);
-  doc.setLineWidth(1.4);
-  doc.line(PAGE.margin, PAGE.margin + 50, PAGE.width - PAGE.margin, PAGE.margin + 50);
-  return PAGE.margin + 76;
-}
-
-function drawLabelValue(doc: jsPDF, label: string, value: string, x: number, y: number, width: number) {
+  // Brand Name
+  doc.setTextColor(17, 24, 39); // Charcoal
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text('KOLA', PAGE.margin + 40, startY + 12);
+
+  // Tagline
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(107, 114, 128); // Gray
+  doc.text('OFFLINE-FIRST BUSINESS MANAGER', PAGE.margin + 40, startY + 25);
+
+  // Business Name (Right aligned)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(17, 24, 39);
+  doc.text(cleanUnicodeForPdf(businessName), PAGE.width - PAGE.margin, startY + 12, { align: 'right' });
+
+  // Subtitle (Right aligned)
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(107, 114, 128);
-  doc.text(label.toUpperCase(), x, y);
-  doc.setFontSize(11);
-  doc.setTextColor(17, 24, 39);
-  return addWrappedText(doc, value, x, y + 15, width, 13);
-}
+  doc.text(cleanUnicodeForPdf(subtitle), PAGE.width - PAGE.margin, startY + 25, { align: 'right' });
 
-function drawTransactionDocumentPdf(doc: jsPDF, data: TransactionExportDocument) {
-  let y = drawPdfHeader(
-    doc,
-    data.title,
-    data.businessName,
-    `${displayDate(data.date)} | Generated ${displayDate(new Date())}`
-  );
+  // Branded Green Accent Line
+  doc.setDrawColor(16, 185, 129); // KOLA green
+  doc.setLineWidth(2);
+  doc.line(PAGE.margin, startY + 40, PAGE.width - PAGE.margin, startY + 40);
 
-  const colWidth = (PAGE.width - PAGE.margin * 2 - 16) / 2;
-  y = Math.max(
-    drawLabelValue(doc, 'Reference', data.reference, PAGE.margin, y, colWidth),
-    drawLabelValue(doc, 'Payment', data.paymentMethod || '-', PAGE.margin + colWidth + 16, y, colWidth)
-  ) + 10;
-
-  if (data.customer || data.businessAddress) {
-    y = Math.max(
-      drawLabelValue(doc, 'Customer', data.customer || '-', PAGE.margin, y, colWidth),
-      drawLabelValue(doc, 'Business address', data.businessAddress || '-', PAGE.margin + colWidth + 16, y, colWidth)
-    ) + 10;
-  }
-
-  doc.setFillColor(249, 250, 251);
-  doc.roundedRect(PAGE.margin, y, PAGE.width - PAGE.margin * 2, 50, 6, 6, 'F');
+  // Document Title
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(107, 114, 128);
-  doc.setFontSize(8);
-  doc.text('GRAND TOTAL', PAGE.margin + 14, y + 18);
+  doc.setFontSize(15);
   doc.setTextColor(17, 24, 39);
-  doc.setFontSize(22);
-  doc.text(money(data.total), PAGE.margin + 14, y + 40);
-  y += 74;
+  doc.text(title, PAGE.margin, startY + 64);
 
-  if (data.details.length > 0) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Details', PAGE.margin, y);
-    y += 18;
-    data.details.forEach((detail) => {
-      y = addPageIfNeeded(doc, y, 32);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(107, 114, 128);
-      doc.text(detail.label.toUpperCase(), PAGE.margin, y);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(17, 24, 39);
-      y = addWrappedText(doc, detail.value, PAGE.margin + 120, y, PAGE.width - PAGE.margin * 2 - 120, 12) + 8;
-    });
-  }
+  return startY + 76;
+}
 
-  if (data.items.length > 0) {
-    y = addPageIfNeeded(doc, y + 8, 44);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(17, 24, 39);
-    doc.text(data.transactionType === 'sale' ? 'Items Sold' : 'Line Items', PAGE.margin, y);
-    y += 18;
+function drawFallbackLogo(doc: jsPDF, x: number, y: number) {
+  doc.setFillColor(16, 185, 129); // KOLA green
+  doc.roundedRect(x, y, 30, 30, 6, 6, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text('K', x + 10, y + 20);
+}
 
-    doc.setFillColor(249, 250, 251);
-    doc.rect(PAGE.margin, y, PAGE.width - PAGE.margin * 2, 22, 'F');
-    doc.setFontSize(8);
-    doc.setTextColor(75, 85, 99);
-    doc.text('ITEM', PAGE.margin + 8, y + 14);
-    doc.text('QTY', 310, y + 14);
-    doc.text('UNIT PRICE', 360, y + 14);
-    doc.text('TOTAL', 480, y + 14);
-    y += 28;
+function drawPdfFooter(doc: jsPDF, pageNum?: number) {
+  const y = PAGE.height - 35;
+  
+  // Thin footer border
+  doc.setDrawColor(243, 244, 246);
+  doc.setLineWidth(1);
+  doc.line(PAGE.margin, y - 10, PAGE.width - PAGE.margin, y - 10);
 
-    data.items.forEach((item) => {
-      y = addPageIfNeeded(doc, y, 34);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9.5);
-      doc.setTextColor(17, 24, 39);
-      const nextY = addWrappedText(doc, item.name, PAGE.margin + 8, y, 245, 12);
-      doc.text(String(item.quantity), 310, y);
-      doc.text(money(item.unitPrice), 360, y);
-      doc.text(money(item.total), 480, y);
-      doc.setDrawColor(229, 231, 235);
-      y = Math.max(nextY, y + 18);
-      doc.line(PAGE.margin, y, PAGE.width - PAGE.margin, y);
-      y += 9;
-    });
-  }
+  // Footer text
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(156, 163, 175); // gray-400
+  doc.text('Powered by KOLA', PAGE.margin, y);
+  doc.text('Offline-First Financial & Inventory Management System', PAGE.margin, y + 10);
 
-  if (data.note) {
-    y = addPageIfNeeded(doc, y + 8, 42);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(107, 114, 128);
-    doc.text('NOTE', PAGE.margin, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(16, 185, 129); // KOLA green
+  doc.text('SELL. TRACK. GROW.', PAGE.width - PAGE.margin, y, { align: 'right' });
+
+  if (pageNum !== undefined) {
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(17, 24, 39);
-    y = addWrappedText(doc, data.note, PAGE.margin, y + 14, PAGE.width - PAGE.margin * 2, 12);
-  }
-
-  if (data.footer) {
-    y = addPageIfNeeded(doc, y + 20, 24);
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(9);
-    doc.setTextColor(107, 114, 128);
-    doc.text(data.footer, PAGE.margin, y);
+    doc.setFontSize(8);
+    doc.setTextColor(156, 163, 175);
+    doc.text(`Page ${pageNum}`, PAGE.width - PAGE.margin, y + 10, { align: 'right' });
   }
 }
+
+function getBannerStyles(type: string) {
+  const t = type?.toLowerCase();
+  if (t === 'expense') {
+    return { bg: [254, 242, 242], text: [220, 38, 38], border: [252, 165, 165], label: 'EXPENSE RECORDED' };
+  }
+  if (t === 'reversal') {
+    return { bg: [254, 243, 199], text: [217, 119, 6], border: [252, 211, 77], label: 'TRANSACTION REVERSED' };
+  }
+  if (t === 'correction' || t === 'adjustment') {
+    return { bg: [254, 243, 199], text: [217, 119, 6], border: [252, 211, 77], label: 'TRANSACTION CORRECTED' };
+  }
+  if (t === 'restock') {
+    return { bg: [239, 246, 255], text: [37, 99, 235], border: [147, 197, 253], label: 'INVENTORY RESTOCKED' };
+  }
+  if (t === 'service') {
+    return { bg: [240, 253, 250], text: [4, 120, 87], border: [110, 231, 183], label: 'SERVICE RECORDED' };
+  }
+  return { bg: [240, 253, 250], text: [4, 120, 87], border: [110, 231, 183], label: 'TRANSACTION SUCCESSFUL' };
+}
+
+function drawCanvasRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawCanvasFallbackLogo(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.fillStyle = '#10b981';
+  drawCanvasRoundedRect(ctx, x, y, 32, 32, 6);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('K', x + 11, y + 21);
+}
+
+// ─── RECEIPT DATA BUILDER ────────────────────────────────────────────────
 
 function getItemQuantity(item: any) {
   return Number(item?.quantity || 0) || 1;
@@ -284,101 +335,537 @@ function getItemName(item: any) {
 }
 
 function buildReceiptDocument(transaction: TransactionWithItems, business?: BusinessExportInfo): TransactionExportDocument {
-  const items = (transaction.items || []).map((item: any) => ({
-    name: getItemName(item),
-    quantity: getItemQuantity(item),
-    unitPrice: getItemUnitPrice(item),
-    total: getItemTotal(item),
-  }));
-
-  return {
-    title: 'Sales Receipt',
-    businessName: business?.businessName || 'Kola Business',
-    businessAddress: business?.businessAddress,
-    reference: transaction.local_id,
-    date: new Date(transaction.created_at),
-    customer: transaction.customer_name,
-    transactionType: 'sale',
-    paymentMethod: transaction.payment_method,
-    total: transaction.amount,
-    details: [
-      { label: 'Receipt number', value: transaction.local_id },
-      { label: 'Date/time', value: displayDate(transaction.created_at) },
-      { label: 'Payment method', value: transaction.payment_method },
-    ],
-    items: items.length > 0
-      ? items
-      : [{ name: transaction.note || 'Sale', quantity: 1, unitPrice: transaction.amount, total: transaction.amount }],
-    note: transaction.note,
-    footer: 'Thank you for your business.',
-  };
-}
-
-function buildTransactionDetailDocument(transaction: TransactionWithItems, business?: BusinessExportInfo): TransactionExportDocument {
   const isRestock = transaction.source_type === 'restock';
-  const typeLabel = isRestock ? 'restock' : transaction.type;
-  const details: ExportDetail[] = [
-    { label: 'Type', value: typeLabel },
-    { label: 'Status', value: transaction.status },
-    { label: 'Date/time', value: displayDate(transaction.created_at) },
-    { label: 'Payment method', value: transaction.payment_method },
+  const type = isRestock ? 'restock' : transaction.type;
+  
+  let title = 'Transaction Receipt';
+  let successLabel = 'Transaction Successful';
+  let details: ExportDetail[] = [
+    { label: 'Receipt No.', value: transaction.local_id },
+    { label: 'Date & Time', value: displayDate(transaction.created_at) },
   ];
 
-  if (transaction.customer_name) details.push({ label: 'Customer', value: transaction.customer_name });
-  if (isRestock) details.push({ label: 'Category', value: 'Inventory Purchase' });
-  if (!isRestock && transaction.category_name) details.push({ label: 'Category', value: transaction.category_name });
-  if (transaction.service_name) details.push({ label: 'Service', value: transaction.service_name });
-  if (transaction.note) details.push({ label: 'Details', value: transaction.note });
+  if (transaction.payment_method) {
+    details.push({ label: 'Payment Method', value: transaction.payment_method.toUpperCase() });
+  }
+  if (transaction.customer_name) {
+    details.push({ label: 'Customer', value: transaction.customer_name });
+  }
 
-  const saleItems = transaction.type === 'sale'
-    ? (transaction.items || []).map((item: any) => ({
-      name: getItemName(item),
-      quantity: getItemQuantity(item),
-      unitPrice: getItemUnitPrice(item),
-      total: getItemTotal(item),
-    }))
-    : [];
+  let items: ExportLineItem[] = [];
 
-  const fallbackName = transaction.service_name
-    || transaction.category_name
-    || (isRestock ? 'Inventory Purchase' : transaction.display_title)
-    || typeLabel;
+  switch (type) {
+    case 'sale':
+      title = 'Sales Receipt';
+      successLabel = 'Sale Recorded Successfully';
+      items = (transaction.items || []).map((item: any) => ({
+        name: getItemName(item),
+        quantity: getItemQuantity(item),
+        unitPrice: getItemUnitPrice(item),
+        total: getItemTotal(item),
+      }));
+      if (items.length === 0) {
+        items = [{
+          name: transaction.note || 'Items Purchase',
+          quantity: 1,
+          unitPrice: transaction.amount,
+          total: transaction.amount,
+        }];
+      }
+      break;
+
+    case 'service':
+      title = 'Service Receipt';
+      successLabel = 'Service Recorded Successfully';
+      if (transaction.category_name) {
+        details.push({ label: 'Category', value: transaction.category_name });
+      }
+      items = [{
+        name: transaction.service_name || transaction.display_title || 'Service Rendered',
+        quantity: 1,
+        unitPrice: transaction.amount,
+        total: transaction.amount,
+      }];
+      break;
+
+    case 'expense':
+      title = 'Expense Receipt';
+      successLabel = 'Expense Recorded Successfully';
+      if (transaction.category_name) {
+        details.push({ label: 'Category', value: transaction.category_name });
+      }
+      items = [{
+        name: transaction.note || 'Business Expense',
+        quantity: 1,
+        unitPrice: transaction.amount,
+        total: transaction.amount,
+      }];
+      break;
+
+    case 'restock':
+      title = 'Restock Confirmation';
+      successLabel = 'Inventory Restocked Successfully';
+      items = [{
+        name: transaction.note || 'Inventory Restock',
+        quantity: 1,
+        unitPrice: transaction.amount,
+        total: transaction.amount,
+      }];
+      break;
+
+    case 'reversal':
+      title = 'Reversal Confirmation';
+      successLabel = 'Transaction Reversed';
+      items = [{
+        name: transaction.note || 'Reversal Adjustment',
+        quantity: 1,
+        unitPrice: transaction.amount,
+        total: transaction.amount,
+      }];
+      break;
+
+    case 'adjustment':
+      title = 'Correction Confirmation';
+      successLabel = 'Transaction Corrected';
+      items = [{
+        name: transaction.note || 'Correction Adjustment',
+        quantity: 1,
+        unitPrice: transaction.amount,
+        total: transaction.amount,
+      }];
+      break;
+
+    default:
+      items = [{
+        name: transaction.display_title || transaction.note || 'Transaction',
+        quantity: 1,
+        unitPrice: transaction.amount,
+        total: transaction.amount,
+      }];
+      break;
+  }
 
   return {
-    title: 'Transaction Detail',
+    title,
     businessName: business?.businessName || 'Kola Business',
     businessAddress: business?.businessAddress,
     reference: transaction.local_id,
     date: new Date(transaction.created_at),
     customer: transaction.customer_name,
-    transactionType: typeLabel,
+    transactionType: type,
     paymentMethod: transaction.payment_method,
     total: transaction.amount,
     details,
-    items: saleItems.length > 0
-      ? saleItems
-      : [{ name: fallbackName, quantity: 1, unitPrice: transaction.amount, total: transaction.amount }],
+    items,
     note: transaction.note,
+    footer: successLabel,
   };
 }
 
-function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number) {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = '';
+// ─── PREMIUM RECEIPT LAYOUT ──────────────────────────────────────────────
 
-  words.forEach((word) => {
-    const next = current ? `${current} ${word}` : word;
-    if (context.measureText(next).width <= maxWidth || !current) {
-      current = next;
-    } else {
-      lines.push(current);
-      current = word;
+function drawTransactionDocumentPdf(doc: jsPDF, data: TransactionExportDocument, logoImg: HTMLImageElement | null) {
+  let y = drawPdfBrandedHeader(
+    doc,
+    data.title,
+    data.businessName,
+    `${displayDate(data.date)} | Generated ${displayDate(new Date())}`,
+    logoImg
+  );
+
+  const addReceiptPageIfNeeded = (currentY: number, needed: number) => {
+    if (currentY + needed <= PAGE.height - PAGE.margin - 40) return currentY;
+    drawPdfFooter(doc);
+    doc.addPage();
+    return drawPdfBrandedHeader(
+      doc,
+      data.title,
+      data.businessName,
+      `${displayDate(data.date)} | Generated ${displayDate(new Date())}`,
+      logoImg
+    );
+  };
+
+  // Success status badge
+  const banner = getBannerStyles(data.transactionType);
+  y = addReceiptPageIfNeeded(y, 35);
+  doc.setFillColor(banner.bg[0], banner.bg[1], banner.bg[2]);
+  doc.setDrawColor(banner.border[0], banner.border[1], banner.border[2]);
+  doc.setLineWidth(1);
+  doc.roundedRect(PAGE.margin, y, PAGE.width - PAGE.margin * 2, 28, 6, 6, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(banner.text[0], banner.text[1], banner.text[2]);
+  doc.text(banner.label, PAGE.margin + 12, y + 17);
+  y += 42;
+
+  // GRAND TOTAL CARD (Subtle gray fill with borders)
+  y = addReceiptPageIfNeeded(y, 65);
+  doc.setFillColor(250, 250, 250);
+  doc.setDrawColor(243, 244, 246);
+  doc.roundedRect(PAGE.margin, y, PAGE.width - PAGE.margin * 2, 54, 8, 8, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(107, 114, 128); // gray-500
+  doc.setFontSize(8);
+  doc.text('GRAND TOTAL', PAGE.margin + 16, y + 18);
+
+  doc.setTextColor(16, 185, 129); // KOLA Green
+  doc.setFontSize(22);
+  doc.text(money(data.total), PAGE.margin + 16, y + 42);
+  y += 68;
+
+  // DETAILS CARD
+  if (data.details && data.details.length > 0) {
+    const detailsHeight = 16 + data.details.length * 22;
+    y = addReceiptPageIfNeeded(y, detailsHeight + 20);
+    
+    // Draw Details Card Box
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(243, 244, 246);
+    doc.roundedRect(PAGE.margin, y, PAGE.width - PAGE.margin * 2, detailsHeight, 8, 8, 'FD');
+
+    // Section title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(156, 163, 175);
+    doc.text('TRANSACTION DETAILS', PAGE.margin + 16, y + 16);
+
+    let detailY = y + 34;
+    data.details.forEach((detail) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(107, 114, 128);
+      doc.text(detail.label.toUpperCase(), PAGE.margin + 16, detailY);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(17, 24, 39);
+      doc.text(cleanUnicodeForPdf(detail.value), PAGE.width - PAGE.margin - 16, detailY, { align: 'right' });
+      detailY += 22;
+    });
+    y += detailsHeight + 14;
+  }
+
+  // LINE ITEMS
+  if (data.items && data.items.length > 0) {
+    const itemsHeaderHeight = 24;
+    const itemsRowHeight = 28;
+    const itemsTotalHeight = itemsHeaderHeight + data.items.length * itemsRowHeight + 10;
+    
+    y = addReceiptPageIfNeeded(y, itemsTotalHeight + 20);
+
+    // Section Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(156, 163, 175);
+    doc.text(data.transactionType === 'sale' ? 'ITEMS SOLD' : 'TRANSACTION ITEMS', PAGE.margin + 6, y);
+    y += 10;
+
+    // Table Header Background
+    doc.setFillColor(249, 250, 251);
+    doc.setDrawColor(243, 244, 246);
+    doc.roundedRect(PAGE.margin, y, PAGE.width - PAGE.margin * 2, itemsTotalHeight, 8, 8, 'FD');
+
+    doc.setFontSize(7.5);
+    doc.setTextColor(107, 114, 128);
+    doc.text('ITEM', PAGE.margin + 12, y + 16);
+    doc.text('QTY', 310, y + 16, { align: 'center' });
+    doc.text('UNIT PRICE', 390, y + 16, { align: 'right' });
+    doc.text('TOTAL', PAGE.width - PAGE.margin - 12, y + 16, { align: 'right' });
+    
+    let itemY = y + 36;
+    data.items.forEach((item) => {
+      // Draw horizontal line separator
+      doc.setDrawColor(243, 244, 246);
+      doc.setLineWidth(1);
+      doc.line(PAGE.margin + 12, itemY - 10, PAGE.width - PAGE.margin - 12, itemY - 10);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(17, 24, 39);
+      
+      const itemNameLines = doc.splitTextToSize(cleanUnicodeForPdf(item.name), 230) as string[];
+      doc.text(itemNameLines[0], PAGE.margin + 12, itemY);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(String(item.quantity), 310, itemY, { align: 'center' });
+      doc.text(money(item.unitPrice), 390, itemY, { align: 'right' });
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text(money(item.total), PAGE.width - PAGE.margin - 12, itemY, { align: 'right' });
+      
+      itemY += itemsRowHeight;
+    });
+    y += itemsTotalHeight + 14;
+  }
+
+  // NOTE CARD
+  if (data.note) {
+    y = addReceiptPageIfNeeded(y, 46);
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(243, 244, 246);
+    doc.roundedRect(PAGE.margin, y, PAGE.width - PAGE.margin * 2, 42, 6, 6, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(156, 163, 175);
+    doc.text('TRANSACTION NOTE', PAGE.margin + 12, y + 15);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(75, 85, 99);
+    doc.text(cleanUnicodeForPdf(data.note), PAGE.margin + 12, y + 30);
+    y += 56;
+  }
+
+  // Draw Footer
+  drawPdfFooter(doc);
+}
+
+// ─── SHARING CANVAS DRAWER ────────────────────────────────────────────────
+
+function drawTransactionCanvas(data: TransactionExportDocument, logoImg: HTMLImageElement | null) {
+  const width = 600;
+  const scale = 2; // high resolution scaling
+  
+  // Calculate dynamic height
+  let height = 140; // header padding
+  
+  // Success banner height
+  height += 56;
+  
+  // Grand total card height
+  height += 100;
+  
+  // Details card height
+  const detailsHeight = data.details.length > 0 ? 20 + data.details.length * 24 : 0;
+  if (detailsHeight > 0) height += detailsHeight + 20;
+  
+  // Items card height
+  const itemsHeight = data.items.length > 0 ? 30 + data.items.length * 36 : 0;
+  if (itemsHeight > 0) height += itemsHeight + 24;
+  
+  // Note height
+  if (data.note) height += 80;
+  
+  // Footer height
+  height += 70;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas context not found');
+  ctx.scale(scale, scale);
+
+  // Background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw border outline
+  ctx.strokeStyle = '#f3f4f6';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(6, 6, width - 12, height - 12);
+
+  // 1. Draw Branded Header
+  let y = 36;
+  if (logoImg) {
+    try {
+      ctx.drawImage(logoImg, 32, y, 32, 32);
+    } catch {
+      drawCanvasFallbackLogo(ctx, 32, y);
     }
-  });
+  } else {
+    drawCanvasFallbackLogo(ctx, 32, y);
+  }
 
-  if (current) lines.push(current);
-  return lines.length > 0 ? lines : ['-'];
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 15px sans-serif';
+  ctx.fillText('KOLA', 76, y + 15);
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '500 8.5px sans-serif';
+  ctx.fillText('OFFLINE-FIRST BUSINESS MANAGER', 76, y + 27);
+
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(data.businessName, width - 32, y + 14);
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '500 8.5px sans-serif';
+  ctx.fillText(displayDate(data.date), width - 32, y + 26);
+  ctx.textAlign = 'left';
+
+  // Green line
+  ctx.strokeStyle = '#10b981';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(32, y + 42);
+  ctx.lineTo(width - 32, y + 42);
+  ctx.stroke();
+
+  // Document Title
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillText(data.title, 32, y + 68);
+  y += 82;
+
+  // 2. Success Banner
+  const banner = getBannerStyles(data.transactionType);
+  ctx.fillStyle = `rgb(${banner.bg.join(',')})`;
+  ctx.strokeStyle = `rgb(${banner.border.join(',')})`;
+  ctx.lineWidth = 1;
+  drawCanvasRoundedRect(ctx, 32, y, width - 64, 30, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = `rgb(${banner.text.join(',')})`;
+  ctx.font = 'bold 9px sans-serif';
+  ctx.fillText(banner.label, 44, y + 18);
+  y += 46;
+
+  // 3. Grand Total Card
+  ctx.fillStyle = '#fafafa';
+  ctx.strokeStyle = '#f3f4f6';
+  ctx.lineWidth = 1;
+  drawCanvasRoundedRect(ctx, 32, y, width - 64, 58, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#6b7280';
+  ctx.font = 'bold 8.5px sans-serif';
+  ctx.fillText('GRAND TOTAL', 48, y + 20);
+
+  ctx.fillStyle = '#10b981';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText(money(data.total), 48, y + 46);
+  y += 76;
+
+  // 4. Details Card
+  if (detailsHeight > 0) {
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#f3f4f6';
+    ctx.lineWidth = 1;
+    drawCanvasRoundedRect(ctx, 32, y, width - 64, detailsHeight, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.fillText('TRANSACTION DETAILS', 48, y + 16);
+
+    let detailY = y + 36;
+    data.details.forEach((detail) => {
+      ctx.fillStyle = '#6b7280';
+      ctx.font = 'bold 8.5px sans-serif';
+      ctx.fillText(detail.label.toUpperCase(), 48, detailY);
+
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 9.5px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(detail.value, width - 48, detailY);
+      ctx.textAlign = 'left';
+      detailY += 24;
+    });
+    y += detailsHeight + 20;
+  }
+
+  // 5. Line Items Card
+  if (itemsHeight > 0) {
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.fillText(data.transactionType === 'sale' ? 'ITEMS SOLD' : 'TRANSACTION ITEMS', 38, y);
+    y += 10;
+
+    ctx.fillStyle = '#fafafa';
+    ctx.strokeStyle = '#f3f4f6';
+    ctx.lineWidth = 1;
+    drawCanvasRoundedRect(ctx, 32, y, width - 64, itemsHeight, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#6b7280';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.fillText('ITEM', 44, y + 18);
+    ctx.textAlign = 'center';
+    ctx.fillText('QTY', 310, y + 18);
+    ctx.textAlign = 'right';
+    ctx.fillText('UNIT PRICE', 420, y + 18);
+    ctx.fillText('TOTAL', width - 44, y + 18);
+    ctx.textAlign = 'left';
+
+    let itemY = y + 42;
+    data.items.forEach((item) => {
+      ctx.strokeStyle = '#f3f4f6';
+      ctx.beginPath();
+      ctx.moveTo(44, itemY - 14);
+      ctx.lineTo(width - 44, itemY - 14);
+      ctx.stroke();
+
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 9.5px sans-serif';
+      ctx.fillText(item.name, 44, itemY);
+
+      ctx.font = '500 9.5px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(item.quantity), 310, itemY);
+
+      ctx.textAlign = 'right';
+      ctx.fillText(money(item.unitPrice), 420, itemY);
+      
+      ctx.font = 'bold 9.5px sans-serif';
+      ctx.fillText(money(item.total), width - 44, itemY);
+      ctx.textAlign = 'left';
+
+      itemY += 36;
+    });
+    y += itemsHeight + 20;
+  }
+
+  // 6. Note Card
+  if (data.note) {
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#f3f4f6';
+    ctx.lineWidth = 1;
+    drawCanvasRoundedRect(ctx, 32, y, width - 64, 46, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = 'bold 7.5px sans-serif';
+    ctx.fillText('TRANSACTION NOTE', 44, y + 15);
+
+    ctx.fillStyle = '#4b5563';
+    ctx.font = '500 9px sans-serif';
+    ctx.fillText(data.note, 44, y + 30);
+    y += 62;
+  }
+
+  // 7. Footer
+  ctx.strokeStyle = '#f3f4f6';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(32, y);
+  ctx.lineTo(width - 32, y);
+  ctx.stroke();
+
+  ctx.fillStyle = '#9ca3af';
+  ctx.font = '500 8.5px sans-serif';
+  ctx.fillText('Powered by KOLA', 32, y + 18);
+  ctx.fillText('Offline-First Financial & Inventory Management System', 32, y + 30);
+
+  ctx.fillStyle = '#10b981';
+  ctx.font = 'bold 8.5px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('SELL. TRACK. GROW.', width - 32, y + 18);
+  ctx.textAlign = 'left';
+
+  return canvas;
 }
 
 async function canvasToBlob(canvas: HTMLCanvasElement) {
@@ -387,142 +874,9 @@ async function canvasToBlob(canvas: HTMLCanvasElement) {
   return blob;
 }
 
-function drawTransactionCanvas(data: TransactionExportDocument) {
-  const width = 900;
-  const scale = 2;
-  const rowHeight = 68;
-  const detailHeight = data.details.reduce((total, detail) => total + 44 + Math.max(0, Math.ceil(detail.value.length / 42) - 1) * 24, 0);
-  const height = Math.max(940, 500 + detailHeight + data.items.length * rowHeight + (data.note ? 90 : 0));
-  const canvas = document.createElement('canvas');
-  canvas.width = width * scale;
-  canvas.height = height * scale;
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas is not available.');
-  ctx.scale(scale, scale);
-  ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(46, 42, width - 92, height - 84);
-  ctx.strokeStyle = '#e5e7eb';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(46, 42, width - 92, height - 84);
-
-  let y = 100;
-  ctx.fillStyle = '#111827';
-  ctx.font = '700 34px Arial';
-  ctx.fillText(data.businessName, 84, y);
-  y += 34;
-  if (data.businessAddress) {
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '700 18px Arial';
-    wrapCanvasText(ctx, data.businessAddress, width - 168).forEach((line) => {
-      ctx.fillText(line, 84, y);
-      y += 24;
-    });
-  }
-
-  y += 18;
-  ctx.strokeStyle = '#111827';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(84, y);
-  ctx.lineTo(width - 84, y);
-  ctx.stroke();
-  y += 52;
-
-  ctx.fillStyle = '#111827';
-  ctx.font = '700 42px Arial';
-  ctx.fillText(data.title, 84, y);
-  y += 34;
-  ctx.fillStyle = '#6b7280';
-  ctx.font = '700 18px Arial';
-  ctx.fillText(`Ref: ${data.reference}`, 84, y);
-  y += 28;
-  ctx.fillText(displayDate(data.date), 84, y);
-  y += 46;
-
-  ctx.fillStyle = '#ecfdf5';
-  ctx.fillRect(84, y, width - 168, 100);
-  ctx.fillStyle = '#047857';
-  ctx.font = '700 18px Arial';
-  ctx.fillText('GRAND TOTAL', 112, y + 34);
-  ctx.fillStyle = '#064e3b';
-  ctx.font = '700 42px Arial';
-  ctx.fillText(money(data.total), 112, y + 78);
-  y += 138;
-
-  ctx.fillStyle = '#111827';
-  ctx.font = '700 22px Arial';
-  ctx.fillText('Details', 84, y);
-  y += 34;
-
-  data.details.forEach((detail) => {
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '700 15px Arial';
-    ctx.fillText(detail.label.toUpperCase(), 84, y);
-    ctx.fillStyle = '#111827';
-    ctx.font = '700 20px Arial';
-    const lines = wrapCanvasText(ctx, detail.value, width - 360);
-    lines.forEach((line, index) => {
-      ctx.fillText(line, 310, y + index * 24);
-    });
-    y += Math.max(44, lines.length * 24 + 14);
-  });
-
-  y += 16;
-  ctx.fillStyle = '#111827';
-  ctx.font = '700 22px Arial';
-  ctx.fillText(data.transactionType === 'sale' ? 'Items Sold' : 'Line Items', 84, y);
-  y += 32;
-
-  data.items.forEach((item) => {
-    ctx.strokeStyle = '#e5e7eb';
-    ctx.beginPath();
-    ctx.moveTo(84, y - 12);
-    ctx.lineTo(width - 84, y - 12);
-    ctx.stroke();
-
-    ctx.fillStyle = '#111827';
-    ctx.font = '700 20px Arial';
-    const lines = wrapCanvasText(ctx, item.name, 330);
-    ctx.fillText(lines[0], 84, y + 12);
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '700 16px Arial';
-    ctx.fillText(`${item.quantity} x ${money(item.unitPrice)}`, 84, y + 38);
-    ctx.fillStyle = '#111827';
-    ctx.font = '700 21px Arial';
-    ctx.textAlign = 'right';
-    ctx.fillText(money(item.total), width - 84, y + 24);
-    ctx.textAlign = 'left';
-    y += rowHeight + Math.max(0, lines.length - 1) * 22;
-  });
-
-  if (data.note) {
-    y += 12;
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '700 15px Arial';
-    ctx.fillText('NOTE', 84, y);
-    y += 26;
-    ctx.fillStyle = '#111827';
-    ctx.font = '600 18px Arial';
-    wrapCanvasText(ctx, data.note, width - 168).forEach((line) => {
-      ctx.fillText(line, 84, y);
-      y += 24;
-    });
-  }
-
-  ctx.fillStyle = '#6b7280';
-  ctx.font = '600 16px Arial';
-  ctx.fillText(`Generated ${displayDate(new Date())}`, 84, height - 72);
-  return canvas;
-}
-
 async function shareDocumentImage(data: TransactionExportDocument, fileName: string): Promise<ShareResult> {
-  const canvas = drawTransactionCanvas(data);
+  const logoImg = await getLogoImage();
+  const canvas = drawTransactionCanvas(data, logoImg);
   const blob = await canvasToBlob(canvas);
   const file = new File([blob], fileName, { type: 'image/png' });
   const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean };
@@ -540,6 +894,8 @@ async function shareDocumentImage(data: TransactionExportDocument, fileName: str
   showToast('Share not supported, image downloaded instead');
   return { shared: false, downloaded: true };
 }
+
+// ─── EXPORT SERVICE API ──────────────────────────────────────────────────
 
 export const exportService = {
   toCsv(snapshot: ReportsSnapshot) {
@@ -635,7 +991,7 @@ export const exportService = {
     this.downloadTransactionHistoryPdf(snapshot);
   },
 
-  downloadTransactionHistoryPdf(
+  async downloadTransactionHistoryPdf(
     snapshot: ReportsSnapshot,
     options?: BusinessExportInfo
   ) {
@@ -650,46 +1006,108 @@ export const exportService = {
     const totalBalance = rows.reduce((total, item) => (
       total + transactionBalance(item.transaction.type, item.transaction.amount)
     ), 0);
+    
     const rangeText = `${snapshot.range.label} (${snapshot.range.startDate.toLocaleDateString('en-NG')} - ${snapshot.range.endDate.toLocaleDateString('en-NG')})`;
 
+    const logoImg = await getLogoImage();
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    let y = drawPdfHeader(
+    
+    let y = drawPdfBrandedHeader(
       doc,
       'Transaction History',
       options?.businessName || 'Kola Business',
-      `${rangeText} | Generated ${displayDate(new Date())}`
+      `${rangeText} | Generated ${displayDate(new Date())}`,
+      logoImg
     );
 
-    const cardWidth = (PAGE.width - PAGE.margin * 2 - 24) / 3;
-    [
-      ['Selected Range', rangeText],
-      ['Total Records', String(rows.length)],
-      ['Total Balance', money(totalBalance)],
-    ].forEach(([label, value], index) => {
-      const x = PAGE.margin + index * (cardWidth + 12);
-      doc.setFillColor(249, 250, 251);
-      doc.roundedRect(x, y, cardWidth, 50, 6, 6, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(107, 114, 128);
-      doc.text(label.toUpperCase(), x + 10, y + 17);
-      doc.setFontSize(11);
-      doc.setTextColor(17, 24, 39);
-      addWrappedText(doc, value, x + 10, y + 35, cardWidth - 20, 11);
-    });
-    y += 78;
+    let pageNum = 1;
+    const addHistoryPageIfNeeded = (currentY: number, needed: number) => {
+      if (currentY + needed <= PAGE.height - PAGE.margin - 40) return currentY;
+      drawPdfFooter(doc, pageNum);
+      doc.addPage();
+      pageNum += 1;
+      return drawPdfBrandedHeader(
+        doc,
+        'Transaction History',
+        options?.businessName || 'Kola Business',
+        `${rangeText} | Generated ${displayDate(new Date())}`,
+        logoImg
+      );
+    };
 
+    // ── SUMMARY CARDS ──
+    y = addHistoryPageIfNeeded(y, 60);
+    const cardWidth = (PAGE.width - PAGE.margin * 2 - 24) / 3;
+    const cardHeight = 46;
+
+    // Card 1: Selected Date Range
+    let x = PAGE.margin;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(x, y, cardWidth, cardHeight, 6, 6, 'FD');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(75, 85, 99);
-    doc.setFillColor(249, 250, 251);
-    doc.rect(PAGE.margin, y, PAGE.width - PAGE.margin * 2, 22, 'F');
-    doc.text('DATE', PAGE.margin + 6, y + 14);
-    doc.text('TYPE', 145, y + 14);
-    doc.text('DESCRIPTION', 220, y + 14);
-    doc.text('AMOUNT', 438, y + 14);
-    doc.text('PAYMENT', 510, y + 14);
-    y += 30;
+    doc.setFontSize(7);
+    doc.setTextColor(156, 163, 175);
+    doc.text('DATE RANGE', x + 10, y + 16);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(17, 24, 39);
+    addWrappedText(doc, snapshot.range.label, x + 10, y + 31, cardWidth - 20, 10);
+
+    // Card 2: Total Transactions
+    x = PAGE.margin + cardWidth + 12;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(x, y, cardWidth, cardHeight, 6, 6, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(156, 163, 175);
+    doc.text('TOTAL TRANSACTIONS', x + 10, y + 16);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(17, 24, 39);
+    doc.text(String(rows.length), x + 10, y + 33);
+
+    // Card 3: Total Balance
+    x = PAGE.margin + (cardWidth + 12) * 2;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(x, y, cardWidth, cardHeight, 6, 6, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(156, 163, 175);
+    doc.text('TOTAL BALANCE', x + 10, y + 16);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(16, 185, 129); // Green
+    doc.text(money(totalBalance), x + 10, y + 33);
+
+    y += cardHeight + 24;
+
+    // ── TRANSACTION TABLE ──
+    y = addHistoryPageIfNeeded(y, 44);
+
+    // Styled Table Header
+    doc.setFillColor(16, 185, 129); // KOLA Green
+    doc.roundedRect(PAGE.margin, y, PAGE.width - PAGE.margin * 2, 24, 6, 6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(255, 255, 255); // White Text
+    doc.text('DATE', PAGE.margin + 12, y + 15);
+    doc.text('TYPE', 150, y + 15);
+    doc.text('DESCRIPTION', 230, y + 15);
+    doc.text('AMOUNT', 438, y + 15, { align: 'right' });
+    doc.text('PAYMENT', PAGE.width - PAGE.margin - 12, y + 15, { align: 'right' });
+    y += 32;
+
+    const badgeColors: Record<string, { bg: number[]; text: number[] }> = {
+      sale: { bg: [240, 253, 250], text: [13, 148, 136] }, // teal
+      service: { bg: [238, 242, 255], text: [79, 70, 229] }, // indigo
+      expense: { bg: [254, 242, 242], text: [220, 38, 38] }, // red
+      restock: { bg: [239, 246, 255], text: [37, 99, 235] }, // blue
+      reversal: { bg: [254, 243, 199], text: [217, 119, 6] }, // amber
+      correction: { bg: [254, 243, 199], text: [217, 119, 6] }, // amber
+    };
 
     rows.forEach((item) => {
       const transaction = item.transaction;
@@ -700,25 +1118,55 @@ export const exportService = {
         transaction.note,
       ].filter(Boolean).join(' | ') || transaction.local_id;
 
-      y = addPageIfNeeded(doc, y, 46);
+      y = addHistoryPageIfNeeded(y, 40);
+
+      // Render Date
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(75, 85, 99);
+      doc.text(displayDate(transaction.created_at).split(',')[0], PAGE.margin + 12, y);
+
+      // Render Type Colored Badge
+      const txType = (transaction.type || 'sale').toLowerCase();
+      const badge = badgeColors[txType] || badgeColors.sale;
+      doc.setFillColor(badge.bg[0], badge.bg[1], badge.bg[2]);
+      doc.roundedRect(138, y - 9, 52, 13, 4, 4, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(badge.text[0], badge.text[1], badge.text[2]);
+      doc.text(txType.toUpperCase(), 164, y, { align: 'center' });
+
+      // Render Description (with wrapping)
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       doc.setTextColor(17, 24, 39);
-      doc.text(displayDate(transaction.created_at), PAGE.margin + 6, y);
-      doc.text(transaction.type, 145, y);
-      const descEnd = addWrappedText(doc, description, 220, y, 205, 10);
-      doc.text(money(transaction.amount), 438, y);
-      doc.text(transaction.payment_method || '-', 510, y);
-      y = Math.max(descEnd, y + 16);
-      doc.setDrawColor(229, 231, 235);
-      doc.line(PAGE.margin, y, PAGE.width - PAGE.margin, y);
-      y += 9;
+      const descEnd = addWrappedText(doc, description, 230, y, 160, 10);
+
+      // Render Amount (Color coded)
+      let amtColor = [17, 24, 39];
+      if (txType === 'sale' || txType === 'service') {
+        amtColor = [16, 185, 129];
+      } else if (txType === 'expense' || transaction.source_type === 'restock') {
+        amtColor = [220, 38, 38];
+      } else if (txType === 'reversal' || txType === 'correction') {
+        amtColor = [217, 119, 6];
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(amtColor[0], amtColor[1], amtColor[2]);
+      doc.text(money(transaction.amount), 438, y, { align: 'right' });
+
+      // Render Payment method
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(75, 85, 99);
+      doc.text((transaction.payment_method || '-').toUpperCase(), PAGE.width - PAGE.margin - 12, y, { align: 'right' });
+
+      y = Math.max(descEnd, y + 14);
+      doc.setDrawColor(243, 244, 246);
+      doc.line(PAGE.margin + 12, y, PAGE.width - PAGE.margin - 12, y);
+      y += 14;
     });
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(107, 114, 128);
-    doc.text(`Generated ${displayDate(new Date())}`, PAGE.margin, PAGE.height - 24);
+    drawPdfFooter(doc, pageNum);
     doc.save(`kola-transaction-history-${plainDate(new Date())}.pdf`);
     showToast('PDF downloaded');
   },
@@ -728,10 +1176,11 @@ export const exportService = {
     return true;
   },
 
-  downloadReceiptPdf(transaction: TransactionWithItems, business?: BusinessExportInfo) {
+  async downloadReceiptPdf(transaction: TransactionWithItems, business?: BusinessExportInfo) {
     const data = buildReceiptDocument(transaction, business);
+    const logoImg = await getLogoImage();
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    drawTransactionDocumentPdf(doc, data);
+    drawTransactionDocumentPdf(doc, data, logoImg);
     doc.save(`kola-receipt-${safeFilename(data.reference)}.pdf`);
     showToast('PDF downloaded');
   },
@@ -742,15 +1191,10 @@ export const exportService = {
   },
 
   downloadTransactionDetailPdf(transaction: Transaction, business?: BusinessExportInfo) {
-    const data = buildTransactionDetailDocument(transaction as TransactionWithItems, business);
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    drawTransactionDocumentPdf(doc, data);
-    doc.save(`kola-transaction-${safeFilename(data.reference)}.pdf`);
-    showToast('PDF downloaded');
+    this.downloadReceiptPdf(transaction as TransactionWithItems, business);
   },
 
   async shareTransactionDetailImage(transaction: Transaction, business?: BusinessExportInfo) {
-    const data = buildTransactionDetailDocument(transaction as TransactionWithItems, business);
-    return shareDocumentImage(data, `kola-transaction-${safeFilename(data.reference)}.png`);
+    return this.shareReceiptImage(transaction as TransactionWithItems, business);
   },
 };

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { FileText, Share2, RotateCcw, Edit3, History } from 'lucide-react';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Touchable } from '@/components/touchable';
