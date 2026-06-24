@@ -6,14 +6,9 @@ import { db } from '@/db/dexie';
 import { TransactionList } from '@/components/sales/transaction-list';
 import { RecordExpenseSheet } from '@/components/finance/record-expense-sheet';
 import { Touchable } from '@/components/touchable';
-import { CompactMetricCard } from '@/components/reports/report-cards';
-import { Transaction } from '@/db/schema';
-import { reportService } from '@/services/reportService';
 import { reportsService } from '@/services/reportsService';
-import { motion } from 'framer-motion';
 import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
 import { HeroSummaryCard } from '@/components/dashboard/hero-summary-card';
-import { Calendar } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 
@@ -22,7 +17,6 @@ export default function ExpensesPage() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange>('today');
   const [customDate, setCustomDate] = useState<Date>(new Date());
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const businessId = useAuthStore((state) => state.activeBusinessId);
 
@@ -34,7 +28,7 @@ export default function ExpensesPage() {
   const expenses = useStableLiveQuery(async () => {
     if (!businessId || !reportsData) return undefined;
 
-    let collection = db.transactions
+    const collection = db.transactions
       .where('type')
       .equals('expense')
       .reverse();
@@ -64,7 +58,7 @@ export default function ExpensesPage() {
   }, [businessId, searchQuery, reportsData]);
 
   return (
-    <div className="space-y-6">
+    <div className="expenses-page space-y-6">
       {/* Header & Stats */}
       <section className="px-4 space-y-5">
         <div className="flex items-center justify-between">

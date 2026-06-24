@@ -18,7 +18,7 @@ export function PWAInstallPrompt() {
     }
   };
 
-  if (!canInstall || dismissed) return null;
+  if (!canInstall || dismissed) return null; 
 
   return (
     <AnimatePresence>

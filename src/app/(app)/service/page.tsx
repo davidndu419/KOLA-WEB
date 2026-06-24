@@ -45,8 +45,8 @@ export default function ServicePage() {
   }, [businessId, selectedRange, customDate]);
 
   return (
-    <div className="px-6 space-y-2">
-      <header className="py-4 flex justify-between items-end">
+    <div className="service-page px-6 space-y-2">
+      <header className="screen-header py-4 flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Services</h1>
           <p className="text-sm text-muted-foreground font-medium">Manage your craft</p>

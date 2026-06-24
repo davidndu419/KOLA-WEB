@@ -22,7 +22,6 @@ import { Touchable } from '@/components/touchable';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function LandingPage() {
-  const [logoError, setLogoError] = React.useState(false);
   const router = useRouter();
   const { isAuthenticated, isInitialized, business } = useAuth();
 
@@ -36,22 +35,15 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 h-16 glassmorphism border-b border-border/40 px-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {!logoError ? (
-            <Image 
-              src="/logo/kola-logo.png" 
-              alt="Kola" 
-              width={32} 
-              height={32} 
-              className="object-contain"
-              onError={() => setLogoError(true)}
-            />
-          ) : (
-            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-black text-sm">K</span>
-            </div>
-          )}
-          <span className="font-black text-xl tracking-tight">Kola</span>
+        <div className="flex items-center">
+          <Image 
+            src="/logo/kola-logo.png" 
+            alt="Kola" 
+            width={90} 
+            height={44} 
+            className="object-contain"
+            unoptimized
+          />
         </div>
         <Link href="/auth/login">
           <Touchable onPress={() => {}} className="px-4 py-2 text-sm font-bold text-emerald-500 hover:text-emerald-600 transition-colors">
@@ -174,15 +166,15 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="py-12 px-6 border-t border-border/40">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center">
             <Image 
               src="/logo/kola-logo.png" 
               alt="Kola" 
-              width={24} 
-              height={24} 
+              width={72} 
+              height={36} 
               className="object-contain opacity-80"
+              unoptimized
             />
-            <span className="font-bold text-lg tracking-tight">Kola</span>
           </div>
           <p className="text-sm text-muted-foreground font-medium">
             © 2026 Kola PWA. Built for African Small Businesses.

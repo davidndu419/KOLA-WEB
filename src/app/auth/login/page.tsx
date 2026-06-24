@@ -10,6 +10,7 @@ import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { Touchable } from '@/components/touchable';
 import { authService } from '@/services/authService';
 import { Loader2 } from 'lucide-react';
+import Image from 'next/image';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 
@@ -110,12 +111,37 @@ export default function LoginPage() {
   // Show loading state while checking for existing session
   if (isCheckingSession) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
-        <div className="w-16 h-16 bg-emerald-500 rounded-[22px] flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20 mb-4">
-          <span className="text-white text-3xl font-black">K</span>
+      <div className="min-h-screen flex flex-col bg-background">
+        {/* Center logo zone */}
+        <div className="flex-1 flex items-center justify-center">
+          <Image
+            src="/logo/kola-logo.png"
+            alt="Kola"
+            width={200}
+            height={200}
+            className="object-contain drop-shadow-xl"
+            unoptimized
+            priority
+          />
         </div>
-        <div className="flex items-center gap-2 text-muted-foreground font-bold uppercase tracking-widest text-[10px]">
-          <Loader2 className="animate-spin" size={12} /> Loading session...
+
+        {/* Bottom status zone */}
+        <div className="pb-16 flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <Loader2 className="animate-spin text-emerald-500" size={14} />
+            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+              Loading session
+            </span>
+          </div>
+          <div className="flex gap-1.5">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"
+                style={{ animationDelay: `${i * 0.2}s` }}
+              />
+            ))}
+          </div>
         </div>
       </div>
     );

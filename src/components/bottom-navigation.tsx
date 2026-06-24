@@ -1,8 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
 import { 
@@ -17,6 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import { springs } from '@/lib/animation-config';
 import { useUIStore } from '@/store/use-ui-store';
+import { Touchable } from '@/components/touchable';
 
 const navItems = [
   { href: '/dashboard', icon: Home, label: 'Home' },
@@ -30,6 +30,7 @@ const navItems = [
 
 export function BottomNavigation() {
   const pathname = usePathname();
+  const router = useRouter();
   const syncCount = useLiveQuery(() => db.sync_queue.count());
   const { openSheetsCount } = useUIStore();
   const isSheetOpen = openSheetsCount > 0;
@@ -42,7 +43,7 @@ export function BottomNavigation() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={springs.default}
-          className="fixed bottom-0 left-0 right-0 z-[60] pb-safe"
+          className="fixed bottom-0 left-0 right-0 z-[60] safe-bottom bottom-navigation"
         >
           <div className="absolute inset-0 bg-background/80 backdrop-blur-2xl border-t border-border/50" />
           
@@ -53,9 +54,11 @@ export function BottomNavigation() {
               const Icon = item.icon;
 
               return (
-                <Link
+                <Touchable
                   key={item.href}
-                  href={item.href}
+                  onPress={() => {
+                    if (!isActive) router.push(item.href);
+                  }}
                   className="relative flex flex-col items-center justify-center w-full h-14"
                 >
                   {isActive && (
@@ -89,7 +92,7 @@ export function BottomNavigation() {
                   )}>
                     {item.label}
                   </span>
-                </Link>
+                </Touchable>
               );
             })}
           </div>

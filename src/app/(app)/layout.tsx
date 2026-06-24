@@ -3,20 +3,21 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { BottomNavigation } from '@/components/bottom-navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { WifiOff } from 'lucide-react';
 import { useSync } from '@/hooks/useSync';
 
 
 import { AuthGuard } from '@/components/auth/AuthGuard';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(() => {
+    if (typeof navigator === 'undefined') return true;
+    return navigator.onLine;
+  });
   
   // Initialize background sync loop
   useSync();
 
   useEffect(() => {
-    setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     
@@ -32,9 +33,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <AuthGuard>
-      <div className="fixed inset-0 flex flex-col bg-background overflow-hidden">
+      <div className="fixed inset-0 flex flex-col bg-background overflow-hidden mobile-page pwa-page">
         {/* Safe Area Top */}
-        <div className="h-safe-top bg-background flex-shrink-0 touch-none" />
+        <div className="safe-top-spacer bg-background flex-shrink-0 touch-none" />
         
         {/* Offline Indicator */}
         <AnimatePresence>
@@ -52,14 +53,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </AnimatePresence>
         
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto overscroll-y-none relative scrollbar-none">
-          <div className="pb-24 pt-4">
+        <main className="flex-1 overflow-y-auto overscroll-contain relative scrollbar-none mobile-scroll">
+          <div className="app-main-content pb-28 pt-4">
             {children}
           </div>
         </main>
         
         {/* Bottom Navigation */}
-        <div className="touch-none">
+        <div>
           <BottomNavigation />
         </div>
       </div>

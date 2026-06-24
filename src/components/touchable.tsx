@@ -4,6 +4,7 @@ import { motion, useAnimation } from 'framer-motion';
 import { ReactNode, useCallback } from 'react';
 import { springs } from '@/lib/animation-config';
 import { cn } from '@/lib/utils';
+import { useIntentionalTap } from '@/hooks/use-intentional-tap';
 
 interface TouchableProps {
   children: ReactNode;
@@ -36,7 +37,6 @@ export function Touchable({
   const handleTapStart = () => {
     if (disabled) return;
     controls.start({ scale: 0.97 });
-    triggerHaptic();
   };
 
   const handleTapEnd = () => {
@@ -46,22 +46,27 @@ export function Touchable({
 
   const handleTap = () => {
     if (disabled) return;
-    // Let the spring handle the bounce naturally
     controls.start({
       scale: 1,
       transition: springs.bouncy,
     });
+    triggerHaptic();
     onPress?.();
   };
+
+  const tapHandlers = useIntentionalTap(handleTap, {
+    disabled,
+    onStart: handleTapStart,
+    onEnd: handleTapEnd,
+    onCancel: handleTapEnd,
+  });
 
   return (
     <motion.button
       animate={controls}
-      onTapStart={handleTapStart}
-      onTap={handleTap}
-      onTapCancel={handleTapEnd}
+      {...tapHandlers}
       transition={springs.snappy}
-      className={cn("outline-none select-none", className)}
+      className={cn("outline-none select-none touch-manipulation", className)}
       disabled={disabled}
       style={{ 
         WebkitTapHighlightColor: 'transparent',

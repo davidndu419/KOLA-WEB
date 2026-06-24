@@ -18,8 +18,8 @@ export default function InventoryPage() {
   const metrics = useInventoryMetrics();
 
   return (
-    <div className="px-6 space-y-2">
-      <header className="py-4 flex justify-between items-end">
+    <div className="inventory-page px-6 space-y-2">
+      <header className="screen-header py-4 flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             {view === 'active' ? 'Inventory' : 'Archived Stock'}

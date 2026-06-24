@@ -1,16 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRight, TrendingUp } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { HeroBalanceCard } from '@/components/dashboard/hero-balance-card';
 import { QuickActions } from '@/components/dashboard/quick-actions';
-import { CompactMetricCard, MetricGrid } from '@/components/reports/report-cards';
+import { MetricGrid } from '@/components/reports/report-cards';
 import { RecordSaleSheet } from '@/components/sales/record-sale-sheet';
 import { RecordExpenseSheet } from '@/components/finance/record-expense-sheet';
 import { RecordServiceSheet } from '@/components/service/record-service-sheet';
-import { AddProductSheet } from '@/components/inventory/add-product-sheet';
 import { useRouter } from 'next/navigation';
-import { Touchable } from '@/components/touchable';
 import { DateRangePickerSheet, DateRange } from '@/components/dashboard/date-range-picker-sheet';
 import { reportService } from '@/services/reportService';
 import { reportsService } from '@/services/reportsService';
@@ -19,8 +17,6 @@ import { db } from '@/db/dexie';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
-
-import type { Transaction, LedgerEntry } from '@/db/schema';
 
 import { resolveReportDateRange } from '@/services/reportSelectors';
 
@@ -81,7 +77,7 @@ export default function DashboardPage() {
 
 
   return (
-    <div className="space-y-2">
+    <div className="dashboard-page space-y-2">
       {stats ? (
         <HeroBalanceCard
           balance={stats.totalBalance}

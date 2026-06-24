@@ -49,6 +49,7 @@ import { DBInitializer } from "@/components/db-initializer";
 import { PWARegistration } from "@/components/pwa-registration";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { SyncToast } from "@/components/sync-toast";
+import { PWAEnvironment } from "@/components/pwa-environment";
 
 export default function RootLayout({
   children,
@@ -58,6 +59,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased bg-background text-foreground">
+        <PWAEnvironment />
         <DBInitializer />
         <PWARegistration />
         <PWAInstallPrompt />

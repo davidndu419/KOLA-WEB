@@ -16,6 +16,7 @@ import { useStableLiveQuery } from '@/hooks/use-stable-live-query';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { TransactionSearchBar } from '@/components/transactions/transaction-search-bar';
 import { safeTime } from '@/lib/utils';
+import type { LedgerEntry } from '@/db/schema';
 
 export default function SalesPage() {
   const router = useRouter();
@@ -51,14 +52,14 @@ export default function SalesPage() {
     // Receivables usually remain lifetime unless filtered
     const allLedger = await db.ledger_entries.where('business_id').equals(businessId).toArray();
     const receivables = allLedger
-     .reduce((acc, entry: any) => {
-  let balance = 0;
-  
-  if (entry.debit_account === 'Receivables') balance += entry.amount;
-  if (entry.credit_account === 'Receivables') balance -= entry.amount;
-  
-  return acc + balance;
-}, 0);
+      .reduce((acc: number, entry: LedgerEntry) => {
+        let balance = 0;
+
+        if (entry.debit_account === 'Receivables') balance += entry.amount;
+        if (entry.credit_account === 'Receivables') balance -= entry.amount;
+
+        return acc + balance;
+      }, 0);
 
 
     const cashSales = businessTransactions
@@ -71,8 +72,8 @@ export default function SalesPage() {
   }, [businessId, selectedRange, customDate]);
 
   return (
-    <div className="px-6 space-y-2">
-      <header className="py-4 flex justify-between items-end">
+    <div className="sales-page px-6 space-y-2">
+      <header className="screen-header py-4 flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Sales</h1>
           <p className="text-sm text-muted-foreground font-medium">Business history & trends</p>

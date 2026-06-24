@@ -8,6 +8,7 @@ import { getRuntimeMode } from '@/lib/runtime-mode';
 import { startSupabaseAuthStateListener } from '@/services/sessionRecovery';
 import { Loader2, WifiOff, CloudDownload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized, user, business } = useAuth();
@@ -74,17 +75,48 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!isInitialized) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
+      <div className="min-h-screen flex flex-col bg-background">
+        {/* Center logo zone */}
+        <div className="flex-1 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.88 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
+          >
+            <Image
+              src="/logo/kola-logo.png"
+              alt="Kola"
+              width={200}
+              height={200}
+              className="object-contain drop-shadow-xl"
+              unoptimized
+              priority
+            />
+          </motion.div>
+        </div>
+
+        {/* Bottom status zone */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center space-y-4"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="pb-16 flex flex-col items-center gap-4"
         >
-          <div className="w-16 h-16 bg-emerald-500 rounded-[22px] flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
-            <span className="text-white text-3xl font-black">K</span>
+          <div className="flex items-center gap-2.5">
+            <Loader2 className="animate-spin text-emerald-500" size={14} />
+            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+              Initializing Kola
+            </span>
           </div>
-          <div className="flex items-center justify-center gap-2 text-muted-foreground font-bold uppercase tracking-widest text-[10px]">
-            <Loader2 className="animate-spin" size={12} /> Initializing Kola...
+          <div className="flex gap-1.5">
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                key={i}
+                className="w-1.5 h-1.5 bg-emerald-500 rounded-full"
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+              />
+            ))}
           </div>
         </motion.div>
       </div>
@@ -96,34 +128,48 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // This prevents the dashboard from rendering with empty/partial data.
   if (isAuthenticated && business && initialHydrationStatus === 'hydrating') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
+      <div className="min-h-screen flex flex-col bg-background">
+        {/* Center logo zone */}
+        <div className="flex-1 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.88 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
+          >
+            <Image
+              src="/logo/kola-logo.png"
+              alt="Kola"
+              width={200}
+              height={200}
+              className="object-contain drop-shadow-xl"
+              unoptimized
+              priority
+            />
+          </motion.div>
+        </div>
+
+        {/* Bottom status zone */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center space-y-5"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="pb-16 px-10 flex flex-col items-center gap-4"
         >
-          <div className="w-16 h-16 bg-emerald-500 rounded-[22px] flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
-            <span className="text-white text-3xl font-black">K</span>
+          <div className="flex items-center gap-2 text-emerald-500">
+            <CloudDownload size={14} className="animate-pulse" />
+            <span className="font-black text-xs tracking-tight">Preparing your workspace</span>
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-center gap-2.5 text-emerald-500">
-              <CloudDownload size={16} className="animate-pulse" />
-              <span className="font-bold text-sm">Preparing your workspace…</span>
-            </div>
-            <p className="text-[11px] text-muted-foreground font-medium max-w-[240px] mx-auto leading-relaxed">
-              Syncing your business data. This only takes a moment.
-            </p>
+          <div className="w-40 h-1 bg-secondary rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-emerald-500 rounded-full"
+              initial={{ width: '0%' }}
+              animate={{ width: '90%' }}
+              transition={{ duration: 8, ease: 'easeOut' }}
+            />
           </div>
-          <div className="flex justify-center pt-1">
-            <div className="w-32 h-1 bg-secondary rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-emerald-500 rounded-full"
-                initial={{ width: '0%' }}
-                animate={{ width: '90%' }}
-                transition={{ duration: 8, ease: 'easeOut' }}
-              />
-            </div>
-          </div>
+          <p className="text-[10px] text-muted-foreground font-medium text-center leading-relaxed">
+            Syncing your business data…
+          </p>
         </motion.div>
       </div>
     );

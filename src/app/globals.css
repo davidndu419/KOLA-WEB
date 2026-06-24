@@ -172,7 +172,9 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     min-height: 100vh;
+    min-height: 100dvh;
     width: 100%;
+    overflow-x: hidden;
   }
   
   html {
@@ -180,10 +182,13 @@
     text-size-adjust: 100%;
     scroll-behavior: smooth;
     min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
   }
   
   button, a, [role="button"] {
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
   
   input, textarea, select {
@@ -205,6 +210,45 @@
   .pb-safe { padding-bottom: var(--safe-bottom); }
   .pl-safe { padding-left: var(--safe-left); }
   .pr-safe { padding-right: var(--safe-right); }
+
+  .safe-top {
+    padding-top: calc(var(--safe-top) + 12px);
+  }
+
+  .safe-bottom {
+    padding-bottom: calc(var(--safe-bottom) + 12px);
+  }
+
+  .safe-top-spacer {
+    height: var(--safe-top);
+  }
+
+  .h-safe-top {
+    height: var(--safe-top);
+  }
+
+  .pwa-page {
+    min-height: 100dvh;
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+  }
+
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  .ios-device.pwa-standalone .mobile-page .safe-top-spacer {
+    height: calc(var(--safe-top) + 12px);
+  }
+
+  .ios-device.pwa-standalone .mobile-page .app-main-content {
+    padding-top: 0.75rem;
+  }
+
+  .ios-device.pwa-standalone .dashboard-page {
+    padding-top: 0.25rem;
+  }
   
   .scrollbar-none {
     -ms-overflow-style: none;
