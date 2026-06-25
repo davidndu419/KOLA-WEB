@@ -158,6 +158,7 @@ export function EditProductSheet({
         </div>
 
         <Touchable 
+          onPress={handleSubmit(onSubmit)}
           disabled={isSubmitting} 
           className="w-full bg-primary text-white font-bold py-5 rounded-[24px] shadow-xl shadow-primary/20 flex items-center justify-center gap-3 disabled:opacity-50"
         >

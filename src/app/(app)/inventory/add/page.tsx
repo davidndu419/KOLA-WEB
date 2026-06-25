@@ -318,6 +318,7 @@ export default function AddProductPage() {
             className="pointer-events-auto"
           >
             <Touchable 
+              onPress={handleSubmit(onSubmit)}
               disabled={isSubmitting} 
               className="w-full bg-primary text-white font-black py-5 rounded-[28px] shadow-2xl shadow-primary/30 flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-50"
             >
