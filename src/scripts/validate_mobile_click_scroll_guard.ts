@@ -17,8 +17,8 @@ const files = {
 };
 
 const checks: Array<[string, boolean]> = [
-  ['bottom nav uses guarded Touchable instead of raw Link', files.bottomNav.includes('<Touchable') && !files.bottomNav.includes('next/link')],
-  ['bottom nav navigates only from confirmed onPress', files.bottomNav.includes('onPress={() =>') && files.bottomNav.includes('router.push(item.href)')],
+  ['bottom nav uses Link navigation', files.bottomNav.includes('import Link from') && files.bottomNav.includes('<Link')],
+  ['bottom nav active state updates instantly based on pathname', files.bottomNav.includes('usePathname()') && files.bottomNav.includes('isActive')],
   ['quick action icons use guarded Touchable', files.quickActions.includes('<Touchable') && files.quickActions.includes('onPress={() => onAction?.(action.label)}')],
   ['transaction rows use guarded Touchable', files.transactionRow.includes('<Touchable onPress={onPress}')],
   ['transaction list opens details from row onPress only', files.transactionList.includes('onPress={() => setSelectedTransaction(tx)}')],

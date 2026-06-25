@@ -1,11 +1,12 @@
 'use client';
 
 import { motion, useDragControls, useMotionValue, useTransform, AnimatePresence, PanInfo } from 'framer-motion';
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { springs } from '@/lib/animation-config';
 import { X } from 'lucide-react';
 import { Touchable } from './touchable';
 import { useUIStore } from '@/store/use-ui-store';
+import { cn } from '@/lib/utils';
 
 let bodyScrollLockCount = 0;
 let previousBodyOverflow = '';
@@ -52,6 +53,15 @@ export function BottomSheet({
   const dragY = useMotionValue(0);
   const { incrementSheets, decrementSheets } = useUIStore();
   const isRegisteredRef = useRef(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsClosing(true);
+    } else {
+      setIsClosing(false);
+    }
+  }, [isOpen]);
 
   const releaseSheet = () => {
     if (!isRegisteredRef.current) return;
@@ -123,7 +133,7 @@ export function BottomSheet({
       }}
     >
       {isOpen && (
-        <div className="fixed inset-0 z-[100] overflow-hidden">
+        <div className="fixed inset-0 z-[100] overflow-hidden pointer-events-none">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -132,7 +142,10 @@ export function BottomSheet({
             transition={{ duration: 0.2 }}
             style={{ opacity: backdropOpacity }}
             onClick={handleBackdropClick}
-            className="absolute inset-0 bg-black/60 backdrop-blur-[4px]"
+            className={cn(
+              "absolute inset-0 bg-black/60 backdrop-blur-[4px]",
+              isClosing ? "pointer-events-none" : "pointer-events-auto"
+            )}
           />
           
           {/* Fixed bottom rail: no external offset or safe-area gap. */}

@@ -1,7 +1,9 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { usePathname, useRouter } from 'next/navigation';
+import React, { memo } from 'react';
+import { motion } from 'framer-motion';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/dexie';
 import { 
@@ -16,7 +18,6 @@ import {
 import { cn } from '@/lib/utils';
 import { springs } from '@/lib/animation-config';
 import { useUIStore } from '@/store/use-ui-store';
-import { Touchable } from '@/components/touchable';
 
 const navItems = [
   { href: '/dashboard', icon: Home, label: 'Home' },
@@ -28,76 +29,83 @@ const navItems = [
   { href: '/settings', icon: Settings, label: 'Settings' },
 ];
 
-export function BottomNavigation() {
-  const pathname = usePathname();
-  const router = useRouter();
+function SettingsSyncBadge() {
   const syncCount = useLiveQuery(() => db.sync_queue.count());
+  
+  if (syncCount === undefined || syncCount <= 0) return null;
+  
+  return (
+    <div className="absolute top-1 right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-background animate-pulse" />
+  );
+}
+
+function BottomNavigationComponent() {
+  const pathname = usePathname();
   const { openSheetsCount } = useUIStore();
   const isSheetOpen = openSheetsCount > 0;
 
   return (
-    <AnimatePresence>
-      {!isSheetOpen && (
-        <motion.nav 
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          transition={springs.default}
-          className="fixed bottom-0 left-0 right-0 z-[60] safe-bottom bottom-navigation"
-        >
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-2xl border-t border-border/50" />
-          
-          <div className="relative flex items-center justify-around px-2 h-16">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href || 
-                (item.href !== '/' && pathname.startsWith(item.href));
-              const Icon = item.icon;
+    <nav className="fixed bottom-0 left-0 right-0 z-[60] safe-bottom bottom-navigation">
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-2xl border-t border-border/50" />
+      
+      <div className="relative flex items-center justify-around px-2 h-16">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href || 
+            (item.href !== '/' && pathname.startsWith(item.href));
+          const Icon = item.icon;
 
-              return (
-                <Touchable
-                  key={item.href}
-                  onPress={() => {
-                    if (!isActive) router.push(item.href);
-                  }}
-                  className="relative flex flex-col items-center justify-center w-full h-14"
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="nav-indicator"
-                      transition={springs.snappy}
-                      className="absolute -top-1 w-8 h-1 bg-primary rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-                    />
-                  )}
-                  
-                  <motion.div
-                    animate={{ 
-                      scale: isActive ? 1.1 : 0.9,
-                      y: isActive ? -2 : 0,
-                    }}
-                    transition={springs.snappy}
-                    className={cn(
-                      'p-1.5 rounded-xl transition-colors',
-                      isActive ? 'text-primary' : 'text-muted-foreground'
-                    )}
-                  >
-                    <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
-                    {item.label === 'Settings' && syncCount !== undefined && syncCount > 0 && (
-                      <div className="absolute top-1 right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-background animate-pulse" />
-                    )}
-                  </motion.div>
-                  
-                  <span className={cn(
-                    'text-[10px] font-bold transition-colors',
-                    isActive ? 'text-primary' : 'text-muted-foreground'
-                  )}>
-                    {item.label}
-                  </span>
-                </Touchable>
-              );
-            })}
-          </div>
-        </motion.nav>
-      )}
-    </AnimatePresence>
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="relative flex flex-col items-center justify-center w-full h-14 outline-none select-none cursor-pointer touch-manipulation pointer-events-auto min-h-[44px]"
+              style={{
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              onClick={(e) => {
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[NAV CLICK] clicked: href=${item.href}, current=${pathname}, isSheetOpen=${isSheetOpen}`);
+                }
+                if (isActive) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="nav-indicator"
+                  transition={springs.snappy}
+                  className="absolute -top-1 w-8 h-1 bg-primary rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                />
+              )}
+              
+              <motion.div
+                animate={{ 
+                  scale: isActive ? 1.1 : 0.9,
+                  y: isActive ? -2 : 0,
+                }}
+                transition={springs.snappy}
+                className={cn(
+                  'p-1.5 rounded-xl transition-colors',
+                  isActive ? 'text-primary' : 'text-muted-foreground'
+                )}
+              >
+                <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                {item.label === 'Settings' && <SettingsSyncBadge />}
+              </motion.div>
+              
+              <span className={cn(
+                'text-[10px] font-bold transition-colors',
+                isActive ? 'text-primary' : 'text-muted-foreground'
+              )}>
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
+
+export const BottomNavigation = memo(BottomNavigationComponent);
