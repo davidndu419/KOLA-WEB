@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, useDragControls, useMotionValue, useTransform, AnimatePresence, PanInfo } from 'framer-motion';
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState, useCallback } from 'react';
 import { springs } from '@/lib/animation-config';
 import { X } from 'lucide-react';
 import { Touchable } from './touchable';
@@ -63,12 +63,12 @@ export function BottomSheet({
     }
   }, [isOpen]);
 
-  const releaseSheet = () => {
+  const releaseSheet = useCallback(() => {
     if (!isRegisteredRef.current) return;
     isRegisteredRef.current = false;
     decrementSheets();
     unlockBodyScroll();
-  };
+  }, [decrementSheets]);
 
   // Manage global UI state for nav visibility
   useEffect(() => {
@@ -81,7 +81,7 @@ export function BottomSheet({
 
   useEffect(() => {
     return () => releaseSheet();
-  }, []);
+  }, [releaseSheet]);
 
   // Backdrop opacity based on drag distance (0 to 200px)
   const backdropOpacity = useTransform(

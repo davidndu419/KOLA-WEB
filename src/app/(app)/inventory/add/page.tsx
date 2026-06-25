@@ -144,7 +144,7 @@ export default function AddProductPage() {
       <div className="flex-1 overflow-y-auto scrollbar-none">
         <form 
           onSubmit={handleSubmit(onSubmit)} 
-          className="px-6 pt-6 pb-24 space-y-8"
+          className="px-6 pt-6 pb-36 space-y-8"
         >
         {/* Section: Basic Info */}
         <section className="space-y-4">
@@ -311,7 +311,7 @@ export default function AddProductPage() {
         </section>
 
         {/* Sticky Action Button */}
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent pointer-events-none">
+        <div className="fixed bottom-0 left-0 right-0 px-6 pt-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] bg-gradient-to-t from-background via-background to-transparent pointer-events-none">
           <motion.div 
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
