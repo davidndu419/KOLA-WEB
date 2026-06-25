@@ -100,6 +100,14 @@ export function TransactionList({ startDate, endDate, type = 'all', limit, trans
     }
   }, [displayTransactions, onCountChange]);
 
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        `[DEV ONLY] Selected Transaction updated: ID = ${selectedTransaction?.local_id || 'null'}, Detail sheet open = ${Boolean(selectedTransaction)}`
+      );
+    }
+  }, [selectedTransaction]);
+
   if (!displayTransactions) {
     return (
       <div className="space-y-4 pt-4">

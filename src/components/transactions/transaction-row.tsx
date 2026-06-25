@@ -46,7 +46,7 @@ export function formatTransactionListStamp(date: Date) {
 
 function TransactionRowComponent({
   transaction,
-  onPress,
+  onPress: originalOnPress,
 }: {
   transaction: Transaction;
   onPress: () => void;
@@ -131,6 +131,13 @@ function TransactionRowComponent({
     tx.payment_method,
     tx.status !== 'completed' ? tx.status : '',
   ].filter(Boolean);
+
+  const onPress = () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[DEV ONLY] Transaction Row Tapped: ID = ${transaction.local_id}, type = ${tx.type}, amount = ${tx.amount}`);
+    }
+    originalOnPress();
+  };
 
   return (
     <Touchable onPress={onPress} className="w-full text-left group">

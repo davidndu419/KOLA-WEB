@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, useAnimation } from 'framer-motion';
-import { ReactNode, useCallback } from 'react';
+import { ReactNode, useCallback, KeyboardEvent } from 'react';
 import { springs } from '@/lib/animation-config';
 import { cn } from '@/lib/utils';
 import { useIntentionalTap } from '@/hooks/use-intentional-tap';
@@ -54,6 +54,14 @@ export function Touchable({
     onPress?.();
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleTap();
+    }
+  };
+
   const tapHandlers = useIntentionalTap(handleTap, {
     disabled,
     onStart: handleTapStart,
@@ -65,6 +73,10 @@ export function Touchable({
     <motion.button
       animate={controls}
       {...tapHandlers}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      type="button"
       transition={springs.snappy}
       className={cn("outline-none select-none touch-manipulation", className)}
       disabled={disabled}

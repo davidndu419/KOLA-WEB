@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { getStorageKeys, getRuntimeMode } from '@/lib/runtime-mode';
 
-export const KOLA_APP_BUILD_VERSION = 'kola-offline-stability-v2';
+export const KOLA_APP_BUILD_VERSION = 'kola-offline-stability-v4';
 
 function isChunkLoadFailure(reason: unknown) {
   const target = reason instanceof Event ? reason.target as HTMLElement | null : null;

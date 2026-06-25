@@ -64,7 +64,14 @@ export function useIntentionalTap(
       onCancel?.();
     }
     touchRef.current = null;
-    suppressClick();
+    
+    const isIOS = typeof window !== 'undefined' && (
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    );
+    if (isIOS) {
+      suppressClick();
+    }
   }, [onCancel, suppressClick]);
 
   const onTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
@@ -105,7 +112,10 @@ export function useIntentionalTap(
     const dy = touch ? touch.clientY - state.startY : 0;
     const distance = Math.hypot(dx, dy);
     const duration = Date.now() - state.startTime;
-    const duringMomentum = Date.now() - lastScrollAt < SCROLL_MOMENTUM_MS;
+    
+    // Correctly calculate momentum relative to touch start to avoid layout shift scroll events swallowing tap
+    const duringMomentum = lastScrollAt < state.startTime && (state.startTime - lastScrollAt) < SCROLL_MOMENTUM_MS;
+    
     const isIntentional =
       !state.moved &&
       distance <= TAP_MOVE_THRESHOLD &&
@@ -113,15 +123,34 @@ export function useIntentionalTap(
       !duringMomentum;
 
     touchRef.current = null;
-    suppressClick();
     onEnd?.();
 
-    if (!isIntentional) {
-      event.preventDefault();
-      event.stopPropagation();
+    const isIOS = typeof window !== 'undefined' && (
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    );
+
+    if (!isIOS) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[useIntentionalTap] Non-iOS device. Letting click event handle action.`);
+      }
       return;
     }
 
+    if (!isIntentional) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[useIntentionalTap] Touch rejected: moved=${state.moved}, distance=${distance.toFixed(1)}, duration=${duration}ms, duringMomentum=${duringMomentum}. Falling back to click.`);
+      }
+      // Do not suppress click or prevent default, allow native fallback click
+      return;
+    }
+
+    suppressClick();
+    event.preventDefault(); // Prevent native click since we handled it
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[useIntentionalTap] Touch intentional. Triggering tap.`);
+    }
     onTap?.();
   }, [disabled, onEnd, onTap, suppressClick]);
 
