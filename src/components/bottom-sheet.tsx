@@ -164,7 +164,7 @@ export function BottomSheet({
               dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={{ top: 0, bottom: 0.08 }}
               onDragEnd={handleDragEnd}
-              className="flex max-h-[calc(100dvh-24px)] flex-col overflow-hidden rounded-t-[40px] border-t border-border/40 bg-card shadow-[0_-12px_50px_rgba(0,0,0,0.3)]"
+              className="flex max-h-[calc(100dvh-env(safe-area-inset-top,24px)-16px)] flex-col overflow-hidden rounded-t-[40px] border-t border-border/40 bg-card shadow-[0_-12px_50px_rgba(0,0,0,0.3)]"
             >
               {/* Header / Drag handle */}
               <div

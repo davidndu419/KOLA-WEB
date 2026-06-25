@@ -122,7 +122,7 @@ export function ProductDetailSheet({
   return (
     <>
       <BottomSheet isOpen={isOpen} onClose={onClose} title="Product Intelligence">
-        <div className="flex flex-col min-h-[500px] max-h-[85vh]">
+        <div className="flex flex-col min-h-[500px] max-h-[75vh]">
           {/* Hero Header */}
           <div className="flex items-center gap-5 pb-6">
             <div className="relative">
