@@ -98,14 +98,12 @@ function VerifyEmailContent() {
           <p className="text-xs text-muted-foreground/70 font-medium">
             Already verified?
           </p>
-          <Link href="/auth/login">
-            <Touchable
-              onPress={() => {}}
-              className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[20px] flex items-center justify-center font-bold text-base transition-colors shadow-lg shadow-emerald-500/20"
-            >
-              Go to Login
-            </Touchable>
-          </Link>
+          <Touchable
+            onPress={() => router.push('/auth/login')}
+            className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[20px] flex items-center justify-center font-bold text-base transition-colors shadow-lg shadow-emerald-500/20"
+          >
+            Go to Login
+          </Touchable>
         </div>
 
         <Link href="/auth/login" className="inline-block text-xs text-muted-foreground hover:text-foreground font-semibold uppercase tracking-widest transition-colors pt-1">

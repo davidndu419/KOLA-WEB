@@ -69,8 +69,8 @@ export default function ResetPasswordPage() {
     checkResetSession();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (isLoading) return;
     setError(null);
 
@@ -139,14 +139,12 @@ export default function ResetPasswordPage() {
             The reset link may have expired or already been used. Please request a new one.
           </p>
           <div className="space-y-3 pt-2">
-            <Link href="/auth/forgot-password">
-              <Touchable
-                onPress={() => {}}
-                className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[20px] flex items-center justify-center font-bold text-base transition-colors shadow-lg shadow-emerald-500/20"
-              >
-                Request New Link
-              </Touchable>
-            </Link>
+            <Touchable
+              onPress={() => router.push('/auth/forgot-password')}
+              className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[20px] flex items-center justify-center font-bold text-base transition-colors shadow-lg shadow-emerald-500/20"
+            >
+              Request New Link
+            </Touchable>
             <Link href="/auth/login" className="inline-block w-full text-center text-xs text-muted-foreground hover:text-foreground font-semibold uppercase tracking-widest transition-colors pt-2">
               ← Back to Login
             </Link>
@@ -205,7 +203,7 @@ export default function ResetPasswordPage() {
 
         <div className="pt-2">
           <Touchable
-            onPress={() => {}}
+            onPress={() => handleSubmit()}
             className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[20px] flex items-center justify-center font-bold text-base transition-colors shadow-lg shadow-emerald-500/20"
           >
             {isLoading ? <Loader2 className="animate-spin" /> : 'Update Password'}

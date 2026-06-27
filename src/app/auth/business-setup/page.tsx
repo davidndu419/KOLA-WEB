@@ -38,8 +38,8 @@ export default function BusinessSetupPage() {
 
   if (!user || business) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (isLoading) return;
     if (!formData.name) {
       setError('Business name is required');
@@ -102,7 +102,7 @@ export default function BusinessSetupPage() {
 
         <div className="pt-4">
           <Touchable
-            onPress={() => {}}
+            onPress={() => handleSubmit()}
             className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[20px] flex items-center justify-center font-bold text-base transition-colors shadow-lg shadow-emerald-500/20"
           >
             {isLoading ? <Loader2 className="animate-spin" /> : 'Complete Setup'}

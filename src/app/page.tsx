@@ -45,11 +45,9 @@ export default function LandingPage() {
             unoptimized
           />
         </div>
-        <Link href="/auth/login">
-          <Touchable onPress={() => {}} className="px-4 py-2 text-sm font-bold text-emerald-500 hover:text-emerald-600 transition-colors">
-            Login
-          </Touchable>
-        </Link>
+        <Touchable onPress={() => router.push('/auth/login')} className="px-4 py-2 text-sm font-bold text-emerald-500 hover:text-emerald-600 transition-colors">
+          Login
+        </Touchable>
       </nav>
 
       {/* Hero Section */}
@@ -78,14 +76,12 @@ export default function LandingPage() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="flex flex-col md:flex-row items-center justify-center gap-4 pt-4"
         >
-          <Link href="/auth/register" className="w-full md:w-auto">
-            <Touchable
-              onPress={() => {}}
-              className="w-full md:px-12 h-14 bg-emerald-500 text-white rounded-full flex items-center justify-center gap-2 font-black text-lg shadow-xl shadow-emerald-500/25"
-            >
-              Get Started Free <ArrowRight size={20} />
-            </Touchable>
-          </Link>
+          <Touchable
+            onPress={() => router.push('/auth/register')}
+            className="w-full md:px-12 h-14 bg-emerald-500 text-white rounded-full flex items-center justify-center gap-2 font-black text-lg shadow-xl shadow-emerald-500/25"
+          >
+            Get Started Free <ArrowRight size={20} />
+          </Touchable>
         </motion.div>
       </section>
 
@@ -151,14 +147,12 @@ export default function LandingPage() {
             Join thousands of African entrepreneurs using Kola to manage their shops professionally.
           </p>
           <div className="flex justify-center pt-4 relative z-10">
-            <Link href="/auth/register">
-              <Touchable
-                onPress={() => {}}
-                className="px-12 h-16 bg-white text-emerald-600 rounded-full flex items-center justify-center gap-2 font-black text-xl hover:bg-emerald-50 transition-colors shadow-lg"
-              >
-                Create Account Now
-              </Touchable>
-            </Link>
+            <Touchable
+              onPress={() => router.push('/auth/register')}
+              className="px-12 h-16 bg-white text-emerald-600 rounded-full flex items-center justify-center gap-2 font-black text-xl hover:bg-emerald-50 transition-colors shadow-lg"
+            >
+              Create Account Now
+            </Touchable>
           </div>
         </div>
       </section>

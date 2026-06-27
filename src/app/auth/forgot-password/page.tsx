@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthCard } from '@/components/auth/AuthCard';
 import { AuthInput } from '@/components/auth/AuthInput';
@@ -10,6 +11,7 @@ import { authService } from '@/services/authService';
 import { showToast } from '@/lib/toast';
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,14 +45,12 @@ export default function ForgotPasswordPage() {
             Click the link in the email to reset your password. If you don&apos;t see it, check your spam folder.
           </p>
           <div className="pt-4">
-            <Link href="/auth/login">
-              <Touchable
-                onPress={() => {}}
-                className="w-full h-14 bg-secondary text-foreground rounded-[20px] flex items-center justify-center font-bold text-base transition-colors"
-              >
-                Return to Login
-              </Touchable>
-            </Link>
+            <Touchable
+              onPress={() => router.push('/auth/login')}
+              className="w-full h-14 bg-secondary text-foreground rounded-[20px] flex items-center justify-center font-bold text-base transition-colors"
+            >
+              Return to Login
+            </Touchable>
           </div>
         </div>
       </AuthCard>
@@ -65,14 +65,12 @@ export default function ForgotPasswordPage() {
         </div>
         
         <div className="pt-2">
-          <Link href="/auth/login">
-            <Touchable
-              onPress={() => {}}
-              className="w-full h-14 bg-secondary text-foreground rounded-[20px] flex items-center justify-center font-bold text-base transition-colors"
-            >
-              Return to Login
-            </Touchable>
-          </Link>
+          <Touchable
+            onPress={() => router.push('/auth/login')}
+            className="w-full h-14 bg-secondary text-foreground rounded-[20px] flex items-center justify-center font-bold text-base transition-colors"
+          >
+            Return to Login
+          </Touchable>
         </div>
       </div>
     </AuthCard>

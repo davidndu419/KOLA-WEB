@@ -53,8 +53,8 @@ export default function LoginPage() {
     checkExistingSession();
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (isLoading) return;
     setError(null);
     setIsLoading(true);
@@ -180,7 +180,7 @@ export default function LoginPage() {
 
         <div className="pt-2">
           <Touchable
-            onPress={() => {}}
+            onPress={() => handleSubmit()}
             className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[20px] flex items-center justify-center font-bold text-base transition-colors shadow-lg shadow-emerald-500/20"
           >
             {isLoading ? <Loader2 className="animate-spin" /> : 'Login'}
