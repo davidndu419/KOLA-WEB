@@ -590,17 +590,17 @@ export const authService = {
 
     await syncQueueService.enqueue('businesses', 'create', businessData, business_id);
 
+    const user = useAuthStore.getState().user;
+    if (user) {
+      hydrateStores({ ...user, business_id }, businessData);
+    }
+
     if (isBrowserOnline()) {
       try {
         await syncService.runFullSync(business_id);
       } catch (error) {
         console.warn('[Auth] Initial business cloud push failed; queued sync remains pending:', error);
       }
-    }
-
-    const user = useAuthStore.getState().user;
-    if (user) {
-      hydrateStores({ ...user, business_id }, businessData);
     }
 
     return businessData;
